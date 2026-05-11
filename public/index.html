@@ -12,6 +12,28 @@
   <script src="https://cdn.jsdelivr.net/npm/three@0.138.0/build/three.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.138.0/examples/js/loaders/STLLoader.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/fflate@0.7.4/lib/browser.min.js"></script>
+  <script>
+    // Ensure fflate is available for 3MFLoader
+    window.addEventListener('load', () => {
+      if (typeof fflate !== 'undefined') {
+        window.fflate = fflate;
+        if (typeof THREE !== 'undefined') THREE.fflate = fflate;
+      }
+    });
+    // Silence annoying browser extension errors
+    window.addEventListener('error', (e) => {
+      if (e.message && e.message.includes('signalUnknownCredential')) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    }, true);
+    window.addEventListener('unhandledrejection', (e) => {
+      if (e.reason && e.reason.message && e.reason.message.includes('signalUnknownCredential')) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    }, true);
+  </script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.138.0/examples/js/loaders/3MFLoader.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.138.0/examples/js/controls/OrbitControls.js"></script>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🗄️</text></svg>">

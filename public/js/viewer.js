@@ -16,7 +16,8 @@ const Viewer = {
     const container = document.getElementById(containerId);
     if (!container || typeof THREE === 'undefined') return;
     const is3MF = fileUrl.toLowerCase().includes('.3mf');
-    const loader = is3MF ? new THREE.ThreeMFLoader() : new THREE.STLLoader();
+    if (is3MF && typeof fflate !== 'undefined') { window.fflate = fflate; THREE.fflate = fflate; }
+    const loader = is3MF ? new THREE.3MFLoader() : new THREE.STLLoader();
 
     const width = container.clientWidth;
     const height = container.clientHeight;
@@ -67,46 +68,52 @@ const Viewer = {
     loader.load(
       fileUrl,
       (object) => {
-        let geometry;
         if (is3MF) {
-          object.traverse(child => { if (child.isMesh) geometry = child.geometry; });
+          scene.add(object);
+          const box = new THREE.Box3().setFromObject(object);
+          const center = new THREE.Vector3();
+          box.getCenter(center);
+          object.position.sub(center);
+          
+          const size = new THREE.Vector3();
+          box.getSize(size);
+          const maxDim = Math.max(size.x, size.y, size.z);
+          const scale = 60 / maxDim;
+          object.scale.set(scale, scale, scale);
+          object.position.y = (size.y * scale) / 2;
         } else {
-          geometry = object;
+          const geometry = object;
+          if (!geometry.attributes.normal || geometry.attributes.normal.count === 0) geometry.computeVertexNormals();
+          
+          const material = new THREE.MeshPhongMaterial({
+            color: 0x00ccee,
+            specular: 0x333355,
+            shininess: 35,
+            flatShading: false,
+          });
+
+          const mesh = new THREE.Mesh(geometry, material);
+
+          // Center and scale
+          geometry.computeBoundingBox();
+          const box = geometry.boundingBox;
+          const center = new THREE.Vector3();
+          box.getCenter(center);
+          mesh.position.sub(center);
+
+          const size = new THREE.Vector3();
+          box.getSize(size);
+          const maxDim = Math.max(size.x, size.y, size.z);
+          const scale = 60 / maxDim;
+          mesh.scale.set(scale, scale, scale);
+
+          // STL is often Z-up, rotate to Y-up
+          mesh.rotation.x = -Math.PI / 2;
+          
+          // Make it sit on the grid floor
+          mesh.position.y = (size.z * scale) / 2;
+          scene.add(mesh);
         }
-        if (!geometry) return;
-        if (!geometry.attributes.normal || geometry.attributes.normal.count === 0) {
-          geometry.computeVertexNormals();
-        }
-
-        const material = new THREE.MeshPhongMaterial({
-          color: 0x00ccee,
-          specular: 0x333355,
-          shininess: 35,
-          flatShading: false,
-        });
-
-        const mesh = new THREE.Mesh(geometry, material);
-
-        // Center and scale
-        geometry.computeBoundingBox();
-        const box = geometry.boundingBox;
-        const center = new THREE.Vector3();
-        box.getCenter(center);
-        mesh.position.sub(center);
-
-        const size = new THREE.Vector3();
-        box.getSize(size);
-        const maxDim = Math.max(size.x, size.y, size.z);
-        const scale = 60 / maxDim;
-        mesh.scale.set(scale, scale, scale);
-
-        // STL is often Z-up, rotate to Y-up
-        mesh.rotation.x = -Math.PI / 2;
-        
-        // Make it sit on the grid floor
-        mesh.position.y = (size.z * scale) / 2;
-
-        scene.add(mesh);
 
         // Position camera
         camera.position.set(50, 40, 70);
@@ -193,9 +200,7 @@ const Viewer = {
     const grid = new THREE.GridHelper(200, 30, 0x252545, 0x1a1a35);
     scene.add(grid);
 
-    const loader = new THREE.STLLoader();
-
-    if (typeof fflate !== 'undefined') THREE.fflate = fflate;
+    if (typeof fflate !== 'undefined') { window.fflate = fflate; THREE.fflate = fflate; }
 
     for (const target of targets) {
       target.classList.remove('stl-thumb-target'); 
@@ -203,8 +208,9 @@ const Viewer = {
       if (!url) continue;
 
       try {
+        if (typeof fflate !== 'undefined') { window.fflate = fflate; THREE.fflate = fflate; }
         const is3MF = url.toLowerCase().includes('.3mf');
-        const loader = is3MF ? new THREE.ThreeMFLoader() : new THREE.STLLoader();
+        const loader = is3MF ? new THREE.3MFLoader() : new THREE.STLLoader();
         const object = await new Promise((resolve, reject) => loader.load(url, resolve, undefined, reject));
         
         // Remove previous objects
