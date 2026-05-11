@@ -195,8 +195,10 @@ const Viewer = {
 
     const loader = new THREE.STLLoader();
 
+    if (typeof fflate !== 'undefined') THREE.fflate = fflate;
+
     for (const target of targets) {
-      target.classList.remove('stl-thumb-target'); // Process only once
+      target.classList.remove('stl-thumb-target'); 
       const url = target.dataset.stlUrl;
       if (!url) continue;
 
@@ -205,60 +207,63 @@ const Viewer = {
         const loader = is3MF ? new THREE.ThreeMFLoader() : new THREE.STLLoader();
         const object = await new Promise((resolve, reject) => loader.load(url, resolve, undefined, reject));
         
-        let geometry;
-        if (is3MF) {
-          object.traverse(child => { if (child.isMesh) geometry = child.geometry; });
-        } else {
-          geometry = object;
+        // Remove previous objects
+        while(scene.children.length > 0){ 
+          const child = scene.children[0];
+          if (child.type === 'Mesh' || child.type === 'Group') {
+            scene.remove(child);
+          } else {
+            break; // Keep lights/grid
+          }
         }
-        if (!geometry) continue;
-        if (!geometry.attributes.normal || geometry.attributes.normal.count === 0) geometry.computeVertexNormals();
-        
-        const material = new THREE.MeshPhongMaterial({ color: 0x00ccee, specular: 0x333355, shininess: 35 });
-        const mesh = new THREE.Mesh(geometry, material);
-        
-        geometry.computeBoundingBox();
-        const box = geometry.boundingBox;
-        const center = new THREE.Vector3();
-        box.getCenter(center);
-        mesh.position.sub(center);
-        
-        const size = new THREE.Vector3();
-        box.getSize(size);
-        const maxDim = Math.max(size.x, size.y, size.z);
-        const scale = 60 / maxDim;
-        mesh.scale.set(scale, scale, scale);
-        
+        // Re-add lights and grid if they were at the end, but better to just filter
+        scene.children.filter(c => c.type === 'Mesh' || c.type === 'Group').forEach(c => scene.remove(c));
+
+        let maxDim = 0;
+        let modelCenterY = 0;
+
         if (is3MF) {
           scene.add(object);
-          // 3MFs are often already correctly oriented, but let's ensure we frame them
-          const box3 = new THREE.Box3().setFromObject(object);
-          const center3 = new THREE.Vector3();
-          box3.getCenter(center3);
-          object.position.sub(center3);
+          const box = new THREE.Box3().setFromObject(object);
+          const center = new THREE.Vector3();
+          box.getCenter(center);
+          object.position.sub(center);
           
-          const size3 = new THREE.Vector3();
-          box3.getSize(size3);
-          const maxDim3 = Math.max(size3.x, size3.y, size3.z);
-          const scale3 = 60 / maxDim3;
-          object.scale.set(scale3, scale3, scale3);
-          object.position.y = (size3.y * scale3) / 2;
-          
-          // Use these for camera calc
-          maxDim = maxDim3;
-          size.y = size3.y; 
+          const size = new THREE.Vector3();
+          box.getSize(size);
+          maxDim = Math.max(size.x, size.y, size.z);
+          const scale = 60 / maxDim;
+          object.scale.set(scale, scale, scale);
+          modelCenterY = (size.y * scale) / 2;
+          object.position.y = modelCenterY;
         } else {
+          const geometry = object;
+          if (!geometry.attributes.normal || geometry.attributes.normal.count === 0) geometry.computeVertexNormals();
+          const material = new THREE.MeshPhongMaterial({ color: 0x00ccee, specular: 0x333355, shininess: 35 });
+          const mesh = new THREE.Mesh(geometry, material);
+          
+          geometry.computeBoundingBox();
+          const box = geometry.boundingBox;
+          const center = new THREE.Vector3();
+          box.getCenter(center);
+          mesh.position.sub(center);
+          
+          const size = new THREE.Vector3();
+          box.getSize(size);
+          maxDim = Math.max(size.x, size.y, size.z);
+          const scale = 60 / maxDim;
+          mesh.scale.set(scale, scale, scale);
+          
           mesh.rotation.x = -Math.PI / 2;
-          mesh.position.y = (size.z * scale) / 2;
+          modelCenterY = (size.z * scale) / 2;
+          mesh.position.y = modelCenterY;
           scene.add(mesh);
         }
         
-        // Auto-scale camera to fit model
+        // Auto-scale camera
         const fov = camera.fov * (Math.PI / 180);
-        let cameraDist = Math.abs(maxDim / Math.sin(fov / 2));
-        cameraDist *= 1.2; // Safe margin
+        let cameraDist = Math.abs(maxDim / Math.sin(fov / 2)) * 1.2;
         
-        const modelCenterY = (size.z * scale) / 2;
         camera.position.set(cameraDist * 0.8, cameraDist * 0.7 + modelCenterY, cameraDist * 0.8);
         camera.lookAt(0, modelCenterY, 0);
         
@@ -268,12 +273,11 @@ const Viewer = {
         target.innerHTML = `<img src="${dataUrl}" style="width:100%;height:100%;object-fit:cover;opacity:0;transition:opacity 0.3s" onload="this.style.opacity=1">`;
         target.style.background = 'transparent';
 
-        // Auto-upload the thumbnail so it's persistent
         const modelId = target.closest('[data-model-id]')?.dataset.modelId;
         if (modelId) {
           fetch(dataUrl).then(res => res.blob()).then(blob => {
             const file = new File([blob], `thumb_${modelId}.png`, { type: 'image/png' });
-            API.uploadThumbnail(modelId, file).catch(err => console.warn('Thumb upload failed', err));
+            API.uploadThumbnail(modelId, file).catch(() => {});
           });
         }
       } catch (e) {
@@ -281,7 +285,6 @@ const Viewer = {
       }
     }
     
-    // Cleanup
     renderer.dispose();
     renderer.forceContextLoss();
   }
