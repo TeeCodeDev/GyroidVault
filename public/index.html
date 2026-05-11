@@ -22,15 +22,18 @@
     });
     // Silence annoying browser extension errors
     window.addEventListener('error', (e) => {
-      if (e.message && e.message.includes('signalUnknownCredential')) {
+      const msg = e.message || (e.error && e.error.message);
+      if (msg && (msg.includes('signalUnknownCredential') || msg.includes('webauthnInterceptor'))) {
         e.preventDefault();
-        e.stopPropagation();
+        e.stopImmediatePropagation();
+        return true;
       }
     }, true);
     window.addEventListener('unhandledrejection', (e) => {
-      if (e.reason && e.reason.message && e.reason.message.includes('signalUnknownCredential')) {
+      const msg = e.reason && e.reason.message;
+      if (msg && (msg.includes('signalUnknownCredential') || msg.includes('webauthnInterceptor'))) {
         e.preventDefault();
-        e.stopPropagation();
+        e.stopImmediatePropagation();
       }
     }, true);
   </script>
