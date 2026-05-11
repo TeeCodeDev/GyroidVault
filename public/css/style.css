@@ -166,8 +166,9 @@ input,select,textarea{font-family:var(--font)}
 .file-list{margin-top:16px}
 
 /* ─── File Item ─────────────────────────────────────────────────────────── */
+.file-item{display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--border);transition:background var(--transition);overflow:visible}
+.file-item:last-child{border-bottom:none}
 .file-item:hover{background:rgba(255,255,255,0.02)}
-.file-item{overflow:visible}
 .glass-panel{overflow:visible}
 .file-icon{width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:transform var(--transition)}
 .file-item:hover .file-icon{transform:scale(1.05)}

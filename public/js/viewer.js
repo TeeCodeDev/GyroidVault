@@ -221,9 +221,6 @@ const Viewer = {
         scene.add(mesh);
         
         // Auto-scale camera to fit model
-        const size = new THREE.Vector3();
-        box.getSize(size);
-        const maxDim = Math.max(size.x, size.y, size.z);
         const fov = camera.fov * (Math.PI / 180);
         let cameraDist = Math.abs(maxDim / Math.sin(fov / 2));
         cameraDist *= 1.2; // Safe margin
