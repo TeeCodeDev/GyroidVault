@@ -3,7 +3,7 @@ services:
     image: ghcr.io/systemedic/gyroidvault:latest
     container_name: gyroidvault
     ports:
-      - "${PORT:-3000}:3000"
+      - "${PORT:-3457}:3000"
     volumes:
       - ./data:/app/data
       - ./library:/library

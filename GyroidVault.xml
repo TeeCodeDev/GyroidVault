@@ -4,7 +4,7 @@
   <Repository>ghcr.io/systemedic/gyroidvault:latest</Repository>
   <Registry>https://github.com/systemedic/GyroidVault/pkgs/container/gyroidvault</Registry>
   <Network>bridge</Network>
-  <MyPort>3000</MyPort>
+  <MyPort>3457</MyPort>
   <Shell>sh</Shell>
   <Privileged>false</Privileged>
   <Support>https://github.com/systemedic/GyroidVault/issues</Support>
@@ -25,7 +25,7 @@
     <Mode>bridge</Mode>
     <Publish>
       <Port>
-        <HostPort>3000</HostPort>
+        <HostPort>3457</HostPort>
         <ContainerPort>3000</ContainerPort>
         <Protocol>tcp</Protocol>
       </Port>
@@ -56,7 +56,7 @@
     </Variable>
   </Environment>
   <Labels/>
-  <Config Name="WebUI Port" Target="3000" Default="3000" Mode="tcp" Description="The port for the GyroidVault web interface." Type="Port" Display="always" Required="true" Mask="false">3000</Config>
+  <Config Name="WebUI Port" Target="3000" Default="3457" Mode="tcp" Description="The port for the GyroidVault web interface." Type="Port" Display="always" Required="true" Mask="false">3457</Config>
   <Config Name="AppData" Target="/app/data" Default="/mnt/user/appdata/gyroidvault" Mode="rw" Description="Storage for database and settings." Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/gyroidvault</Config>
   <Config Name="3D Models Library" Target="/library" Default="/mnt/user/3Dprints" Mode="rw" Description="Path to your 3D models and prints library." Type="Path" Display="always" Required="true" Mask="false">/mnt/user/3Dprints</Config>
 </Container>

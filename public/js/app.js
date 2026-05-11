@@ -21,10 +21,19 @@ const App = {
 
   async loadCache() {
     try {
-      const [cats, tags, mats, users] = await Promise.all([
-        API.getCategories(), API.getTags(), API.getMaterials(), API.getUsers()
+      const [cats, tags, mats] = await Promise.all([
+        API.getCategories(), API.getTags(), API.getMaterials()
       ]);
-      this.cache = { categories: cats, tags, materials: mats, users };
+      this.cache.categories = cats;
+      this.cache.tags = tags;
+      this.cache.materials = mats;
+      
+      // Only try to fetch users if logged in
+      if (this.currentUser) {
+        try {
+          this.cache.users = await API.getUsers();
+        } catch(e) { /* ignore auth error */ }
+      }
     } catch (e) { console.error('Cache load failed:', e); }
   },
 
@@ -289,6 +298,10 @@ const App = {
 
   // ─── Projects ────────────────────────────────────────────────────────
   async renderProjects() {
+    if (!this.currentUser) {
+      this.el.innerHTML = '<div class="empty-state"><div class="empty-state-icon">🔐</div><div class="empty-state-text">Login to view projects</div><div class="empty-state-sub">Projects are private and require an account</div><button class="btn btn-primary btn-sm" onclick="App.showLogin()" style="margin-top:16px">Login</button></div>';
+      return;
+    }
     this.el.innerHTML = '<div class="skeleton-grid"></div>';
     try {
       const projects = await API.getProjects();
@@ -485,13 +498,18 @@ const App = {
     btn.innerHTML = '<span class="btn-icon rotating">🔄</span> Scanning...';
 
     try {
-      const res = await fetch('/api/library/scan', { method: 'POST' });
+      const token = localStorage.getItem('pv_token');
+      const res = await fetch('/api/library/scan', { 
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
       const data = await res.json();
       if (res.ok) {
         this.toast(`Scan complete! Added ${data.modelsAdded} models and ${data.filesAdded} files.`);
         this.fetchAndRenderModels();
       } else {
-        alert('Scan failed: ' + data.error);
+        if (res.status === 401) this.toast('Please login as admin to scan', 'error');
+        else alert('Scan failed: ' + data.error);
       }
     } catch (e) {
       console.error(e);
