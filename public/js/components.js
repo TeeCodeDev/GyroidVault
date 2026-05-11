@@ -159,7 +159,7 @@ const UI = {
         <div class="file-actions" style="display:flex;gap:4px;align-items:center">
           ${(f.file_type === 'stl' || f.file_type === '3mf') ? `
             <div class="dropdown">
-              <button class="btn btn-ghost btn-xs" title="Open in Slicer" style="color:var(--accent-purple);font-size:1.1rem">🔌</button>
+              <button class="btn btn-ghost btn-xs" title="Open in Slicer" style="color:var(--accent-purple);font-weight:600;font-size:0.75rem;border:1px solid var(--accent-purple);padding:2px 8px;border-radius:4px;line-height:1">SLICER</button>
               <div class="dropdown-content">
                 <div class="dropdown-header">Open in Slicer</div>
                 <a href="bambustudio://open?file=${window.location.origin}${f.url}" target="_blank">Bambu Studio</a>
@@ -245,10 +245,10 @@ const UI = {
             </div>
           </div>
 
-          ${model.thumbnail ? `
+          ${model.thumbnail_url ? `
           <div class="glass-panel" style="margin-top:16px">
             <div class="panel-header"><div class="panel-title">🖼 Thumbnail</div></div>
-            <div class="panel-body"><img src="${model.thumbnail.startsWith('/') ? model.thumbnail : '/uploads/' + model.thumbnail}" style="border-radius:var(--radius-sm);width:100%"></div>
+            <div class="panel-body"><img src="${model.thumbnail_url}" style="border-radius:var(--radius-sm);width:100%"></div>
           </div>` : ''}
 
           ${model.versions?.length ? `

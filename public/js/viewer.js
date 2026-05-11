@@ -220,8 +220,15 @@ const Viewer = {
         
         scene.add(mesh);
         
-        // isometric-ish view
-        camera.position.set(50, 40, 70);
+        // Auto-scale camera to fit model
+        const size = new THREE.Vector3();
+        box.getSize(size);
+        const maxDim = Math.max(size.x, size.y, size.z);
+        const fov = camera.fov * (Math.PI / 180);
+        let cameraDist = Math.abs(maxDim / Math.sin(fov / 2));
+        cameraDist *= 1.2; // Safe margin
+        
+        camera.position.set(cameraDist * 0.7, cameraDist * 0.6, cameraDist * 0.7);
         camera.lookAt(0, 0, 0);
         
         renderer.render(scene, camera);
