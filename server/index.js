@@ -154,9 +154,15 @@ app.get('/api/models', (req, res) => {
       }
       
       let thumb_url = m.thumbnail;
-      if (m.thumbnail && m.library_path) {
-        const thumbPath = path.join(m.library_path, m.thumbnail);
-        thumb_url = getFileUrl({ filename: m.thumbnail, library_path: thumbPath });
+      if (m.thumbnail) {
+        // If it's a library file, it usually contains a path or was found during scan
+        // If it was uploaded via API, it's just a filename in UPLOADS_DIR
+        const thumbPath = m.library_path ? path.join(m.library_path, m.thumbnail) : null;
+        if (thumbPath && fs.existsSync(thumbPath)) {
+          thumb_url = getFileUrl({ filename: m.thumbnail, library_path: thumbPath });
+        } else {
+          thumb_url = `/uploads/${m.thumbnail}`;
+        }
       }
 
       return {
@@ -178,9 +184,13 @@ app.get('/api/models/:id', (req, res) => {
     const model = get('SELECT m.*,c.name as category_name,c.color as category_color, u.username as uploader_name FROM models m LEFT JOIN categories c ON m.category_id=c.id LEFT JOIN users u ON m.user_id=u.id WHERE m.id=?', [id]);
     if (!model) return res.status(404).json({ error: 'Model not found' });
 
-    if (model.thumbnail && model.library_path) {
-      const thumbPath = path.join(model.library_path, model.thumbnail);
-      model.thumbnail = getFileUrl({ filename: model.thumbnail, library_path: thumbPath });
+    if (model.thumbnail) {
+      const thumbPath = model.library_path ? path.join(model.library_path, model.thumbnail) : null;
+      if (thumbPath && fs.existsSync(thumbPath)) {
+        model.thumbnail_url = getFileUrl({ filename: model.thumbnail, library_path: thumbPath });
+      } else {
+        model.thumbnail_url = `/uploads/${model.thumbnail}`;
+      }
     }
 
     model.files = all('SELECT f.*, u.username as uploader_name FROM files f LEFT JOIN users u ON f.user_id=u.id WHERE f.model_id=? ORDER BY uploaded_at DESC', [model.id]).map(f => ({
