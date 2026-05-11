@@ -2,24 +2,6 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <script>
-    // SILENCE ERRORS IMMEDIATELY
-    window.addEventListener('error', (e) => {
-      const msg = e.message || (e.error && e.error.message);
-      if (msg && (msg.includes('signalUnknownCredential') || msg.includes('webauthnInterceptor'))) {
-        e.preventDefault();
-        e.stopImmediatePropagation();
-        return true;
-      }
-    }, true);
-    window.addEventListener('unhandledrejection', (e) => {
-      const msg = (e.reason && (e.reason.message || e.reason)) || '';
-      if (typeof msg === 'string' && (msg.includes('signalUnknownCredential') || msg.includes('webauthnInterceptor'))) {
-        e.preventDefault();
-        e.stopImmediatePropagation();
-      }
-    }, true);
-  </script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="description" content="GyroidVault — Self-hosted 3D model management for 3D printing">
   <title>GyroidVault</title>
@@ -27,11 +9,25 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/css/style.css">
+  
+  <!-- Core 3D Engine -->
   <script src="https://cdn.jsdelivr.net/npm/three@0.138.0/build/three.min.js"></script>
+  
+  <!-- Decompression for 3MF -->
+  <script src="https://cdn.jsdelivr.net/npm/fflate@0.8.0/dist/fflate.umd.min.js"></script>
+  <script>
+    // Explicitly link fflate for Three.js loaders
+    if (typeof fflate !== 'undefined') {
+      window.fflate = fflate;
+      THREE.fflate = fflate;
+    }
+  </script>
+  
+  <!-- Loaders -->
   <script src="https://cdn.jsdelivr.net/npm/three@0.138.0/examples/js/loaders/STLLoader.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/fflate@0.7.4/lib/browser.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.138.0/examples/js/loaders/3MFLoader.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.138.0/examples/js/controls/OrbitControls.js"></script>
+  
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🗄️</text></svg>">
 </head>
 <body>
