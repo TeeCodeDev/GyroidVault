@@ -1,7 +1,7 @@
 services:
-  printvault:
-    build: .
-    container_name: printvault
+  gyroidvault:
+    image: ghcr.io/systemedic/gyroidvault:latest
+    container_name: gyroidvault
     ports:
       - "${PORT:-3000}:3000"
     volumes:
