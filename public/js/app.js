@@ -24,9 +24,9 @@ const App = {
       const [cats, tags, mats] = await Promise.all([
         API.getCategories(), API.getTags(), API.getMaterials()
       ]);
-      this.cache.categories = cats;
-      this.cache.tags = tags;
-      this.cache.materials = mats;
+      this.cache.categories = cats || [];
+      this.cache.tags = tags || [];
+      this.cache.materials = mats || [];
       
       // Only try to fetch users if logged in
       if (this.currentUser) {

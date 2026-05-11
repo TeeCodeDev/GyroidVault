@@ -2,6 +2,10 @@
 const API = {
   async request(url, options = {}) {
     const token = localStorage.getItem('pv_token');
+    // Don't even try profile calls if no token is present
+    if (url.startsWith('/api/auth/') && !['login', 'register', 'forgot-password', 'reset-password'].some(p => url.includes(p)) && !token) {
+      return null;
+    }
     const headers = { 'Content-Type': 'application/json', ...options.headers };
     if (token) headers['Authorization'] = `Bearer ${token}`;
 
@@ -9,6 +13,10 @@ const API = {
       headers,
       ...options,
     });
+    if (res.status === 401) {
+      // Don't throw for 401 on background requests to avoid triggering interceptors
+      return null;
+    }
     if (!res.ok) {
       const err = await res.json().catch(() => ({ error: 'Request failed' }));
       throw new Error(err.error || 'Request failed');
