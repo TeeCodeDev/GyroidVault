@@ -166,9 +166,9 @@ input,select,textarea{font-family:var(--font)}
 .file-list{margin-top:16px}
 
 /* ─── File Item ─────────────────────────────────────────────────────────── */
-.file-item{display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--border);transition:background var(--transition)}
-.file-item:last-child{border-bottom:none}
 .file-item:hover{background:rgba(255,255,255,0.02)}
+.file-item{overflow:visible}
+.glass-panel{overflow:visible}
 .file-icon{width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:transform var(--transition)}
 .file-item:hover .file-icon{transform:scale(1.05)}
 .file-icon.stl{background:rgba(0,212,255,0.08);color:var(--accent-cyan)}
@@ -297,8 +297,8 @@ input,select,textarea{font-family:var(--font)}
 .rotating { display: inline-block; animation: rotate 2s linear infinite; }
 /* ─── Dropdown ─────────────────────────────────────────────────────────── */
 .dropdown{position:relative;display:inline-block}
-.dropdown-content{display:none;position:absolute;background:var(--bg-secondary);min-width:180px;box-shadow:var(--shadow-lg);border:1px solid var(--border);border-radius:var(--radius-md);z-index:100;margin-top:4px;overflow:hidden}
-.dropdown:hover .dropdown-content{display:block}
+.dropdown-content{display:none;position:absolute;background:var(--bg-secondary);min-width:160px;box-shadow:var(--shadow-lg);border-radius:var(--radius-md);z-index:100;border:1px solid var(--border);right:0;top:100%;margin-top:4px}
+.dropdown:hover .dropdown-content{display:block;z-index:200}
 .dropdown-content a{color:var(--text-secondary);padding:10px 16px;text-decoration:none;display:block;font-size:.875rem;transition:all var(--transition)}
 .dropdown-content a:hover{background:rgba(0,212,255,0.08);color:var(--accent-cyan)}
 .dropdown-header{padding:8px 16px;font-size:.65rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid var(--border);background:rgba(255,255,255,0.02)}

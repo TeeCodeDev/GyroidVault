@@ -99,7 +99,8 @@ app.post('/api/auth/reset-password', async (req, res) => {
 function getFileUrl(file) {
   if (file.library_path) {
     const relPath = path.relative(LIBRARY_PATH, file.library_path).replace(/\\/g, '/');
-    return `/library-files/${relPath}`;
+    const encodedPath = relPath.split('/').map(segment => encodeURIComponent(segment)).join('/');
+    return `/library-files/${encodedPath}`;
   }
   return `/uploads/${file.filename}`;
 }
