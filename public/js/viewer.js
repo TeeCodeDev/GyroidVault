@@ -14,7 +14,9 @@ const Viewer = {
 
   create(containerId, fileUrl) {
     const container = document.getElementById(containerId);
-    if (!container || typeof THREE === 'undefined' || !THREE.STLLoader) return;
+    if (!container || typeof THREE === 'undefined') return;
+    const is3MF = fileUrl.toLowerCase().includes('.3mf');
+    const loader = is3MF ? new THREE.ThreeMFLoader() : new THREE.STLLoader();
 
     const width = container.clientWidth;
     const height = container.clientHeight;
@@ -62,10 +64,16 @@ const Viewer = {
     scene.add(grid);
 
     // Load STL
-    const loader = new THREE.STLLoader();
     loader.load(
       fileUrl,
-      (geometry) => {
+      (object) => {
+        let geometry;
+        if (is3MF) {
+          object.traverse(child => { if (child.isMesh) geometry = child.geometry; });
+        } else {
+          geometry = object;
+        }
+        if (!geometry) return;
         if (!geometry.attributes.normal || geometry.attributes.normal.count === 0) {
           geometry.computeVertexNormals();
         }
@@ -193,7 +201,17 @@ const Viewer = {
       if (!url) continue;
 
       try {
-        const geometry = await new Promise((resolve, reject) => loader.load(url, resolve, undefined, reject));
+        const is3MF = url.toLowerCase().includes('.3mf');
+        const loader = is3MF ? new THREE.ThreeMFLoader() : new THREE.STLLoader();
+        const object = await new Promise((resolve, reject) => loader.load(url, resolve, undefined, reject));
+        
+        let geometry;
+        if (is3MF) {
+          object.traverse(child => { if (child.isMesh) geometry = child.geometry; });
+        } else {
+          geometry = object;
+        }
+        if (!geometry) continue;
         if (!geometry.attributes.normal || geometry.attributes.normal.count === 0) geometry.computeVertexNormals();
         
         const material = new THREE.MeshPhongMaterial({ color: 0x00ccee, specular: 0x333355, shininess: 35 });

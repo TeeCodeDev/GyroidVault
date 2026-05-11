@@ -122,7 +122,9 @@ app.get('/api/models', (req, res) => {
       (SELECT COUNT(*) FROM print_history WHERE model_id=m.id) as print_count,
       (SELECT GROUP_CONCAT(DISTINCT file_type) FROM files WHERE model_id=m.id) as file_types,
       (SELECT filename FROM files WHERE model_id=m.id AND file_type='stl' ORDER BY uploaded_at DESC LIMIT 1) as stl_file,
-      (SELECT library_path FROM files WHERE model_id=m.id AND file_type='stl' ORDER BY uploaded_at DESC LIMIT 1) as stl_library_path
+      (SELECT library_path FROM files WHERE model_id=m.id AND file_type='stl' ORDER BY uploaded_at DESC LIMIT 1) as stl_library_path,
+      (SELECT filename FROM files WHERE model_id=m.id AND file_type='3mf' ORDER BY uploaded_at DESC LIMIT 1) as mf_file,
+      (SELECT library_path FROM files WHERE model_id=m.id AND file_type='3mf' ORDER BY uploaded_at DESC LIMIT 1) as mf_library_path
       FROM models m 
       LEFT JOIN categories c ON m.category_id=c.id
       LEFT JOIN users u ON m.user_id=u.id`;
@@ -151,6 +153,8 @@ app.get('/api/models', (req, res) => {
       let stl_url = null;
       if (m.stl_file) {
         stl_url = getFileUrl({ filename: m.stl_file, library_path: m.stl_library_path });
+      } else if (m.mf_file) {
+        stl_url = getFileUrl({ filename: m.mf_file, library_path: m.mf_library_path });
       }
       
       let thumb_url = m.thumbnail;
@@ -308,6 +312,15 @@ app.post('/api/models/:id/files', upload.array('files', 20), (req, res) => {
       if (ft === 'gcode') {
         const meta = parseGcodeMetadata(file.path);
         if (meta) metadata = JSON.stringify(meta);
+        
+        if (!model.thumbnail) {
+          const { extractGcodeThumbnail } = require('./utils/gcode');
+          const thumb = extractGcodeThumbnail(file.path, UPLOADS_DIR);
+          if (thumb) {
+            run('UPDATE models SET thumbnail=? WHERE id=?', [thumb, id]);
+            model.thumbnail = thumb;
+          }
+        }
       }
       if (ft === 'image' && !model.thumbnail) run('UPDATE models SET thumbnail=? WHERE id=?', [file.filename, id]);
       const r = run('INSERT INTO files (model_id,filename,original_name,file_type,file_size,metadata) VALUES (?,?,?,?,?,?)',

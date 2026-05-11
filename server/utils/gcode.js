@@ -83,4 +83,22 @@ function parseGcodeMetadata(filePath) {
   }
 }
 
-module.exports = { parseGcodeMetadata };
+function extractGcodeThumbnail(filePath, outputDir) {
+  try {
+    const content = fs.readFileSync(filePath, 'utf8');
+    const thumbRegex = /;\s*thumbnail\s+begin\s+(\d+)x(\d+)\s+(\d+)\s*([\s\S]+?);\s*thumbnail\s+end/i;
+    const match = content.match(thumbRegex);
+    if (!match) return null;
+
+    const base64Data = match[4].replace(/;\s*/g, '').trim();
+    const filename = `thumb_${Date.now()}.png`;
+    const outputPath = path.join(outputDir, filename);
+    fs.writeFileSync(outputPath, Buffer.from(base64Data, 'base64'));
+    return filename;
+  } catch (e) {
+    console.error('Failed to extract G-code thumbnail:', e);
+    return null;
+  }
+}
+
+module.exports = { parseGcodeMetadata, extractGcodeThumbnail };

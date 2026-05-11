@@ -100,8 +100,8 @@ const UI = {
       ? '<span class="badge badge-printed">✓ Printed</span>'
       : '<span class="badge badge-not-printed">Not printed</span>';
 
-    // Find first STL file for 3D preview
-    const stlFile = (model.files || []).find(f => f.file_type === 'stl');
+    // Find first STL or 3MF file for 3D preview
+    const stlFile = (model.files || []).find(f => f.file_type === 'stl' || f.file_type === '3mf');
     let viewerHtml;
 
     if (stlFile) {

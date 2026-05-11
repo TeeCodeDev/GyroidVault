@@ -63,6 +63,15 @@ async function scanLibrary(libraryPath) {
             if (ft === 'gcode') {
               const meta = parseGcodeMetadata(filePath);
               if (meta) metadata = JSON.stringify(meta);
+              
+              if (!model.thumbnail) {
+                const { extractGcodeThumbnail } = require('./gcode');
+                const thumb = extractGcodeThumbnail(filePath, path.join(__dirname, '..', '..', 'uploads'));
+                if (thumb) {
+                  db.run('UPDATE models SET thumbnail = ? WHERE id = ?', [thumb, model.id]);
+                  model.thumbnail = thumb;
+                }
+              }
             }
 
             if (ft === 'image' && !model.thumbnail) {
