@@ -1,0 +1,14 @@
+services:
+  printvault:
+    build: .
+    container_name: printvault
+    ports:
+      - "${PORT:-3000}:3000"
+    volumes:
+      - ./data:/app/data
+      - ./library:/library
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - LIBRARY_PATH=/library
+    restart: unless-stopped

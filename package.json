@@ -1,0 +1,27 @@
+{
+  "name": "gyroid-vault",
+  "version": "1.0.0",
+  "description": "GyroidVault — Self-hosted 3D model management for 3D printing",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node --watch server/index.js"
+  },
+  "keywords": [
+    "3d-printing",
+    "model-management",
+    "self-hosted",
+    "stl",
+    "gcode",
+    "3mf"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "express": "^4.21.0",
+    "jsonwebtoken": "^9.0.3",
+    "multer": "^1.4.5-lts.1",
+    "nodemailer": "^8.0.7",
+    "sql.js": "^1.11.0"
+  }
+}

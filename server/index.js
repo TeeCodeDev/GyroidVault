@@ -1,0 +1,583 @@
+const express = require('express');
+const path = require('path');
+const fs = require('fs');
+const { initDatabase, all, get, run, UPLOADS_DIR } = require('./database');
+const { upload, getFileType, setUploadsDir } = require('./middleware/upload');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+const { authenticate, SECRET } = require('./middleware/auth');
+
+const app = express();
+const PORT = process.env.PORT || 3000;
+const LIBRARY_PATH = process.env.LIBRARY_PATH || (process.platform === 'win32' ? 'C:\\Users\\Systemedic\\Documents\\3Dprints' : '/library');
+
+app.use(express.json());
+
+// ─── AUTH ───────────────────────────────────────────────────────────────────
+
+app.post('/api/auth/register', async (req, res) => {
+  try {
+    const { username, password, email } = req.body;
+    if (!username || !password || !email) return res.status(400).json({ error: 'Missing fields' });
+    
+    const userCount = get('SELECT COUNT(*) as count FROM users').count;
+    const role = userCount === 0 ? 'admin' : 'user';
+    
+    const hash = await bcrypt.hash(password, 10);
+    const r = run('INSERT INTO users (username, email, password_hash, role) VALUES (?, ?, ?, ?)', [username, email, hash, role]);
+    res.status(201).json({ id: r.lastId, username, email, role });
+  } catch (e) { 
+    if (e.message.includes('UNIQUE')) return res.status(400).json({ error: 'Username or Email taken' });
+    console.error(e); res.status(500).json({ error: 'Registration failed' }); 
+  }
+});
+
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    const { username, password } = req.body;
+    const user = get('SELECT * FROM users WHERE username = ?', [username]);
+    if (!user || !(await bcrypt.compare(password, user.password_hash))) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+    const token = jwt.sign({ id: user.id, username: user.username, role: user.role, email: user.email }, SECRET, { expiresIn: '30d' });
+    res.json({ token, user: { id: user.id, username: user.username, role: user.role, email: user.email } });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Login failed' }); }
+});
+
+app.get('/api/auth/me', authenticate, (req, res) => {
+  const user = get('SELECT id, username, email, role FROM users WHERE id=?', [req.user.id]);
+  res.json(user);
+});
+
+app.put('/api/auth/profile', authenticate, async (req, res) => {
+  try {
+    const { username, email, password } = req.body;
+    const updates = [], params = [];
+    if (username) { updates.push('username=?'); params.push(username); }
+    if (email) { updates.push('email=?'); params.push(email); }
+    if (password) { 
+      const hash = await bcrypt.hash(password, 10);
+      updates.push('password_hash=?'); params.push(hash);
+    }
+    if (!updates.length) return res.status(400).json({ error: 'Nothing to update' });
+    params.push(req.user.id);
+    run(`UPDATE users SET ${updates.join(',')} WHERE id=?`, params);
+    res.json({ success: true });
+  } catch (e) { 
+    if (e.message.includes('UNIQUE')) return res.status(400).json({ error: 'Username or Email taken' });
+    console.error(e); res.status(500).json({ error: 'Profile update failed' }); 
+  }
+});
+
+app.post('/api/auth/forgot-password', async (req, res) => {
+  try {
+    const { email } = req.body;
+    const user = get('SELECT * FROM users WHERE email=?', [email]);
+    if (!user) return res.json({ message: 'If that email exists, we sent a reset link' });
+    
+    const token = require('crypto').randomBytes(20).toString('hex');
+    run("UPDATE users SET password_reset_token=?, password_reset_expires=datetime('now', '+1 hour') WHERE id=?", [token, user.id]);
+    
+    const { sendResetEmail } = require('./utils/email');
+    await sendResetEmail(email, token, req.headers.origin || `http://${req.headers.host}`);
+    res.json({ message: 'Reset email sent' });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Failed to send reset email' }); }
+});
+
+app.post('/api/auth/reset-password', async (req, res) => {
+  try {
+    const { token, password } = req.body;
+    const user = get("SELECT * FROM users WHERE password_reset_token=? AND password_reset_expires > datetime('now')", [token]);
+    if (!user) return res.status(400).json({ error: 'Token invalid or expired' });
+    
+    const hash = await bcrypt.hash(password, 10);
+    run("UPDATE users SET password_hash=?, password_reset_token=NULL, password_reset_expires=NULL WHERE id=?", [hash, user.id]);
+    res.json({ message: 'Password reset successful' });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Failed to reset password' }); }
+});
+
+function getFileUrl(file) {
+  if (file.library_path) {
+    const relPath = path.relative(LIBRARY_PATH, file.library_path).replace(/\\/g, '/');
+    return `/library-files/${relPath}`;
+  }
+  return `/uploads/${file.filename}`;
+}
+
+app.use(express.json());
+app.use(express.static(path.join(__dirname, '..', 'public')));
+app.use('/uploads', express.static(UPLOADS_DIR));
+if (fs.existsSync(LIBRARY_PATH)) {
+  app.use('/library-files', express.static(LIBRARY_PATH));
+}
+
+// ─── MODELS ───────────────────────────────────────────────────────────
+
+app.get('/api/models', (req, res) => {
+  try {
+    const { search, category, tag, user, printed, sort = 'updated', order = 'desc', project_id } = req.query;
+    let query = `SELECT m.*, c.name as category_name, c.color as category_color, u.username as uploader_name,
+      (SELECT COUNT(*) FROM files WHERE model_id=m.id) as file_count,
+      (SELECT COUNT(*) FROM print_history WHERE model_id=m.id) as print_count,
+      (SELECT GROUP_CONCAT(DISTINCT file_type) FROM files WHERE model_id=m.id) as file_types,
+      (SELECT filename FROM files WHERE model_id=m.id AND file_type='stl' ORDER BY uploaded_at DESC LIMIT 1) as stl_file,
+      (SELECT library_path FROM files WHERE model_id=m.id AND file_type='stl' ORDER BY uploaded_at DESC LIMIT 1) as stl_library_path
+      FROM models m 
+      LEFT JOIN categories c ON m.category_id=c.id
+      LEFT JOIN users u ON m.user_id=u.id`;
+    
+    const conds = [], params = [];
+    
+    // Filter out versions in main view
+    if (!project_id) {
+      conds.push("m.parent_id IS NULL");
+    }
+
+    if (search) { conds.push("(m.name LIKE ? OR m.description LIKE ?)"); params.push(`%${search}%`, `%${search}%`); }
+    if (category) { conds.push("m.category_id=?"); params.push(Number(category)); }
+    if (tag) { conds.push("m.id IN (SELECT model_id FROM model_tags WHERE tag_id=?)"); params.push(Number(tag)); }
+    if (user) { conds.push("m.user_id=?"); params.push(Number(user)); }
+    if (printed === 'true') conds.push("m.id IN (SELECT DISTINCT model_id FROM print_history)");
+    else if (printed === 'false') conds.push("m.id NOT IN (SELECT DISTINCT model_id FROM print_history)");
+    if (project_id) { conds.push("m.id IN (SELECT model_id FROM project_models WHERE project_id=?)"); params.push(Number(project_id)); }
+
+    if (conds.length) query += ' WHERE ' + conds.join(' AND ');
+    
+    const sortMap = { name:'m.name', created:'m.created_at', updated:'m.updated_at', prints:'print_count', files:'file_count' };
+    query += ` ORDER BY ${sortMap[sort]||'m.updated_at'} ${order==='asc'?'ASC':'DESC'}`;
+    
+    const models = all(query, params).map(m => {
+      let stl_url = null;
+      if (m.stl_file) {
+        stl_url = getFileUrl({ filename: m.stl_file, library_path: m.stl_library_path });
+      }
+      return {
+        ...m,
+        stl_file: stl_url,
+        file_types: m.file_types ? [...new Set(m.file_types.split(','))] : [],
+        tags: all('SELECT t.id,t.name FROM tags t JOIN model_tags mt ON mt.tag_id=t.id WHERE mt.model_id=?', [m.id]),
+        has_printed: m.print_count > 0,
+      };
+    });
+    res.json(models);
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Failed to fetch models' }); }
+});
+
+app.get('/api/models/:id', (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const model = get('SELECT m.*,c.name as category_name,c.color as category_color, u.username as uploader_name FROM models m LEFT JOIN categories c ON m.category_id=c.id LEFT JOIN users u ON m.user_id=u.id WHERE m.id=?', [id]);
+    if (!model) return res.status(404).json({ error: 'Model not found' });
+    model.files = all('SELECT f.*, u.username as uploader_name FROM files f LEFT JOIN users u ON f.user_id=u.id WHERE f.model_id=? ORDER BY uploaded_at DESC', [model.id]).map(f => ({
+      ...f,
+      url: getFileUrl(f)
+    }));
+    model.prints = all('SELECT ph.*,mat.name as material_name, u.username as printer_name FROM print_history ph LEFT JOIN materials mat ON ph.material_id=mat.id LEFT JOIN users u ON ph.user_id=u.id WHERE ph.model_id=? ORDER BY ph.printed_at DESC', [model.id]);
+    model.tags = all('SELECT t.id,t.name FROM tags t JOIN model_tags mt ON mt.tag_id=t.id WHERE mt.model_id=?', [model.id]);
+    model.has_printed = model.prints.length > 0;
+    
+    // Versions
+    const rootId = model.parent_id || model.id;
+    model.versions = all(`
+      SELECT id, name, created_at, 
+      (SELECT COUNT(*) FROM files WHERE model_id = models.id) as file_count 
+      FROM models 
+      WHERE (id = ? OR parent_id = ?) AND id != ? 
+      ORDER BY created_at DESC`, [rootId, rootId, model.id]);
+
+    res.json(model);
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Failed to fetch model' }); }
+});
+
+app.post('/api/models/:id/versions', authenticate, (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const parent = get('SELECT * FROM models WHERE id = ?', [id]);
+    if (!parent) return res.status(404).json({ error: 'Parent model not found' });
+
+    const rootId = parent.parent_id || parent.id;
+    const { name, description } = req.body;
+    
+    const r = run(`
+      INSERT INTO models (name, description, category_id, user_id, parent_id) 
+      VALUES (?, ?, ?, ?, ?)`, 
+      [name || `${parent.name} (New Version)`, description || parent.description, parent.category_id, req.user.id, rootId]
+    );
+    
+    // Copy tags
+    const tags = all('SELECT tag_id FROM model_tags WHERE model_id = ?', [id]);
+    for (const t of tags) {
+      run('INSERT INTO model_tags (model_id, tag_id) VALUES (?, ?)', [r.lastId, t.tag_id]);
+    }
+
+    res.status(201).json({ id: r.lastId });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Failed to create version' }); }
+});
+
+app.post('/api/library/scan', authenticate, async (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
+  try {
+    const { scanLibrary } = require('./utils/library');
+    const results = await scanLibrary(LIBRARY_PATH);
+    res.json(results);
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/api/models', authenticate, (req, res) => {
+  const userId = req.user.id;
+  try {
+    const { name, description, print_tips, category_id, tags } = req.body;
+    if (!name?.trim()) return res.status(400).json({ error: 'Name is required' });
+    const r = run('INSERT INTO models (name,description,print_tips,category_id,user_id) VALUES (?,?,?,?,?)',
+      [name.trim(), description||'', print_tips||'', category_id||null, userId]);
+    if (tags?.length) { for (const t of tags) run('INSERT OR IGNORE INTO model_tags (model_id,tag_id) VALUES (?,?)', [r.lastId, t]); }
+    res.status(201).json(get('SELECT * FROM models WHERE id=?', [r.lastId]));
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Failed to create model' }); }
+});
+
+app.put('/api/models/:id', (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const model = get('SELECT * FROM models WHERE id=?', [id]);
+    if (!model) return res.status(404).json({ error: 'Model not found' });
+    const { name, description, print_tips, category_id, tags } = req.body;
+    run("UPDATE models SET name=?,description=?,print_tips=?,category_id=?,updated_at=datetime('now') WHERE id=?",
+      [name||model.name, description!==undefined?description:model.description, print_tips!==undefined?print_tips:model.print_tips, category_id!==undefined?category_id:model.category_id, id]);
+    if (tags !== undefined) {
+      run('DELETE FROM model_tags WHERE model_id=?', [id]);
+      if (tags?.length) for (const t of tags) run('INSERT OR IGNORE INTO model_tags (model_id,tag_id) VALUES (?,?)', [id, t]);
+    }
+    res.json(get('SELECT * FROM models WHERE id=?', [id]));
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Failed to update model' }); }
+});
+
+app.delete('/api/models/:id', (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const model = get('SELECT * FROM models WHERE id=?', [id]);
+    if (!model) return res.status(404).json({ error: 'Model not found' });
+    const files = all('SELECT filename FROM files WHERE model_id=?', [id]);
+    for (const f of files) { const p = path.join(UPLOADS_DIR, f.filename); if (fs.existsSync(p)) fs.unlinkSync(p); }
+    if (model.thumbnail) { const p = path.join(UPLOADS_DIR, model.thumbnail); if (fs.existsSync(p)) fs.unlinkSync(p); }
+    run('DELETE FROM models WHERE id=?', [id]);
+    res.json({ success: true });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Failed to delete model' }); }
+});
+
+// ─── FILES ──────────────────────────────────────────────────────────────────
+
+app.post('/api/models/:id/files', upload.array('files', 20), (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const model = get('SELECT * FROM models WHERE id=?', [id]);
+    if (!model) return res.status(404).json({ error: 'Model not found' });
+    if (!req.files?.length) return res.status(400).json({ error: 'No files uploaded' });
+    const { parseGcodeMetadata } = require('./utils/gcode');
+    const uploaded = [];
+    for (const file of req.files) {
+      const ft = getFileType(file.originalname);
+      let metadata = null;
+      if (ft === 'gcode') {
+        const meta = parseGcodeMetadata(file.path);
+        if (meta) metadata = JSON.stringify(meta);
+      }
+      if (ft === 'image' && !model.thumbnail) run('UPDATE models SET thumbnail=? WHERE id=?', [file.filename, id]);
+      const r = run('INSERT INTO files (model_id,filename,original_name,file_type,file_size,metadata) VALUES (?,?,?,?,?,?)',
+        [id, file.filename, file.originalname, ft, file.size, metadata]);
+      uploaded.push({ id: r.lastId, model_id: id, filename: file.filename, original_name: file.originalname, file_type: ft, file_size: file.size, metadata });
+    }
+    run("UPDATE models SET updated_at=datetime('now') WHERE id=?", [id]);
+    res.status(201).json(uploaded);
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Failed to upload files' }); }
+});
+
+app.post('/api/models/:id/thumbnail', upload.single('thumbnail'), (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const model = get('SELECT * FROM models WHERE id=?', [id]);
+    if (!model) return res.status(404).json({ error: 'Model not found' });
+    if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+    if (model.thumbnail) { const p = path.join(UPLOADS_DIR, model.thumbnail); if (fs.existsSync(p)) fs.unlinkSync(p); }
+    run("UPDATE models SET thumbnail=?,updated_at=datetime('now') WHERE id=?", [req.file.filename, id]);
+    res.json({ thumbnail: req.file.filename });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Failed to upload thumbnail' }); }
+});
+
+app.get('/api/files/:id/download', (req, res) => {
+  try {
+    const file = get('SELECT * FROM files WHERE id=?', [Number(req.params.id)]);
+    if (!file) return res.status(404).json({ error: 'File not found' });
+    const p = file.library_path || path.join(UPLOADS_DIR, file.filename);
+    if (!fs.existsSync(p)) return res.status(404).json({ error: 'File not found on disk' });
+    res.download(p, file.original_name);
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Failed to download' }); }
+});
+
+app.delete('/api/files/:id', (req, res) => {
+  try {
+    const file = get('SELECT * FROM files WHERE id=?', [Number(req.params.id)]);
+    if (!file) return res.status(404).json({ error: 'File not found' });
+    const p = path.join(UPLOADS_DIR, file.filename); if (fs.existsSync(p)) fs.unlinkSync(p);
+    run('DELETE FROM files WHERE id=?', [file.id]);
+    run("UPDATE models SET updated_at=datetime('now') WHERE id=?", [file.model_id]);
+    res.json({ success: true });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Failed to delete file' }); }
+});
+
+// ─── PROJECTS ───────────────────────────────────────────────────────────────
+
+app.get('/api/projects', authenticate, (req, res) => {
+  try {
+    const projects = all('SELECT p.*, COUNT(pm.model_id) as model_count FROM projects p LEFT JOIN project_models pm ON p.id=pm.project_id GROUP BY p.id ORDER BY p.created_at DESC');
+    res.json(projects);
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Failed to fetch projects' }); }
+});
+
+app.get('/api/projects/:id', (req, res) => {
+  try {
+    const project = get('SELECT * FROM projects WHERE id=?', [Number(req.params.id)]);
+    if (!project) return res.status(404).json({ error: 'Project not found' });
+    project.models = all(`
+      SELECT m.*, c.name as category_name, c.color as category_color 
+      FROM models m 
+      JOIN project_models pm ON m.id=pm.model_id 
+      LEFT JOIN categories c ON m.category_id=c.id 
+      WHERE pm.project_id=?`, [project.id]);
+    res.json(project);
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Failed to fetch project' }); }
+});
+
+app.post('/api/projects', authenticate, (req, res) => {
+  try {
+    const { name, description } = req.body;
+    if (!name) return res.status(400).json({ error: 'Name is required' });
+    const r = run('INSERT INTO projects (name, description, user_id) VALUES (?, ?, ?)', [name, description||'', req.user.id]);
+    res.status(201).json({ id: r.lastId, name, description });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Failed to create project' }); }
+});
+
+app.delete('/api/projects/:id', authenticate, (req, res) => {
+  try {
+    run('DELETE FROM projects WHERE id=?', [Number(req.params.id)]);
+    res.json({ success: true });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Failed to delete project' }); }
+});
+
+app.post('/api/projects/:id/models', authenticate, (req, res) => {
+  try {
+    const { model_id } = req.body;
+    run('INSERT OR IGNORE INTO project_models (project_id, model_id) VALUES (?, ?)', [Number(req.params.id), Number(model_id)]);
+    res.json({ success: true });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Failed to add model to project' }); }
+});
+
+app.delete('/api/projects/:id/models/:modelId', authenticate, (req, res) => {
+  try {
+    run('DELETE FROM project_models WHERE project_id=? AND model_id=?', [Number(req.params.id), Number(req.params.modelId)]);
+    res.json({ success: true });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Failed to remove model from project' }); }
+});
+
+// ─── SHARING ────────────────────────────────────────────────────────────────
+
+app.post('/api/shares', authenticate, (req, res) => {
+  try {
+    const { model_id, expires_days } = req.body;
+    const slug = require('crypto').randomBytes(6).toString('hex');
+    const expires_at = expires_days ? `datetime('now', '+${expires_days} days')` : null;
+    
+    if (expires_at) {
+      run(`INSERT INTO shares (id, model_id, expires_at) VALUES (?, ?, ${expires_at})`, [slug, Number(model_id)]);
+    } else {
+      run('INSERT INTO shares (id, model_id, expires_at) VALUES (?, ?, NULL)', [slug, Number(model_id)]);
+    }
+    
+    res.json({ slug });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Failed to create share' }); }
+});
+
+app.get('/api/shares/:slug', (req, res) => {
+  try {
+    const share = get("SELECT * FROM shares WHERE id=? AND (expires_at IS NULL OR expires_at > datetime('now'))", [req.params.slug]);
+    if (!share) return res.status(404).json({ error: 'Share not found or expired' });
+    
+    const model = get('SELECT m.*,c.name as category_name,c.color as category_color FROM models m LEFT JOIN categories c ON m.category_id=c.id WHERE m.id=?', [share.model_id]);
+    model.files = all('SELECT * FROM files WHERE model_id=? ORDER BY uploaded_at DESC', [model.id]).map(f => ({
+      ...f,
+      url: getFileUrl(f)
+    }));
+    res.json(model);
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Failed to fetch shared model' }); }
+});
+
+// ─── PRINT HISTORY ──────────────────────────────────────────────────────────
+
+app.post('/api/models/:id/prints', (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!get('SELECT id FROM models WHERE id=?', [id])) return res.status(404).json({ error: 'Model not found' });
+    const { material_id, successful = true, notes = '', printed_at } = req.body;
+    const date = printed_at || new Date().toISOString();
+    const r = run('INSERT INTO print_history (model_id,material_id,successful,notes,printed_at) VALUES (?,?,?,?,?)',
+      [id, material_id||null, successful?1:0, notes, date]);
+    run("UPDATE models SET updated_at=datetime('now') WHERE id=?", [id]);
+    res.status(201).json(get('SELECT ph.*,mat.name as material_name FROM print_history ph LEFT JOIN materials mat ON ph.material_id=mat.id WHERE ph.id=?', [r.lastId]));
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Failed to add print' }); }
+});
+
+app.delete('/api/prints/:id', (req, res) => {
+  try {
+    const p = get('SELECT * FROM print_history WHERE id=?', [Number(req.params.id)]);
+    if (!p) return res.status(404).json({ error: 'Not found' });
+    run('DELETE FROM print_history WHERE id=?', [p.id]);
+    run("UPDATE models SET updated_at=datetime('now') WHERE id=?", [p.model_id]);
+    res.json({ success: true });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Failed to delete print' }); }
+});
+
+// ─── CATEGORIES ─────────────────────────────────────────────────────────────
+
+app.get('/api/categories', (req, res) => {
+  try { res.json(all('SELECT c.*,(SELECT COUNT(*) FROM models WHERE category_id=c.id) as model_count FROM categories c ORDER BY c.name')); }
+  catch (e) { res.status(500).json({ error: 'Failed' }); }
+});
+app.post('/api/categories', (req, res) => {
+  try {
+    const { name, color } = req.body;
+    if (!name?.trim()) return res.status(400).json({ error: 'Name is required' });
+    const r = run('INSERT INTO categories (name,color) VALUES (?,?)', [name.trim(), color||'#8b5cf6']);
+    res.status(201).json(get('SELECT * FROM categories WHERE id=?', [r.lastId]));
+  } catch (e) { res.status(e.message?.includes('UNIQUE') ? 409 : 500).json({ error: e.message?.includes('UNIQUE') ? 'Already exists' : 'Failed' }); }
+});
+app.put('/api/categories/:id', (req, res) => {
+  try {
+    const { name, color } = req.body;
+    run('UPDATE categories SET name=COALESCE(?,name),color=COALESCE(?,color) WHERE id=?', [name, color, Number(req.params.id)]);
+    res.json(get('SELECT * FROM categories WHERE id=?', [Number(req.params.id)]));
+  } catch (e) { res.status(500).json({ error: 'Failed' }); }
+});
+app.delete('/api/categories/:id', (req, res) => {
+  try { run('DELETE FROM categories WHERE id=?', [Number(req.params.id)]); res.json({ success: true }); }
+  catch (e) { res.status(500).json({ error: 'Failed' }); }
+});
+
+// ─── TAGS ───────────────────────────────────────────────────────────────────
+
+app.get('/api/tags', (req, res) => {
+  try { res.json(all('SELECT t.*,(SELECT COUNT(*) FROM model_tags WHERE tag_id=t.id) as model_count FROM tags t ORDER BY t.name')); }
+  catch (e) { res.status(500).json({ error: 'Failed' }); }
+});
+app.post('/api/tags', (req, res) => {
+  try {
+    const { name } = req.body;
+    if (!name?.trim()) return res.status(400).json({ error: 'Name is required' });
+    const r = run('INSERT INTO tags (name) VALUES (?)', [name.trim()]);
+    res.status(201).json(get('SELECT * FROM tags WHERE id=?', [r.lastId]));
+  } catch (e) { res.status(e.message?.includes('UNIQUE') ? 409 : 500).json({ error: e.message?.includes('UNIQUE') ? 'Already exists' : 'Failed' }); }
+});
+app.delete('/api/tags/:id', (req, res) => {
+  try { run('DELETE FROM tags WHERE id=?', [Number(req.params.id)]); res.json({ success: true }); }
+  catch (e) { res.status(500).json({ error: 'Failed' }); }
+});
+
+// ─── MATERIALS ──────────────────────────────────────────────────────────────
+
+app.get('/api/materials', (req, res) => {
+  try { res.json(all('SELECT mat.*,(SELECT COUNT(*) FROM print_history WHERE material_id=mat.id) as usage_count FROM materials mat ORDER BY mat.is_preset DESC,mat.name')); }
+  catch (e) { res.status(500).json({ error: 'Failed' }); }
+});
+app.post('/api/materials', (req, res) => {
+  try {
+    const { name } = req.body;
+    if (!name?.trim()) return res.status(400).json({ error: 'Name is required' });
+    const r = run('INSERT INTO materials (name,is_preset) VALUES (?,0)', [name.trim()]);
+    res.status(201).json(get('SELECT * FROM materials WHERE id=?', [r.lastId]));
+  } catch (e) { res.status(e.message?.includes('UNIQUE') ? 409 : 500).json({ error: e.message?.includes('UNIQUE') ? 'Already exists' : 'Failed' }); }
+});
+app.delete('/api/materials/:id', (req, res) => {
+  try {
+    const m = get('SELECT * FROM materials WHERE id=?', [Number(req.params.id)]);
+    if (!m) return res.status(404).json({ error: 'Not found' });
+    if (m.is_preset) return res.status(403).json({ error: 'Cannot delete preset materials' });
+    run('DELETE FROM materials WHERE id=?', [m.id]);
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: 'Failed' }); }
+});
+
+// ─── STATS ──────────────────────────────────────────────────────────────────
+
+// ─── SETTINGS ───────────────────────────────────────────────────────────────
+
+app.get('/api/settings/smtp', authenticate, (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
+  const settings = all('SELECT * FROM system_settings WHERE key LIKE "smtp_%"');
+  const config = {};
+  settings.forEach(s => config[s.key] = s.value);
+  res.json(config);
+});
+
+app.post('/api/settings/smtp', authenticate, (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
+  try {
+    const config = req.body;
+    for (const [key, value] of Object.entries(config)) {
+      run('INSERT OR REPLACE INTO system_settings (key, value) VALUES (?, ?)', [key, value]);
+    }
+    res.json({ success: true });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Failed to save SMTP settings' }); }
+});
+
+app.get('/api/users', authenticate, (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
+  try {
+    res.json(all('SELECT id, username, email, role FROM users ORDER BY username ASC'));
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Failed to fetch users' }); }
+});
+
+app.get('/api/stats', (req, res) => {
+  try {
+    const totalModels = get('SELECT COUNT(*) as c FROM models').c;
+    const totalFiles = get('SELECT COUNT(*) as c FROM files').c;
+    const totalPrints = get('SELECT COUNT(*) as c FROM print_history').c;
+    const successfulPrints = get('SELECT COUNT(*) as c FROM print_history WHERE successful=1').c;
+    const printedModels = get('SELECT COUNT(DISTINCT model_id) as c FROM print_history').c;
+    const totalSize = get('SELECT COALESCE(SUM(file_size),0) as s FROM files').s;
+    const recentModels = all('SELECT m.*,c.name as category_name,c.color as category_color FROM models m LEFT JOIN categories c ON m.category_id=c.id ORDER BY m.created_at DESC LIMIT 5');
+    const recentPrints = all('SELECT ph.*,m.name as model_name,mat.name as material_name FROM print_history ph JOIN models m ON ph.model_id=m.id LEFT JOIN materials mat ON ph.material_id=mat.id ORDER BY ph.printed_at DESC LIMIT 5');
+    const materialUsage = all('SELECT mat.name,COUNT(ph.id) as count FROM materials mat JOIN print_history ph ON ph.material_id=mat.id GROUP BY mat.id ORDER BY count DESC LIMIT 5');
+    res.json({
+      totalModels, totalFiles, totalPrints, successfulPrints, printedModels,
+      successRate: totalPrints > 0 ? Math.round((successfulPrints/totalPrints)*100) : 0,
+      totalSize, recentModels, recentPrints, materialUsage,
+    });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Failed to fetch stats' }); }
+});
+
+// ─── Uploaded Files ───────────────────────────────────────────────────────
+
+app.get('/uploads/:filename', (req, res) => {
+  const filePath = path.join(UPLOADS_DIR, req.params.filename);
+  if (fs.existsSync(filePath)) {
+    res.sendFile(filePath);
+  } else {
+    res.status(404).json({ error: 'File not found' });
+  }
+});
+
+// ─── SPA Fallback & Error Handler ─────────────────────────────────────────
+
+app.get('*', (req, res) => { res.sendFile(path.join(__dirname, '..', 'public', 'index.html')); });
+app.use((err, req, res, next) => { console.error(err); res.status(500).json({ error: 'Internal server error' }); });
+
+// ─── Bootstrap ──────────────────────────────────────────────────────────────
+
+(async () => {
+  await initDatabase();
+  setUploadsDir(UPLOADS_DIR);
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`\n  🗄️  GyroidVault running on http://localhost:${PORT}\n`);
+  });
+})();
