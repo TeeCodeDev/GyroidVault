@@ -54,9 +54,11 @@ const UI = {
   modelCard(m) {
     let thumb;
     if (m.thumbnail) {
-      thumb = `<img src="/uploads/${m.thumbnail}" alt="${m.name}">`;
+      const thumbUrl = m.thumbnail.startsWith('/') ? m.thumbnail : `/uploads/${m.thumbnail}`;
+      thumb = `<img src="${thumbUrl}" alt="${m.name}">`;
     } else if (m.stl_file) {
-      thumb = `<div class="model-card-placeholder stl-thumb-target" data-stl-url="/uploads/${m.stl_file}?t=${Date.now()}" style="background:${this.gradient(m.name)}">📦</div>`;
+      const stlUrl = m.stl_file.startsWith('/') ? m.stl_file : `/uploads/${m.stl_file}`;
+      thumb = `<div class="model-card-placeholder stl-thumb-target" data-stl-url="${stlUrl}?t=${Date.now()}" style="background:${this.gradient(m.name)}">📦</div>`;
     } else {
       thumb = `<div class="model-card-placeholder" style="background:${this.gradient(m.name)}">📦</div>`;
     }
@@ -238,7 +240,7 @@ const UI = {
           ${model.thumbnail ? `
           <div class="glass-panel" style="margin-top:16px">
             <div class="panel-header"><div class="panel-title">🖼 Thumbnail</div></div>
-            <div class="panel-body"><img src="/uploads/${model.thumbnail}" style="border-radius:var(--radius-sm);width:100%"></div>
+            <div class="panel-body"><img src="${model.thumbnail.startsWith('/') ? model.thumbnail : '/uploads/' + model.thumbnail}" style="border-radius:var(--radius-sm);width:100%"></div>
           </div>` : ''}
 
           ${model.versions?.length ? `

@@ -151,8 +151,16 @@ app.get('/api/models', (req, res) => {
       if (m.stl_file) {
         stl_url = getFileUrl({ filename: m.stl_file, library_path: m.stl_library_path });
       }
+      
+      let thumb_url = m.thumbnail;
+      if (m.thumbnail && m.library_path) {
+        const thumbPath = path.join(m.library_path, m.thumbnail);
+        thumb_url = getFileUrl({ filename: m.thumbnail, library_path: thumbPath });
+      }
+
       return {
         ...m,
+        thumbnail: thumb_url,
         stl_file: stl_url,
         file_types: m.file_types ? [...new Set(m.file_types.split(','))] : [],
         tags: all('SELECT t.id,t.name FROM tags t JOIN model_tags mt ON mt.tag_id=t.id WHERE mt.model_id=?', [m.id]),
@@ -168,6 +176,12 @@ app.get('/api/models/:id', (req, res) => {
     const id = Number(req.params.id);
     const model = get('SELECT m.*,c.name as category_name,c.color as category_color, u.username as uploader_name FROM models m LEFT JOIN categories c ON m.category_id=c.id LEFT JOIN users u ON m.user_id=u.id WHERE m.id=?', [id]);
     if (!model) return res.status(404).json({ error: 'Model not found' });
+
+    if (model.thumbnail && model.library_path) {
+      const thumbPath = path.join(model.library_path, model.thumbnail);
+      model.thumbnail = getFileUrl({ filename: model.thumbnail, library_path: thumbPath });
+    }
+
     model.files = all('SELECT f.*, u.username as uploader_name FROM files f LEFT JOIN users u ON f.user_id=u.id WHERE f.model_id=? ORDER BY uploaded_at DESC', [model.id]).map(f => ({
       ...f,
       url: getFileUrl(f)
