@@ -2,6 +2,24 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <script>
+    // SILENCE ERRORS IMMEDIATELY
+    window.addEventListener('error', (e) => {
+      const msg = e.message || (e.error && e.error.message);
+      if (msg && (msg.includes('signalUnknownCredential') || msg.includes('webauthnInterceptor'))) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        return true;
+      }
+    }, true);
+    window.addEventListener('unhandledrejection', (e) => {
+      const msg = (e.reason && (e.reason.message || e.reason)) || '';
+      if (typeof msg === 'string' && (msg.includes('signalUnknownCredential') || msg.includes('webauthnInterceptor'))) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+      }
+    }, true);
+  </script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="description" content="GyroidVault — Self-hosted 3D model management for 3D printing">
   <title>GyroidVault</title>
@@ -12,31 +30,6 @@
   <script src="https://cdn.jsdelivr.net/npm/three@0.138.0/build/three.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.138.0/examples/js/loaders/STLLoader.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/fflate@0.7.4/lib/browser.min.js"></script>
-  <script>
-    // Ensure fflate is available for 3MFLoader
-    window.addEventListener('load', () => {
-      if (typeof fflate !== 'undefined') {
-        window.fflate = fflate;
-        if (typeof THREE !== 'undefined') THREE.fflate = fflate;
-      }
-    });
-    // Silence annoying browser extension errors
-    window.addEventListener('error', (e) => {
-      const msg = e.message || (e.error && e.error.message);
-      if (msg && (msg.includes('signalUnknownCredential') || msg.includes('webauthnInterceptor'))) {
-        e.preventDefault();
-        e.stopImmediatePropagation();
-        return true;
-      }
-    }, true);
-    window.addEventListener('unhandledrejection', (e) => {
-      const msg = e.reason && e.reason.message;
-      if (msg && (msg.includes('signalUnknownCredential') || msg.includes('webauthnInterceptor'))) {
-        e.preventDefault();
-        e.stopImmediatePropagation();
-      }
-    }, true);
-  </script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.138.0/examples/js/loaders/3MFLoader.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.138.0/examples/js/controls/OrbitControls.js"></script>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🗄️</text></svg>">

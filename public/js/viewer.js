@@ -17,7 +17,9 @@ const Viewer = {
     if (!container || typeof THREE === 'undefined') return;
     const is3MF = fileUrl.toLowerCase().includes('.3mf');
     if (is3MF && typeof fflate !== 'undefined') { window.fflate = fflate; THREE.fflate = fflate; }
-    const loader = is3MF ? new THREE['3MFLoader']() : new THREE.STLLoader();
+    const loaderClass = is3MF ? (THREE.ThreeMFLoader || THREE['3MFLoader'] || THREE.MFLoader) : (THREE.STLLoader);
+    if (!loaderClass) return;
+    const loader = new loaderClass();
 
     const width = container.clientWidth;
     const height = container.clientHeight;
@@ -218,7 +220,9 @@ const Viewer = {
       try {
         if (typeof fflate !== 'undefined') { window.fflate = fflate; THREE.fflate = fflate; }
         const is3MF = url.toLowerCase().includes('.3mf');
-        const loader = is3MF ? new THREE['3MFLoader']() : new THREE.STLLoader();
+        const loaderClass = is3MF ? (THREE.ThreeMFLoader || THREE['3MFLoader'] || THREE.MFLoader) : THREE.STLLoader;
+        if (!loaderClass) continue;
+        const loader = new loaderClass();
         const object = await new Promise((resolve, reject) => loader.load(url, resolve, undefined, reject));
         
         // Remove previous objects
