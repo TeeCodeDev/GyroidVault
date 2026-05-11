@@ -159,7 +159,7 @@ const UI = {
         <div class="file-actions" style="display:flex;gap:4px;align-items:center">
           ${(f.file_type === 'stl' || f.file_type === '3mf') ? `
             <div class="dropdown">
-              <button class="btn btn-ghost btn-xs" title="Open in Slicer" style="color:var(--accent-purple);font-weight:600;font-size:0.75rem;border:1px solid var(--accent-purple);padding:2px 8px;border-radius:4px;line-height:1">SLICER</button>
+              <button class="btn btn-ghost btn-xs" title="Open in Slicer" style="color:var(--accent-purple);font-weight:600;font-size:0.7rem;border:1px solid var(--accent-purple);padding:3px 10px;border-radius:4px;line-height:1;white-space:nowrap">OPEN IN SLICER</button>
               <div class="dropdown-content">
                 <div class="dropdown-header">Open in Slicer</div>
                 <a href="bambustudio://open?file=${window.location.origin}${f.url}" target="_blank">Bambu Studio</a>
