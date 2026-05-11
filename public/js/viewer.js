@@ -229,7 +229,15 @@ const Viewer = {
         
         target.innerHTML = `<img src="${dataUrl}" style="width:100%;height:100%;object-fit:cover;opacity:0;transition:opacity 0.3s" onload="this.style.opacity=1">`;
         target.style.background = 'transparent';
-        
+
+        // Auto-upload the thumbnail so it's persistent
+        const modelId = target.closest('[data-model-id]')?.dataset.modelId;
+        if (modelId) {
+          fetch(dataUrl).then(res => res.blob()).then(blob => {
+            const file = new File([blob], `thumb_${modelId}.png`, { type: 'image/png' });
+            API.uploadThumbnail(modelId, file).catch(err => console.warn('Thumb upload failed', err));
+          });
+        }
       } catch (e) {
         console.error('Failed to generate thumb for', url, e);
       }

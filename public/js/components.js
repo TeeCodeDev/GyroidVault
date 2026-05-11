@@ -71,13 +71,15 @@ const UI = {
     const cat = m.category_name
       ? `<span class="badge badge-category" style="background:${m.category_color}20;color:${m.category_color};border:1px solid ${m.category_color}33">${m.category_name}</span>`
       : '';
+    const isAdmin = App.currentUser?.role === 'admin';
+    const plusBtn = isAdmin ? `<button class="btn btn-ghost btn-xs" onclick="event.stopPropagation();App.addToProject(${m.id})" title="Add to project" style="margin-top:-4px;margin-right:-8px;padding:4px">➕</button>` : '';
 
     return `<div class="model-card" onclick="App.navigate('/models/${m.id}')" data-model-id="${m.id}">
       <div class="model-card-thumb">${thumb}<div class="model-card-badges">${types}</div></div>
       <div class="model-card-body">
         <div style="display:flex;justify-content:space-between;align-items:flex-start">
           <div class="model-card-name" style="flex:1">${m.name}</div>
-          <button class="btn btn-ghost btn-xs" onclick="event.stopPropagation();App.addToProject(${m.id})" title="Add to project" style="margin-top:-4px;margin-right:-8px;padding:4px">➕</button>
+          ${plusBtn}
         </div>
         <div class="model-card-meta">${cat} ${printed}</div>
       </div>
@@ -88,8 +90,8 @@ const UI = {
     </div>`;
   },
 
-  // ── Model Detail ──
   modelDetail(model) {
+    const isAdmin = App.currentUser?.role === 'admin';
     const cat = model.category_name
       ? `<span class="badge badge-category" style="background:${model.category_color}20;color:${model.category_color};border:1px solid ${model.category_color}33">${model.category_name}</span>`
       : '';
@@ -104,7 +106,7 @@ const UI = {
 
     if (stlFile) {
       viewerHtml = `
-      <div class="glass-panel" style="margin-bottom:24px">
+      <div class="glass-panel" style="margin-bottom:24px;overflow:visible">
         <div class="panel-header">
           <div class="panel-title">🔮 3D Preview</div>
         </div>
@@ -119,7 +121,7 @@ const UI = {
       </div>`;
     } else {
       viewerHtml = `
-      <div class="glass-panel" style="margin-bottom:24px">
+      <div class="glass-panel" style="margin-bottom:24px;overflow:visible">
         <div class="panel-header">
           <div class="panel-title">🔮 3D Preview</div>
         </div>
@@ -160,16 +162,20 @@ const UI = {
               <button class="btn btn-ghost btn-xs" title="Open in Slicer" style="color:var(--accent-purple);font-size:1.1rem">🔌</button>
               <div class="dropdown-content">
                 <div class="dropdown-header">Open in Slicer</div>
-                <a href="#" onclick="event.preventDefault();App.openInSlicer('${f.url}','bambustudio')">Bambu Studio</a>
-                <a href="#" onclick="event.preventDefault();App.openInSlicer('${f.url}','prusaslicer')">PrusaSlicer</a>
-                <a href="#" onclick="event.preventDefault();App.openInSlicer('${f.url}','orcaslicer')">OrcaSlicer</a>
-                <a href="#" onclick="event.preventDefault();navigator.clipboard.writeText('${f.library_path || ''}');App.toast('Path copied')">Copy File Path</a>
+                <a href="bambustudio://open?file=${window.location.origin}${f.url}" target="_blank">Bambu Studio</a>
+                <a href="prusaslicer://${window.location.origin}${f.url}" target="_blank">PrusaSlicer</a>
+                <a href="orcaslicer://open?file=${window.location.origin}${f.url}" target="_blank">OrcaSlicer</a>
+                <a href="elegooslicer://open?file=${window.location.origin}${f.url}" target="_blank">Elegoo Slicer</a>
+                ${(isAdmin && f.library_path) ? `
+                <div class="dropdown-divider"></div>
+                <a href="#" onclick="event.preventDefault();App.copyToClipboard('${f.library_path.replace(/\\/g, '\\\\')}')">Copy File Path</a>
+                ` : ''}
               </div>
             </div>
           ` : ''}
           ${f.file_type === 'stl' && stlFile && f.id !== stlFile.id ? `<button class="btn btn-ghost" style="padding:6px;color:var(--accent-cyan)" onclick="event.stopPropagation();App.previewStl(${model.id},'${f.url || '/uploads/'+f.filename}')" title="Preview"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg></button>` : ''}
           <a href="/api/files/${f.id}/download" class="btn btn-ghost" style="padding:6px" title="Download"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg></a>
-          <button class="btn btn-ghost" style="padding:6px;color:var(--error)" onclick="event.stopPropagation();App.deleteFile(${f.id},${model.id})" title="Delete"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg></button>
+          ${isAdmin ? `<button class="btn btn-ghost" style="padding:6px;color:var(--error)" onclick="event.stopPropagation();App.deleteFile(${f.id},${model.id})" title="Delete"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg></button>` : ''}
         </div>
       </div>`;
     }).join('');
@@ -193,11 +199,13 @@ const UI = {
           <div class="detail-meta">${cat} ${printed} ${tags}</div>
         </div>
         <div class="detail-actions">
+          ${isAdmin ? `
           <button class="btn btn-ghost btn-sm" onclick="App.showShareModal(${model.id})" title="Share Model">🔗 Share</button>
           <button class="btn btn-ghost btn-sm" onclick="App.addToProject(${model.id})" title="Add to Project">📁 Project</button>
           <button class="btn btn-secondary btn-sm" onclick="App.showCreateVersion(${model.id},'${model.name.replace(/'/g, "\\'")}')">➕ New Version</button>
           <button class="btn btn-secondary btn-sm" onclick="App.showEditModel(${model.id})">✏️ Edit</button>
           <button class="btn btn-danger btn-sm" onclick="App.confirmDeleteModel(${model.id},'${model.name.replace(/'/g, "\\'")}')">🗑 Delete</button>
+          ` : ''}
         </div>
       </div>
 
@@ -230,9 +238,9 @@ const UI = {
           <div class="glass-panel" style="margin-top:16px">
             <div class="panel-header">
               <div class="panel-title">📁 Files (${model.files?.length || 0})</div>
-              <button class="btn btn-primary btn-xs" onclick="App.showUploadFiles(${model.id})">+ Upload</button>
+              ${isAdmin ? `<button class="btn btn-primary btn-xs" onclick="App.showUploadFiles(${model.id})">+ Upload</button>` : ''}
             </div>
-            <div class="panel-body no-pad">
+            <div class="panel-body no-pad" style="overflow:visible">
               ${filesHtml || '<div class="empty-state" style="padding:30px"><div class="empty-state-text">No files yet</div><div class="empty-state-sub">Upload STL, Gcode, or 3MF files</div></div>'}
             </div>
           </div>

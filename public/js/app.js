@@ -683,12 +683,36 @@ const App = {
   },
 
   async confirmDeleteModel(id, name) {
+    if (!this.currentUser) return;
     if (!confirm(`Are you sure you want to delete "${name}"? This will also delete all files and print history.`)) return;
     try {
       await API.deleteModel(id);
       this.toast('Model deleted');
       this.navigate('/models');
     } catch (e) { this.toast(e.message, 'error'); }
+  },
+
+  copyToClipboard(text) {
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(text).then(() => this.toast('Path copied'));
+    } else {
+      const textArea = document.createElement("textarea");
+      textArea.value = text;
+      textArea.style.position = "fixed";
+      textArea.style.left = "-9999px";
+      textArea.style.top = "0";
+      document.body.appendChild(textArea);
+      textArea.focus();
+      textArea.select();
+      try {
+        document.execCommand('copy');
+        this.toast('Path copied');
+      } catch (err) {
+        console.error('Fallback copy failed', err);
+        this.toast('Failed to copy', 'error');
+      }
+      document.body.removeChild(textArea);
+    }
   },
 
   // ── Files ──
