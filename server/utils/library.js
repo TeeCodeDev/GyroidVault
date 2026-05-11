@@ -23,15 +23,22 @@ async function scanLibrary(libraryPath) {
   }
 
   const results = { modelsAdded: 0, filesAdded: 0, skipped: 0 };
-  const items = fs.readdirSync(libraryPath, { withFileTypes: true });
 
-  for (const item of items) {
-    if (item.isDirectory()) {
-      // Each top-level directory is a model
-      const modelPath = path.resolve(path.join(libraryPath, item.name));
-      const modelName = item.name;
+  function walk(currentPath) {
+    const items = fs.readdirSync(currentPath, { withFileTypes: true });
+    
+    // Check if this directory contains any supported 3D files
+    const has3DFiles = items.some(item => {
+      if (item.isDirectory()) return false;
+      const ext = path.extname(item.name).toLowerCase();
+      return SUPPORTED_EXTENSIONS.includes(ext);
+    });
 
-      // Check if model already exists by library_path
+    if (has3DFiles) {
+      const modelPath = path.resolve(currentPath);
+      const modelName = path.basename(currentPath);
+
+      // Check if model already exists
       let model = db.get('SELECT id, thumbnail FROM models WHERE library_path = ?', [modelPath]);
       if (!model) {
         const r = db.run('INSERT INTO models (name, library_path) VALUES (?, ?)', [modelName, modelPath]);
@@ -39,19 +46,18 @@ async function scanLibrary(libraryPath) {
         results.modelsAdded++;
       }
 
-      // Scan files in the model directory
-      const files = fs.readdirSync(modelPath);
-      for (const filename of files) {
-        const filePath = path.resolve(path.join(modelPath, filename));
+      // Add files from this directory
+      for (const item of items) {
+        if (item.isDirectory()) continue;
+        const filename = item.name;
+        const filePath = path.join(modelPath, filename);
         const stat = fs.statSync(filePath);
-        if (stat.isDirectory()) continue;
-
         const ext = path.extname(filename).toLowerCase();
+
         if (SUPPORTED_EXTENSIONS.includes(ext) || IMAGE_EXTENSIONS.includes(ext)) {
           const ft = getFileType(filename);
-          
-          // Check if file already exists
           const existingFile = db.get('SELECT id FROM files WHERE library_path = ?', [filePath]);
+          
           if (!existingFile) {
             let metadata = null;
             if (ft === 'gcode') {
@@ -59,11 +65,6 @@ async function scanLibrary(libraryPath) {
               if (meta) metadata = JSON.stringify(meta);
             }
 
-            // Store relative path for serving via /library static route
-            // We use the filename as the unique identifier in the UI for now,
-            // but we'll need to handle the pathing in index.js
-            
-            // If it's an image and model has no thumbnail, set it
             if (ft === 'image' && !model.thumbnail) {
               db.run('UPDATE models SET thumbnail = ? WHERE id = ?', [filename, model.id]);
               model.thumbnail = filename;
@@ -78,8 +79,16 @@ async function scanLibrary(libraryPath) {
         }
       }
     }
+
+    // Always continue walking subdirectories
+    for (const item of items) {
+      if (item.isDirectory()) {
+        walk(path.join(currentPath, item.name));
+      }
+    }
   }
 
+  walk(libraryPath);
   return results;
 }
 
