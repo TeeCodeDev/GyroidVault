@@ -229,22 +229,38 @@ const Viewer = {
         const scale = 60 / maxDim;
         mesh.scale.set(scale, scale, scale);
         
-        mesh.rotation.x = -Math.PI / 2;
-        mesh.position.y = (size.z * scale) / 2;
-        
-        // Remove previous mesh if any
-        const prevMesh = scene.children.find(c => c.type === 'Mesh');
-        if (prevMesh) { scene.remove(prevMesh); prevMesh.geometry.dispose(); prevMesh.material.dispose(); }
-        
-        scene.add(mesh);
+        if (is3MF) {
+          scene.add(object);
+          // 3MFs are often already correctly oriented, but let's ensure we frame them
+          const box3 = new THREE.Box3().setFromObject(object);
+          const center3 = new THREE.Vector3();
+          box3.getCenter(center3);
+          object.position.sub(center3);
+          
+          const size3 = new THREE.Vector3();
+          box3.getSize(size3);
+          const maxDim3 = Math.max(size3.x, size3.y, size3.z);
+          const scale3 = 60 / maxDim3;
+          object.scale.set(scale3, scale3, scale3);
+          object.position.y = (size3.y * scale3) / 2;
+          
+          // Use these for camera calc
+          maxDim = maxDim3;
+          size.y = size3.y; 
+        } else {
+          mesh.rotation.x = -Math.PI / 2;
+          mesh.position.y = (size.z * scale) / 2;
+          scene.add(mesh);
+        }
         
         // Auto-scale camera to fit model
         const fov = camera.fov * (Math.PI / 180);
         let cameraDist = Math.abs(maxDim / Math.sin(fov / 2));
         cameraDist *= 1.2; // Safe margin
         
-        camera.position.set(cameraDist * 0.7, cameraDist * 0.6, cameraDist * 0.7);
-        camera.lookAt(0, 0, 0);
+        const modelCenterY = (size.z * scale) / 2;
+        camera.position.set(cameraDist * 0.8, cameraDist * 0.7 + modelCenterY, cameraDist * 0.8);
+        camera.lookAt(0, modelCenterY, 0);
         
         renderer.render(scene, camera);
         const dataUrl = renderer.domElement.toDataURL('image/png');
