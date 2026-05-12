@@ -8,7 +8,7 @@
      * These errors are external and do not affect the application's functionality.
      */
     (function() {
-      // 1. Silence console reporting
+      // 1. SILENCE CONSOLE
       const originalError = console.error;
       console.error = function() {
         const msg = String(arguments[0] || '');
@@ -16,7 +16,7 @@
         originalError.apply(console, arguments);
       };
       
-      // 2. Catch uncaught exceptions
+      // 2. CATCH ERRORS
       window.addEventListener('error', (e) => {
         const msg = e.message || (e.error && e.error.message);
         if (msg && (msg.includes('signalUnknownCredential') || msg.includes('webauthnInterceptor'))) {
@@ -25,19 +25,23 @@
         }
       }, true);
 
-      // 3. Polyfill to prevent the error from being thrown in the first place
+      // 3. ROBUST POLYFILL
       try {
+        const mockFn = () => Promise.resolve();
+        const mockObj = {
+          signalUnknownCredential: mockFn,
+          signalUnknownCredentialAsync: mockFn,
+          isUserVerifyingPlatformAuthenticatorAvailable: mockFn,
+          isConditionalMediationAvailable: mockFn
+        };
+        
         if (typeof window.PublicKeyCredential === 'undefined') {
           window.PublicKeyCredential = function() {};
         }
-        if (window.PublicKeyCredential) {
-          if (!window.PublicKeyCredential.signalUnknownCredential) {
-            window.PublicKeyCredential.signalUnknownCredential = function() { return Promise.resolve(); };
-          }
-          if (!window.PublicKeyCredential.prototype.signalUnknownCredential) {
-            window.PublicKeyCredential.prototype.signalUnknownCredential = function() { return Promise.resolve(); };
-          }
-        }
+        
+        // Apply to both constructor and prototype
+        Object.assign(window.PublicKeyCredential, mockObj);
+        Object.assign(window.PublicKeyCredential.prototype, mockObj);
       } catch(e) {}
     })();
   </script>

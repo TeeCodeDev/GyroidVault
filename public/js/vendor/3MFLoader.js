@@ -1213,6 +1213,11 @@
 			function buildObject( objectId, objects, modelData, textureData ) {
 
 				const objectData = modelData[ 'resources' ][ 'object' ][ objectId ];
+				if ( ! objectData ) {
+					console.warn( 'THREE.3MFLoader: Object not found in resources:', objectId );
+					objects[ objectId ] = new THREE.Group();
+					return;
+				}
 
 				if ( objectData[ 'mesh' ] ) {
 
@@ -1225,11 +1230,15 @@
 				} else {
 
 					const compositeData = objectData[ 'components' ];
-					objects[ objectData.id ] = getBuild( compositeData, objects, modelData, textureData, objectData, buildComposite );
+					if ( compositeData ) {
+						objects[ objectData.id ] = getBuild( compositeData, objects, modelData, textureData, objectData, buildComposite );
+					} else {
+						objects[ objectData.id ] = new THREE.Group();
+					}
 
 				}
 
-				if ( objectData.name ) {
+				if ( objectData.name && objects[ objectData.id ] ) {
 
 					objects[ objectData.id ].name = objectData.name;
 
