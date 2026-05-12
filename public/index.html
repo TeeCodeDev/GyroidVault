@@ -23,31 +23,21 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/css/style.css">
   
-  <!-- 3D Engine and Dependencies -->
-  <script src="https://cdn.jsdelivr.net/npm/three@0.138.0/build/three.min.js"></script>
-  <script src="https://unpkg.com/fflate@0.7.4/lib/browser.js"></script>
+  <!-- Core 3D Engine (Local) -->
+  <script src="/js/vendor/three.min.js"></script>
+  <script src="/js/vendor/fflate.js"></script>
   <script>
-    // 2. FORCE FFLATE BINDING (MANDATORY FOR 3MFLOADER)
-    (function() {
-      const bind = () => {
-        if (typeof fflate !== 'undefined') {
-          window.fflate = fflate;
-          THREE.fflate = fflate;
-          return true;
-        }
-        return false;
-      };
-      if (!bind()) {
-        const i = setInterval(() => { if (bind()) clearInterval(i); }, 10);
-        setTimeout(() => clearInterval(i), 1000);
-      }
-    })();
+    // Link fflate to THREE namespace for 3MF support
+    if (typeof fflate !== 'undefined') {
+      window.fflate = fflate;
+      THREE.fflate = fflate;
+    }
   </script>
   
-  <!-- Loaders -->
-  <script src="https://cdn.jsdelivr.net/npm/three@0.138.0/examples/js/loaders/STLLoader.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.138.0/examples/js/loaders/3MFLoader.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.138.0/examples/js/controls/OrbitControls.js"></script>
+  <!-- Loaders (Local) -->
+  <script src="/js/vendor/STLLoader.js"></script>
+  <script src="/js/vendor/3MFLoader.js"></script>
+  <script src="/js/vendor/OrbitControls.js"></script>
   
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🗄️</text></svg>">
 </head>
