@@ -3,16 +3,24 @@
 <head>
   <meta charset="UTF-8">
   <script>
-    // 1. SILENCE WEB-AUTHN ERRORS (EARLY MOCK)
+    /**
+     * EXTENSION FIX: Silence the 1Password 'webauthnInterceptor' error.
+     * This error is external and does not affect the application's functionality.
+     */
     (function() {
-      try {
-        if (!window.PublicKeyCredential) {
-          window.PublicKeyCredential = function() {};
-          window.PublicKeyCredential.prototype.signalUnknownCredential = function() { return Promise.resolve(); };
-        } else if (!window.PublicKeyCredential.prototype.signalUnknownCredential) {
-          window.PublicKeyCredential.prototype.signalUnknownCredential = function() { return Promise.resolve(); };
+      const originalError = console.error;
+      console.error = function() {
+        const msg = String(arguments[0] || '');
+        if (msg.includes('signalUnknownCredential') || msg.includes('webauthnInterceptor')) return;
+        originalError.apply(console, arguments);
+      };
+      window.addEventListener('error', (e) => {
+        const msg = e.message || (e.error && e.error.message);
+        if (msg && (msg.includes('signalUnknownCredential') || msg.includes('webauthnInterceptor'))) {
+          e.preventDefault();
+          e.stopImmediatePropagation();
         }
-      } catch(e) {}
+      }, true);
     })();
   </script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
