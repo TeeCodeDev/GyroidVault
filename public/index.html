@@ -4,16 +4,19 @@
   <meta charset="UTF-8">
   <script>
     /**
-     * EXTENSION FIX: Silence the 1Password 'webauthnInterceptor' error.
-     * This error is external and does not affect the application's functionality.
+     * EXTENSION FIX: Silence Enpass / 1Password 'webauthnInterceptor' errors.
+     * These errors are external and do not affect the application's functionality.
      */
     (function() {
+      // 1. Silence console reporting
       const originalError = console.error;
       console.error = function() {
         const msg = String(arguments[0] || '');
         if (msg.includes('signalUnknownCredential') || msg.includes('webauthnInterceptor')) return;
         originalError.apply(console, arguments);
       };
+      
+      // 2. Catch uncaught exceptions
       window.addEventListener('error', (e) => {
         const msg = e.message || (e.error && e.error.message);
         if (msg && (msg.includes('signalUnknownCredential') || msg.includes('webauthnInterceptor'))) {
@@ -21,6 +24,21 @@
           e.stopImmediatePropagation();
         }
       }, true);
+
+      // 3. Polyfill to prevent the error from being thrown in the first place
+      try {
+        if (typeof window.PublicKeyCredential === 'undefined') {
+          window.PublicKeyCredential = function() {};
+        }
+        if (window.PublicKeyCredential) {
+          if (!window.PublicKeyCredential.signalUnknownCredential) {
+            window.PublicKeyCredential.signalUnknownCredential = function() { return Promise.resolve(); };
+          }
+          if (!window.PublicKeyCredential.prototype.signalUnknownCredential) {
+            window.PublicKeyCredential.prototype.signalUnknownCredential = function() { return Promise.resolve(); };
+          }
+        }
+      } catch(e) {}
     })();
   </script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
