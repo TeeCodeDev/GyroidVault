@@ -2,6 +2,18 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <script>
+    /**
+     * CORE FIX: Prevent browser extensions (1Password/Bitwarden) from crashing 
+     * when they look for WebAuthn features that aren't properly exposed.
+     */
+    if (typeof window.PublicKeyCredential === 'undefined') {
+      window.PublicKeyCredential = function() {};
+    }
+    if (window.PublicKeyCredential && !window.PublicKeyCredential.prototype.signalUnknownCredential) {
+      window.PublicKeyCredential.prototype.signalUnknownCredential = function() { return Promise.resolve(); };
+    }
+  </script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="description" content="GyroidVault — Self-hosted 3D model management for 3D printing">
   <title>GyroidVault</title>
@@ -10,17 +22,25 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/css/style.css">
   
-  <!-- Core 3D Engine -->
+  <!-- Core Dependencies -->
   <script src="https://cdn.jsdelivr.net/npm/three@0.138.0/build/three.min.js"></script>
-  
-  <!-- Decompression for 3MF -->
-  <script src="https://cdn.jsdelivr.net/npm/fflate@0.8.0/dist/fflate.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/fflate@0.8.2/dist/fflate.umd.js"></script>
   <script>
-    // Explicitly link fflate for Three.js loaders
-    if (typeof fflate !== 'undefined') {
-      window.fflate = fflate;
-      THREE.fflate = fflate;
-    }
+    // Force fflate into the global and THREE namespace immediately
+    (function() {
+      const checkFflate = () => {
+        if (typeof fflate !== 'undefined') {
+          window.fflate = fflate;
+          THREE.fflate = fflate;
+          return true;
+        }
+        return false;
+      };
+      if (!checkFflate()) {
+        const interval = setInterval(() => { if (checkFflate()) clearInterval(interval); }, 50);
+        setTimeout(() => clearInterval(interval), 2000);
+      }
+    })();
   </script>
   
   <!-- Loaders -->
