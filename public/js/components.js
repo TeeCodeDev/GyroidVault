@@ -119,6 +119,16 @@ const UI = {
           </div>
         </div>
       </div>`;
+    } else if (model.thumbnail_url) {
+      viewerHtml = `
+      <div class="glass-panel" style="margin-bottom:24px;overflow:hidden">
+        <div class="panel-header">
+          <div class="panel-title">🖼️ Model Preview</div>
+        </div>
+        <div class="panel-body no-pad" style="height:400px;background:var(--bg-dark);display:flex;align-items:center;justify-content:center">
+          <img src="${model.thumbnail_url}" style="max-width:100%;max-height:100%;object-fit:contain">
+        </div>
+      </div>`;
     } else {
       viewerHtml = `
       <div class="glass-panel" style="margin-bottom:24px;overflow:visible">
@@ -129,7 +139,7 @@ const UI = {
           <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:350px;color:var(--text-muted);text-align:center">
             <div style="font-size:3.5rem;margin-bottom:16px;opacity:.2">📦</div>
             <div style="font-size:1.1rem;font-weight:600;color:var(--text-secondary)">No 3D Preview Available</div>
-            <div style="font-size:.85rem;margin-top:6px;max-width:280px">Upload an STL file to this model to enable the interactive 3D viewer.</div>
+            <div style="font-size:.85rem;margin-top:6px;max-width:280px">Upload an STL or 3MF file to this model to enable the interactive 3D viewer.</div>
           </div>
         </div>
       </div>`;
@@ -244,12 +254,6 @@ const UI = {
               ${filesHtml || '<div class="empty-state" style="padding:30px"><div class="empty-state-text">No files yet</div><div class="empty-state-sub">Upload STL, Gcode, or 3MF files</div></div>'}
             </div>
           </div>
-
-          ${model.thumbnail_url ? `
-          <div class="glass-panel" style="margin-top:16px">
-            <div class="panel-header"><div class="panel-title">🖼 Thumbnail</div></div>
-            <div class="panel-body"><img src="${model.thumbnail_url}" style="border-radius:var(--radius-sm);width:100%"></div>
-          </div>` : ''}
 
           ${model.versions?.length ? `
           <div class="glass-panel" style="margin-top:16px">

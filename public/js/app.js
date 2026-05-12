@@ -474,13 +474,13 @@ const App = {
           <a href="#/models" style="color:var(--text-secondary);font-size:.85rem;display:inline-flex;align-items:center;gap:4px">← Back to Models</a>
         </div>
         ${UI.modelDetail(model)}`;
-      // Initialize 3D viewer if STL file exists
-      const stlFile = (model.files || []).find(f => f.file_type === 'stl');
+      // Initialize 3D viewer if STL or 3MF file exists
+      const stlFile = (model.files || []).find(f => f.file_type === 'stl' || f.file_type === '3mf');
       if (stlFile && typeof Viewer !== 'undefined') {
         const stlUrl = `${stlFile.url || '/uploads/'+stlFile.filename}?t=${Date.now()}`;
         setTimeout(async () => {
           const v = Viewer.create(`stl-viewer-${model.id}`, stlUrl);
-          if (v && !model.thumbnail) {
+          if (v && !model.thumbnail_url) {
             setTimeout(() => Viewer.takeSnapshot(model.id, v.renderer, v.scene, v.camera), 2500);
           }
         }, 100);
