@@ -128,9 +128,21 @@ const Viewer = {
           scene.add(mesh);
         }
 
-        // Position camera
-        camera.position.set(50, 40, 70);
-        controls.target.set(0, 0, 0);
+        // Auto-frame: look at the center of the scaled object
+        const box = new THREE.Box3().setFromObject(is3MF ? object : mesh);
+        const center = new THREE.Vector3();
+        box.getCenter(center);
+        const size = new THREE.Vector3();
+        box.getSize(size);
+
+        // Position camera relative to the object's size
+        const maxDim = Math.max(size.x, size.y, size.z);
+        const fov = camera.fov * (Math.PI / 180);
+        let cameraZ = Math.abs(maxDim / 2 / Math.tan(fov / 2));
+        cameraZ *= 2.2; // Add some padding
+
+        camera.position.set(cameraZ * 0.6, cameraZ * 0.5, cameraZ);
+        controls.target.copy(center);
         controls.update();
       },
       undefined,
