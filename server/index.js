@@ -11,6 +11,43 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const LIBRARY_PATH = process.env.LIBRARY_PATH || (process.platform === 'win32' ? 'C:\\Users\\Systemedic\\Documents\\3Dprints' : '/library');
 
+// ─── FILE WATCHER / SYNC ──────────────────────────────────────────────────
+// Periodically check if files in DB still exist on disk
+function syncLibraryWithDisk() {
+  try {
+    const files = all('SELECT id, library_path, original_name FROM files WHERE library_path IS NOT NULL');
+    let deletedCount = 0;
+    for (const file of files) {
+      if (!fs.existsSync(file.library_path)) {
+        console.log(`[Sync] File missing from disk, removing from DB: ${file.original_name} (${file.library_path})`);
+        run('DELETE FROM files WHERE id=?', [file.id]);
+        deletedCount++;
+      }
+    }
+    
+    // Also cleanup models with no files and no sub-versions
+    const emptyModels = all(`
+      SELECT m.id, m.name FROM models m 
+      LEFT JOIN files f ON f.model_id = m.id 
+      WHERE f.id IS NULL AND m.library_path IS NOT NULL
+    `);
+    for (const model of emptyModels) {
+      console.log(`[Sync] Model directory empty/missing, removing model: ${model.name}`);
+      run('DELETE FROM models WHERE id=?', [model.id]);
+      deletedCount++;
+    }
+
+    if (deletedCount > 0) console.log(`[Sync] Removed ${deletedCount} missing entries from database.`);
+  } catch (e) {
+    console.error('[Sync] Error during library sync:', e);
+  }
+}
+
+// Run sync every 5 minutes
+setInterval(syncLibraryWithDisk, 300000);
+// Initial sync after boot
+setTimeout(syncLibraryWithDisk, 10000);
+
 app.use(express.json());
 
 // ─── AUTH ───────────────────────────────────────────────────────────────────
@@ -449,9 +486,39 @@ app.post('/api/models/:id/files', upload.array('files', 20), (req, res) => {
         }
       }
       if (ft === 'image' && !model.thumbnail) run('UPDATE models SET thumbnail=? WHERE id=?', [file.filename, id]);
-      const r = run('INSERT INTO files (model_id,filename,original_name,file_type,file_size,metadata) VALUES (?,?,?,?,?,?)',
-        [id, file.filename, file.originalname, ft, file.size, metadata]);
-      uploaded.push({ id: r.lastId, model_id: id, filename: file.filename, original_name: file.originalname, file_type: ft, file_size: file.size, metadata });
+      
+      // Move file to library if model has a library path or we can create one
+      let finalPath = file.path;
+      let libPath = model.library_path;
+      
+      if (!libPath) {
+        // Create a folder for the model in library
+        const safeName = model.name.replace(/[<>:"/\\|?*]/g, '').trim() || `model_${id}`;
+        libPath = path.join(LIBRARY_PATH, safeName);
+        if (!fs.existsSync(libPath)) fs.mkdirSync(libPath, { recursive: true });
+        run('UPDATE models SET library_path=? WHERE id=?', [libPath, id]);
+      }
+
+      const destPath = path.join(libPath, file.originalname);
+      try {
+        // Handle filename collisions in library
+        let finalDest = destPath;
+        let counter = 1;
+        while (fs.existsSync(finalDest)) {
+          const ext = path.extname(file.originalname);
+          const base = path.basename(file.originalname, ext);
+          finalDest = path.join(libPath, `${base}_${counter}${ext}`);
+          counter++;
+        }
+        fs.renameSync(file.path, finalDest);
+        finalPath = finalDest;
+      } catch (err) {
+        console.error('Failed to move uploaded file to library:', err);
+      }
+
+      const r = run('INSERT INTO files (model_id,filename,original_name,file_type,file_size,metadata,library_path) VALUES (?,?,?,?,?,?,?)',
+        [id, file.filename, file.originalname, ft, file.size, metadata, finalPath]);
+      uploaded.push({ id: r.lastId, model_id: id, filename: file.filename, original_name: file.originalname, file_type: ft, file_size: file.size, metadata, library_path: finalPath });
     }
     run("UPDATE models SET updated_at=datetime('now') WHERE id=?", [id]);
     res.status(201).json(uploaded);
