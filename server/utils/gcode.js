@@ -72,16 +72,29 @@ function parseGcodeMetadata(filePath) {
         /;\s*support_material\s*=\s*([01])/i
       ],
       tempNozzle: [
-        /;\s*nozzle_temperature\s*=\s*(\d+)/i,
-        /;\s*first_layer_temperature\s*=\s*(\d+)/i,
-        /;\s*temperature\s*=\s*(\d+)/i,
-        /M104\s+S([1-9]\d{2,})/i // Only match 100+ to avoid preheat/standby temps like 140
+        /;\s*nozzle_temperature\s*=\s*([^\r\n]+)/i,
+        /;\s*first_layer_temperature\s*=\s*([^\r\n]+)/i,
+        /;\s*temperature\s*=\s*([^\r\n]+)/i,
+        /M104\s+S([1-9]\d{2,})/i
       ],
       tempBed: [
-        /;\s*bed_temperature\s*=\s*(\d+)/i,
-        /;\s*first_layer_bed_temperature\s*=\s*(\d+)/i,
-        /M140\s+S([3-9]\d+)/i // Only match 30+ to avoid standby
+        /;\s*hot_plate_temp\s*=\s*([^\r\n]+)/i,
+        /;\s*textured_plate_temp\s*=\s*([^\r\n]+)/i,
+        /;\s*bed_temperature\s*=\s*([^\r\n]+)/i,
+        /;\s*first_layer_bed_temperature\s*=\s*([^\r\n]+)/i,
+        /M140\s+S([3-9]\d+)/i
       ]
+    };
+
+    const getDominantValue = (str) => {
+      if (!str) return null;
+      // Handle both semicolon and comma separators
+      const parts = str.split(/[;,]/).map(p => p.trim()).filter(p => p);
+      if (parts.length <= 1) return str;
+      
+      const counts = {};
+      parts.forEach(p => counts[p] = (counts[p] || 0) + 1);
+      return Object.entries(counts).sort((a,b) => b[1] - a[1])[0][0];
     };
 
     for (const [key, regexes] of Object.entries(patterns)) {
@@ -90,15 +103,9 @@ function parseGcodeMetadata(filePath) {
         if (match) {
           let val = match[1].trim();
           
-          // Special handling for multi-material filament types (e.g. "PETG;PLA;PLA")
-          if (key === 'filamentType' && val.includes(';')) {
-            const types = val.split(';').map(t => t.trim()).filter(t => t);
-            if (types.length > 0) {
-              // Count occurrences and pick the most frequent one
-              const counts = {};
-              types.forEach(t => counts[t] = (counts[t] || 0) + 1);
-              val = Object.entries(counts).sort((a,b) => b[1] - a[1])[0][0];
-            }
+          // Use dominant value for almost everything that can be multi-value
+          if (['filamentType', 'tempNozzle', 'tempBed', 'layerHeight', 'infill'].includes(key)) {
+            val = getDominantValue(val);
           }
           
           metadata[key] = val;
