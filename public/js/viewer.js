@@ -278,11 +278,8 @@ const Viewer = {
           scene.add(mesh);
         }
         
-        // Auto-scale camera
-        const fov = camera.fov * (Math.PI / 180);
-        let cameraDist = Math.abs(maxDim / Math.sin(fov / 2)) * 1.2;
-        
-        camera.position.set(cameraDist * 0.8, cameraDist * 0.7 + modelCenterY, cameraDist * 0.8);
+        // Position camera consistently for normalized object size (60)
+        camera.position.set(50, 45 + modelCenterY, 65);
         camera.lookAt(0, modelCenterY, 0);
         
         renderer.render(scene, camera);
