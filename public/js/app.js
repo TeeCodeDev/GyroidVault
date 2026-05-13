@@ -777,10 +777,28 @@ const App = {
             </div>`;
         } else if (tab === 'system') {
           const config = await API.getSystemSettings();
+          const logs = await API.getSystemLogs();
           content.innerHTML = `
-            <div class="glass-panel" style="max-width:800px">
+            <div class="glass-panel" style="max-width:800px;margin-bottom:24px">
               <div class="panel-header"><div class="panel-title">System Settings</div></div>
               <div class="panel-body">${UI.systemSettingsForm(config)}</div>
+            </div>
+            <div class="glass-panel" style="max-width:800px">
+              <div class="panel-header">
+                <div class="panel-title">System Logs</div>
+                <button class="btn btn-ghost btn-xs" onclick="App.handleClearLogs()" style="color:var(--error)">Clear Logs</button>
+              </div>
+              <div class="panel-body no-pad">
+                <div id="system-logs-list" style="max-height:400px;overflow-y:auto;font-family:monospace;font-size:.75rem">
+                  ${logs.length ? logs.map(l => `
+                    <div style="padding:8px 16px;border-bottom:1px solid var(--border);display:flex;gap:12px;${l.level === 'warning' ? 'background:rgba(245,158,11,0.05);' : ''}">
+                      <span style="color:var(--text-muted);white-space:nowrap">${new Date(l.created_at).toLocaleString()}</span>
+                      <span style="color:var(--accent-${l.level === 'warning' ? 'pink' : 'cyan'});font-weight:700;width:60px">[${l.level.toUpperCase()}]</span>
+                      <span style="color:var(--text-secondary)">${l.message}</span>
+                    </div>
+                  `).join('') : '<div style="padding:20px;text-align:center;color:var(--text-muted)">No logs available</div>'}
+                </div>
+              </div>
             </div>`;
         } else if (tab === 'users') {
           const users = await API.getUsers();
@@ -1069,6 +1087,23 @@ const App = {
       this.renderSettings();
     } catch (e) { this.toast(e.message, 'error'); }
   },
+
+  async handleClearLogs() {
+    if (!confirm('Clear all system logs?')) return;
+    try {
+      await API.clearSystemLogs();
+      this.toast('Logs cleared');
+      this.switchSettingsTab('system');
+    } catch (e) { this.toast(e.message, 'error'); }
+  },
+
+  async switchSettingsTab(tab) {
+    const tabs = document.querySelectorAll('.settings-tab');
+    tabs.forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
+    // Trigger the switch logic already defined in renderSettings
+    const activeTab = Array.from(tabs).find(t => t.dataset.tab === tab);
+    if (activeTab) activeTab.click();
+  }
 };
 
 // ── Close modal on overlay click ──

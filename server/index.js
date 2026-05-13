@@ -11,6 +11,14 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const LIBRARY_PATH = process.env.LIBRARY_PATH || (process.platform === 'win32' ? 'C:\\Users\\Systemedic\\Documents\\3Dprints' : '/library');
 
+function logEvent(level, message) {
+  try {
+    run('INSERT INTO system_logs (level, message) VALUES (?, ?)', [level, message]);
+  } catch (e) {
+    console.error('Failed to log event:', e);
+  }
+}
+
 // ─── FILE WATCHER / SYNC ──────────────────────────────────────────────────
 // Periodically check if files in DB still exist on disk
 function syncLibraryWithDisk() {
@@ -19,7 +27,9 @@ function syncLibraryWithDisk() {
     let deletedCount = 0;
     for (const file of files) {
       if (!fs.existsSync(file.library_path)) {
-        console.log(`[Sync] File missing from disk, removing from DB: ${file.original_name} (${file.library_path})`);
+        const msg = `File missing from disk, removing from DB: ${file.original_name}`;
+        console.log(`[Sync] ${msg}`);
+        logEvent('warning', msg);
         run('DELETE FROM files WHERE id=?', [file.id]);
         deletedCount++;
       }
@@ -32,12 +42,14 @@ function syncLibraryWithDisk() {
       WHERE f.id IS NULL AND m.library_path IS NOT NULL
     `);
     for (const model of emptyModels) {
-      console.log(`[Sync] Model directory empty/missing, removing model: ${model.name}`);
+      const msg = `Model directory empty/missing, removing model: ${model.name}`;
+      console.log(`[Sync] ${msg}`);
+      logEvent('warning', msg);
       run('DELETE FROM models WHERE id=?', [model.id]);
       deletedCount++;
     }
 
-    if (deletedCount > 0) console.log(`[Sync] Removed ${deletedCount} missing entries from database.`);
+    if (deletedCount > 0) logEvent('info', `Library sync complete. Removed ${deletedCount} stale entries.`);
   } catch (e) {
     console.error('[Sync] Error during library sync:', e);
   }
@@ -807,6 +819,20 @@ app.delete('/api/materials/:id', (req, res) => {
 });
 
 // ─── STATS ──────────────────────────────────────────────────────────────────
+app.get('/api/system/logs', authenticate, (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
+  try {
+    res.json(all('SELECT * FROM system_logs ORDER BY created_at DESC LIMIT 100'));
+  } catch (e) { res.status(500).json({ error: 'Failed to fetch logs' }); }
+});
+
+app.delete('/api/system/logs', authenticate, (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
+  try {
+    run('DELETE FROM system_logs');
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: 'Failed to clear logs' }); }
+});
 
 // ─── SETTINGS ───────────────────────────────────────────────────────────────
 

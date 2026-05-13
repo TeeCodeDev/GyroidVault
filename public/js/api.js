@@ -137,4 +137,6 @@ const API = {
   // Stats & System
   getStats() { return this.request('/api/stats'); },
   getUpdateStatus() { return this.request('/api/system/updates'); },
+  getSystemLogs() { return this.request('/api/system/logs'); },
+  clearSystemLogs() { return this.request('/api/system/logs', { method: 'DELETE' }); },
 };

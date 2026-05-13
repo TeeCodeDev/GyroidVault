@@ -12,8 +12,8 @@
   <Overview>GyroidVault is a modern, self-hosted 3D model library and print management platform. Organize your STL, 3MF, and Gcode files, track your print history, and manage your projects in a beautiful dashboard.</Overview>
   <Category>Tools: 3D: Status:Stable</Category>
   <WebUI>http://[IP]:[PORT:3000]/</WebUI>
-  <TemplateURL>https://raw.githubusercontent.com/systemedic/GyroidVault/main/GyroidVault.xml</TemplateURL>
-  <Icon>https://raw.githubusercontent.com/systemedic/GyroidVault/main/public/icon.png</Icon>
+  <TemplateURL>https://raw.githubusercontent.com/TeeCodeDev/GyroidVault/main/GyroidVault.xml</TemplateURL>
+  <Icon>https://raw.githubusercontent.com/TeeCodeDev/GyroidVault/main/public/icon.png</Icon>
   <ExtraParams/>
   <PostArgs/>
   <CPUset/>

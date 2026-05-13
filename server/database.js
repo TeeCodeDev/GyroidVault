@@ -180,6 +180,15 @@ async function initDatabase() {
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
     )
   `);
+  
+  db.run(`
+    CREATE TABLE IF NOT EXISTS system_logs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      level TEXT DEFAULT 'info',
+      message TEXT NOT NULL,
+      created_at DATETIME DEFAULT (datetime('now'))
+    )
+  `);
 
   // Migration: Ensure user_id columns exist
   try {
