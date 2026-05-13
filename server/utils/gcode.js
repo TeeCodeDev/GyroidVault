@@ -55,8 +55,8 @@ function parseGcodeMetadata(filePath) {
         /;\s*Klipper info: ([\w\s.]+)/i
       ],
       filamentType: [
-        /;\s*filament_type\s*=\s*([A-Za-z0-9]+)/i,
-        /;\s*material_type\s*=\s*([A-Za-z0-9]+)/i
+        /;\s*filament_type\s*=\s*([^\r\n]+)/i,
+        /;\s*material_type\s*=\s*([^\r\n]+)/i
       ],
       printerModel: [
         /;\s*printer_model\s*=\s*([^\n\r]+)/i,
@@ -83,7 +83,20 @@ function parseGcodeMetadata(filePath) {
       for (const regex of regexes) {
         const match = content.match(regex);
         if (match) {
-          metadata[key] = match[1].trim();
+          let val = match[1].trim();
+          
+          // Special handling for multi-material filament types (e.g. "PETG;PLA;PLA")
+          if (key === 'filamentType' && val.includes(';')) {
+            const types = val.split(';').map(t => t.trim()).filter(t => t);
+            if (types.length > 0) {
+              // Count occurrences and pick the most frequent one
+              const counts = {};
+              types.forEach(t => counts[t] = (counts[t] || 0) + 1);
+              val = Object.entries(counts).sort((a,b) => b[1] - a[1])[0][0];
+            }
+          }
+          
+          metadata[key] = val;
           break;
         }
       }

@@ -1,3 +1,20 @@
+/* ─── Fonts ────────────────────────────────────────────────────────────── */
+@font-face {
+  font-family: 'Inter';
+  src: url('/fonts/Inter-Regular.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Inter';
+  src: url('/fonts/Inter-Bold.woff2') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
 /* ─── Design Tokens ─────────────────────────────────────────────────────── */
 :root {
   --bg-primary: #07070d;
@@ -20,7 +37,7 @@
   --text-primary: #e2e8f0;
   --text-secondary: #94a3b8;
   --text-muted: #475569;
-  --font: 'Inter',system-ui,-apple-system,sans-serif;
+  --font: 'Inter', system-ui, -apple-system, sans-serif;
   --radius-sm: 8px;
   --radius-md: 12px;
   --radius-lg: 16px;
