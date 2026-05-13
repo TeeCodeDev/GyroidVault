@@ -311,7 +311,16 @@ const UI = {
           <label class="form-label">Print Tips</label>
           <textarea class="form-textarea" name="print_tips" placeholder="Recommended settings, supports needed, etc...">${model?.print_tips || ''}</textarea>
         </div>
-        ${tags.length ? `<div class="form-group"><label class="form-label">Tags</label><div style="display:flex;flex-wrap:wrap;gap:8px">${tagCheckboxes}</div></div>` : ''}
+        <div class="form-group">
+          <label class="form-label">Tags</label>
+          <div id="model-tags-container" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px">
+            ${tagCheckboxes}
+          </div>
+          <div class="add-inline" style="max-width:250px;margin-top:4px">
+            <input type="text" id="new-tag-input" class="form-input" placeholder="Add new tag..." onkeydown="if(event.key==='Enter'){event.preventDefault();App.addInlineTag();}">
+            <button type="button" class="btn btn-secondary btn-sm" onclick="App.addInlineTag()">Add</button>
+          </div>
+        </div>
         ${!isEdit ? `
         <div class="form-group">
           <label class="form-label">Files (optional)</label>
@@ -547,9 +556,10 @@ const UI = {
       </form>`;
   },
 
-  registerForm() {
+  registerForm(token = '') {
     return `
       <form onsubmit="App.handleRegister(event)" class="form-grid">
+        <input type="hidden" name="token" value="${token}">
         <div class="form-group">
           <label>Username</label>
           <input type="text" name="username" required placeholder="Choose username" class="form-input">
@@ -632,8 +642,9 @@ const UI = {
             <option value="true" ${config.smtp_secure === 'true' ? 'selected' : ''}>True (SSL)</option>
           </select>
         </div>
-        <div style="margin-top:20px">
+        <div style="margin-top:20px; display:flex; gap:10px;">
           <button type="submit" class="btn btn-primary">Save SMTP Settings</button>
+          <button type="button" class="btn btn-secondary" onclick="App.testSMTP(event)">Send Test Email</button>
         </div>
       </form>`;
   },

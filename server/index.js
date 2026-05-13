@@ -17,18 +17,58 @@ app.use(express.json());
 
 app.post('/api/auth/register', async (req, res) => {
   try {
-    const { username, password, email } = req.body;
+    const { username, password, email, invite_token } = req.body;
     if (!username || !password || !email) return res.status(400).json({ error: 'Missing fields' });
     
     const userCount = get('SELECT COUNT(*) as count FROM users').count;
-    const role = userCount === 0 ? 'admin' : 'user';
+    let role = 'user';
+
+    // If there are existing users, require a valid invite token
+    if (userCount > 0) {
+      if (!invite_token) return res.status(403).json({ error: 'Registration requires an invite token' });
+      const invite = get("SELECT * FROM user_invites WHERE token=? AND expires_at > datetime('now')", [invite_token]);
+      if (!invite) return res.status(400).json({ error: 'Invalid or expired invite token' });
+      if (invite.email.toLowerCase() !== email.toLowerCase()) {
+        return res.status(400).json({ error: 'Email does not match the invitation' });
+      }
+    } else {
+      role = 'admin';
+    }
     
     const hash = await bcrypt.hash(password, 10);
     const r = run('INSERT INTO users (username, email, password_hash, role) VALUES (?, ?, ?, ?)', [username, email, hash, role]);
+    
+    if (invite_token) {
+      run('DELETE FROM user_invites WHERE token=?', [invite_token]);
+    }
+
     res.status(201).json({ id: r.lastId, username, email, role });
   } catch (e) { 
     if (e.message.includes('UNIQUE')) return res.status(400).json({ error: 'Username or Email taken' });
     console.error(e); res.status(500).json({ error: 'Registration failed' }); 
+  }
+});
+
+app.post('/api/auth/invite', authenticate, async (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
+  try {
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ error: 'Email is required' });
+    
+    // Check if user exists
+    const existing = get('SELECT id FROM users WHERE email=?', [email]);
+    if (existing) return res.status(400).json({ error: 'User already exists' });
+
+    const token = require('crypto').randomBytes(20).toString('hex');
+    run("INSERT OR REPLACE INTO user_invites (token, email, expires_at) VALUES (?, ?, datetime('now', '+7 days'))", [token, email]);
+    
+    const { sendInviteEmail } = require('./utils/email');
+    await sendInviteEmail(email, token, req.headers.origin || `http://${req.headers.host}`);
+    
+    res.json({ message: 'Invitation sent' });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: e.message || 'Failed to send invitation' });
   }
 });
 
@@ -262,7 +302,16 @@ app.post('/api/models', authenticate, (req, res) => {
     if (!name?.trim()) return res.status(400).json({ error: 'Name is required' });
     const r = run('INSERT INTO models (name,description,print_tips,source_url,category_id,user_id) VALUES (?,?,?,?,?,?)',
       [name.trim(), description||'', print_tips||'', source_url||'', category_id||null, userId]);
-    if (tags?.length) { for (const t of tags) run('INSERT OR IGNORE INTO model_tags (model_id,tag_id) VALUES (?,?)', [r.lastId, t]); }
+    if (tags?.length) { 
+      for (const t of tags) {
+        let tagId = t;
+        if (typeof t === 'string') {
+          run('INSERT OR IGNORE INTO tags (name) VALUES (?)', [t]);
+          tagId = get('SELECT id FROM tags WHERE name=?', [t]).id;
+        }
+        run('INSERT OR IGNORE INTO model_tags (model_id,tag_id) VALUES (?,?)', [r.lastId, tagId]); 
+      }
+    }
     res.status(201).json(get('SELECT * FROM models WHERE id=?', [r.lastId]));
   } catch (e) { console.error(e); res.status(500).json({ error: 'Failed to create model' }); }
 });
@@ -277,7 +326,16 @@ app.put('/api/models/:id', (req, res) => {
       [name||model.name, description!==undefined?description:model.description, print_tips!==undefined?print_tips:model.print_tips, source_url!==undefined?source_url:model.source_url, category_id!==undefined?category_id:model.category_id, id]);
     if (tags !== undefined) {
       run('DELETE FROM model_tags WHERE model_id=?', [id]);
-      if (tags?.length) for (const t of tags) run('INSERT OR IGNORE INTO model_tags (model_id,tag_id) VALUES (?,?)', [id, t]);
+      if (tags?.length) {
+        for (const t of tags) {
+          let tagId = t;
+          if (typeof t === 'string') {
+            run('INSERT OR IGNORE INTO tags (name) VALUES (?)', [t]);
+            tagId = get('SELECT id FROM tags WHERE name=?', [t]).id;
+          }
+          run('INSERT OR IGNORE INTO model_tags (model_id,tag_id) VALUES (?,?)', [id, tagId]);
+        }
+      }
     }
     res.json(get('SELECT * FROM models WHERE id=?', [id]));
   } catch (e) { console.error(e); res.status(500).json({ error: 'Failed to update model' }); }
@@ -603,6 +661,20 @@ app.post('/api/settings/smtp', authenticate, (req, res) => {
     }
     res.json({ success: true });
   } catch (e) { console.error(e); res.status(500).json({ error: 'Failed to save SMTP settings' }); }
+});
+
+app.post('/api/settings/smtp/test', authenticate, async (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
+  try {
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ error: 'Email is required' });
+    const { sendTestEmail } = require('./utils/email');
+    await sendTestEmail(email);
+    res.json({ success: true });
+  } catch (e) { 
+    console.error(e); 
+    res.status(500).json({ error: e.message || 'Failed to send test email' }); 
+  }
 });
 
 app.get('/api/users', authenticate, (req, res) => {

@@ -28,8 +28,8 @@ const API = {
   login(username, password) {
     return this.request('/api/auth/login', { method: 'POST', body: JSON.stringify({ username, password }) });
   },
-  register(username, email, password) {
-    return this.request('/api/auth/register', { method: 'POST', body: JSON.stringify({ username, email, password }) });
+  register(username, email, password, token = null) {
+    return this.request('/api/auth/register', { method: 'POST', body: JSON.stringify({ username, email, password, invite_token: token }) });
   },
   getMe() { return this.request('/api/auth/me'); },
   updateProfile(data) {
@@ -42,10 +42,12 @@ const API = {
     return this.request('/api/auth/reset-password', { method: 'POST', body: JSON.stringify({ token, password }) });
   },
   getUsers() { return this.request('/api/users'); },
+  inviteUser(email) { return this.request('/api/auth/invite', { method: 'POST', body: JSON.stringify({ email }) }); },
 
   // Settings
   getSMTPSettings() { return this.request('/api/settings/smtp'); },
   saveSMTPSettings(data) { return this.request('/api/settings/smtp', { method: 'POST', body: JSON.stringify(data) }); },
+  testSMTP(data) { return this.request('/api/settings/smtp/test', { method: 'POST', body: JSON.stringify(data) }); },
 
   // Models
   getModels(params = {}) {

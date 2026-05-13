@@ -68,6 +68,8 @@ const App = {
     } else if (path === '/settings') {
       document.getElementById('nav-settings')?.classList.add('active');
       this.renderSettings();
+    } else if (path === '/register') {
+      this.showRegister(params.get('token') || params.get('invite'));
     } else if (path === '/reset-password') {
       this.showResetPassword(params.get('token'));
     } else {
@@ -183,7 +185,7 @@ const App = {
 
   // ── Auth ──
   showLogin() { this.openModal('Login', UI.loginForm()); },
-  showRegister() { this.openModal('Register', UI.registerForm()); },
+  showRegister(token = '') { this.openModal('Register', UI.registerForm(token)); },
   showForgotPassword() { this.openModal('Reset Password', UI.forgotPasswordForm()); },
   showResetPassword(token) { if (token) this.openModal('Choose New Password', UI.resetPasswordForm(token)); },
   
@@ -207,10 +209,26 @@ const App = {
     e.preventDefault();
     const fd = new FormData(e.target);
     try {
-      await API.register(fd.get('username'), fd.get('email'), fd.get('password'));
+      await API.register(fd.get('username'), fd.get('email'), fd.get('password'), fd.get('token'));
       this.toast('Registration successful! Please login.');
       this.showLogin();
     } catch(e) { this.toast(e.message, 'error'); }
+  },
+
+  async handleInviteUser(e) {
+    e.preventDefault();
+    const btn = e.target.querySelector('button');
+    if (btn) { btn.disabled = true; btn.textContent = 'Sending...'; }
+    const fd = new FormData(e.target);
+    try {
+      await API.inviteUser(fd.get('email'));
+      this.toast('Invitation sent successfully', 'success');
+      e.target.reset();
+    } catch(err) {
+      this.toast(err.message, 'error');
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = 'Send Invite'; }
+    }
   },
 
   async handleForgotPassword(e) {
@@ -260,6 +278,33 @@ const App = {
       await API.saveSMTPSettings(data);
       this.toast('SMTP settings saved');
     } catch(e) { this.toast(e.message, 'error'); }
+  },
+  
+  async testSMTP(e) {
+    if (e) e.preventDefault();
+    const btn = e?.target;
+    if (btn) { btn.disabled = true; btn.textContent = 'Sending...'; }
+    try {
+      const email = prompt("Enter an email address to send the test to:", this.currentUser?.email || "");
+      if (!email) throw new Error("Email cancelled");
+      
+      // Before testing, save the current form settings so we test what's on screen
+      const form = btn.closest('form');
+      if (form) {
+        const fd = new FormData(form);
+        const data = Object.fromEntries(fd.entries());
+        await API.saveSMTPSettings(data);
+      }
+
+      await API.testSMTP({ email });
+      this.toast('Test email sent successfully! Check your inbox.', 'success');
+    } catch(err) {
+      if (err.message !== "Email cancelled") {
+        this.toast(err.message, 'error');
+      }
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = 'Send Test Email'; }
+    }
   },
   
   handleLogout() {
@@ -578,6 +623,15 @@ const App = {
         } else if (tab === 'users') {
           const users = await API.getUsers();
           content.innerHTML = `
+            <div class="glass-panel" style="margin-bottom:20px">
+              <div class="panel-header"><div class="panel-title">Invite User</div></div>
+              <div class="panel-body">
+                <form onsubmit="App.handleInviteUser(event)" style="display:flex;gap:10px">
+                  <input type="email" name="email" required placeholder="Email address to invite" class="form-input" style="max-width:300px">
+                  <button type="submit" class="btn btn-primary">Send Invite</button>
+                </form>
+              </div>
+            </div>
             <div class="glass-panel">
               <div class="panel-header"><div class="panel-title">User Management</div></div>
               <div class="panel-body">
@@ -638,6 +692,22 @@ const App = {
     ).join('');
   },
 
+  addInlineTag() {
+    const input = document.getElementById('new-tag-input');
+    const container = document.getElementById('model-tags-container');
+    if (!input || !container) return;
+    const val = input.value.trim();
+    if (!val) return;
+    
+    const label = document.createElement('label');
+    label.className = 'form-checkbox';
+    // Use a prefix to identify it as a new tag string rather than an ID
+    label.innerHTML = `<input type="checkbox" name="tags" value="NEW:${val}" checked> <span class="badge badge-tag" style="background:none;border-color:var(--accent-cyan);color:var(--accent-cyan)">${val} (new)</span>`;
+    container.appendChild(label);
+    input.value = '';
+    input.focus();
+  },
+
   async showEditModel(id) {
     try {
       const [model] = await Promise.all([API.getModel(id), this.loadCache()]);
@@ -648,11 +718,15 @@ const App = {
   async handleModelSubmit(e, id) {
     e.preventDefault();
     const form = new FormData(e.target);
-    const tags = Array.from(e.target.querySelectorAll('input[name="tags"]:checked')).map(c => parseInt(c.value));
+    const tags = Array.from(e.target.querySelectorAll('input[name="tags"]:checked')).map(c => {
+      if (c.value.startsWith('NEW:')) return c.value.substring(4);
+      return parseInt(c.value);
+    });
     const data = {
       name: form.get('name'),
       description: form.get('description'),
       print_tips: form.get('print_tips'),
+      source_url: form.get('source_url'),
       category_id: form.get('category_id') || null,
       tags,
     };

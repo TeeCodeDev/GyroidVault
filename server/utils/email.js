@@ -46,4 +46,50 @@ async function sendResetEmail(email, token, origin) {
   });
 }
 
-module.exports = { sendResetEmail };
+async function sendTestEmail(email) {
+  const transporter = await getTransporter();
+  if (!transporter) throw new Error('SMTP not configured');
+  
+  const from = get('SELECT value FROM system_settings WHERE key="smtp_from"')?.value || 'GyroidVault <noreply@gyroidvault.local>';
+
+  await transporter.sendMail({
+    from,
+    to: email,
+    subject: 'GyroidVault SMTP Test Successful',
+    html: `
+      <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 8px;">
+        <h1 style="color: #00d4ff;">GyroidVault</h1>
+        <h2 style="color: #1e293b;">SMTP Configuration Test</h2>
+        <p style="color: #475569; line-height: 1.6;">If you are reading this email, your SMTP settings in GyroidVault have been configured correctly!</p>
+        <p style="color: #94a3b8; font-size: 0.875rem;">You can now use email features like password resets and user invites.</p>
+      </div>
+    `,
+  });
+}
+
+async function sendInviteEmail(email, token, origin) {
+  const transporter = await getTransporter();
+  if (!transporter) throw new Error('SMTP not configured');
+  
+  const from = get('SELECT value FROM system_settings WHERE key="smtp_from"')?.value || 'GyroidVault <noreply@gyroidvault.local>';
+  const inviteUrl = `${origin}/#/register?token=${token}`;
+
+  await transporter.sendMail({
+    from,
+    to: email,
+    subject: 'You have been invited to GyroidVault',
+    html: `
+      <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 8px;">
+        <h1 style="color: #00d4ff;">GyroidVault</h1>
+        <h2 style="color: #1e293b;">You're Invited!</h2>
+        <p style="color: #475569; line-height: 1.6;">You have been invited to join a GyroidVault library. Click the button below to create your account.</p>
+        <div style="margin: 30px 0; text-align: center;">
+          <a href="${inviteUrl}" style="background-color: #00d4ff; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: 600; display: inline-block;">Create Account</a>
+        </div>
+        <p style="color: #94a3b8; font-size: 0.875rem;">This invite link will expire in 7 days.</p>
+      </div>
+    `,
+  });
+}
+
+module.exports = { sendResetEmail, sendTestEmail, sendInviteEmail };
