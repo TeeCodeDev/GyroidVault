@@ -936,8 +936,8 @@ const UI = {
               <h3 style="margin:0 0 4px 0;font-size:1.4rem;background:var(--accent-gradient);-webkit-background-clip:text;-webkit-text-fill-color:transparent">GyroidVault</h3>
               <p style="margin:0;font-size:.9rem;color:var(--text-secondary)">Self-hosted 3D model management for enthusiasts and professionals.</p>
               <div style="margin-top:12px;display:flex;gap:12px">
-                <a href="https://github.com/systemedic/GyroidVault" target="_blank" class="btn btn-secondary btn-xs">🐙 GitHub Repository</a>
-                <a href="https://ko-fi.com/systemedic" target="_blank" class="btn btn-secondary btn-xs" style="color:#f59e0b;border-color:rgba(245,158,11,0.3)">☕ Buy me a Coffee</a>
+                <a href="https://github.com/TeeCodeDev/GyroidVault" target="_blank" class="btn btn-secondary btn-xs">🐙 GitHub Repository</a>
+                <a href="https://ko-fi.com/D1D51ZGUNL" target="_blank" class="btn btn-secondary btn-xs" style="color:#f59e0b;border-color:rgba(245,158,11,0.3)">☕ Buy me a Coffee</a>
               </div>
             </div>
           </div>

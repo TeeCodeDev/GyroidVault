@@ -1,6 +1,6 @@
 services:
   gyroidvault:
-    image: ghcr.io/systemedic/gyroidvault:latest
+    image: ghcr.io/teecodedev/gyroidvault:latest
     container_name: gyroidvault
     ports:
       - "${PORT:-3457}:3000"

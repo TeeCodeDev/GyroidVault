@@ -664,7 +664,7 @@ app.get('/api/system/updates', async (req, res) => {
       return res.json({ ...lastUpdateCheck.data, currentVersion });
     }
 
-    const githubRes = await fetch('https://api.github.com/repos/systemedic/GyroidVault/releases/latest', {
+    const githubRes = await fetch('https://api.github.com/repos/TeeCodeDev/GyroidVault/releases/latest', {
       headers: { 'User-Agent': 'GyroidVault-Server' }
     });
     
@@ -686,7 +686,7 @@ app.get('/api/system/updates', async (req, res) => {
         latestVersion: currentVersion,
         hasUpdate: false,
         changelog: '',
-        url: 'https://github.com/systemedic/GyroidVault'
+        url: 'https://github.com/TeeCodeDev/GyroidVault'
       };
       res.json({ ...data, currentVersion });
     }
