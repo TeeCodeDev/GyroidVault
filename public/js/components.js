@@ -100,7 +100,7 @@ const UI = {
       ? '<span class="badge badge-printed">✓ Printed</span>'
       : '<span class="badge badge-not-printed">Not printed</span>';
     const sourceLink = model.source_url
-      ? `<a href="${model.source_url}" target="_blank" class="badge badge-category" style="background:var(--bg-tertiary);color:var(--accent-cyan);text-decoration:none;border:1px solid var(--border)">🔗 Bron</a>`
+      ? `<a href="${model.source_url}" target="_blank" class="badge badge-category" style="background:var(--bg-tertiary);color:var(--accent-cyan);text-decoration:none;border:1px solid var(--border)">🔗 Source</a>`
       : '';
 
     // Find first STL or 3MF file for 3D preview
@@ -502,7 +502,10 @@ const UI = {
       </div>`;
     }).join('');
 
-    const colorInput = type === 'categories' ? `<input type="color" id="add-${type}-color" value="#8b5cf6" style="width:40px;height:36px;border:none;background:none;cursor:pointer">` : '';
+    const colorInput = type === 'categories' ? `
+      <div style="width:36px;height:36px;border-radius:50%;overflow:hidden;border:2px solid var(--border);position:relative">
+        <input type="color" id="add-${type}-color" value="#8b5cf6" style="width:150%;height:150%;position:absolute;top:-25%;left:-25%;border:none;background:none;cursor:pointer">
+      </div>` : '';
 
     return `<div class="glass-panel">
       <div class="panel-header"><div class="panel-title">${title}</div></div>
@@ -663,13 +666,13 @@ const UI = {
         </div>
         <div class="form-group">
           <label>From Email</label>
-          <input type="text" name="smtp_from" value="${config.smtp_from || ''}" placeholder="PrintVault <noreply@example.com>" class="form-input">
+          <input type="text" name="smtp_from" value="${config.smtp_from || ''}" placeholder="GyroidVault <noreply@example.com>" class="form-input">
         </div>
         <div class="form-group">
           <label>Secure (SSL/TLS)</label>
           <select name="smtp_secure" class="form-input">
-            <option value="false" ${config.smtp_secure === 'false' ? 'selected' : ''}>False (STARTTLS)</option>
-            <option value="true" ${config.smtp_secure === 'true' ? 'selected' : ''}>True (SSL)</option>
+            <option value="false" ${config.smtp_secure === 'false' ? 'selected' : ''}>STARTTLS (Port 587)</option>
+            <option value="true" ${config.smtp_secure === 'true' ? 'selected' : ''}>SSL (Port 465)</option>
           </select>
         </div>
         <div style="margin-top:20px; display:flex; gap:10px;">
@@ -762,6 +765,23 @@ const UI = {
         <div style="margin-top:20px;display:flex;justify-content:flex-end;gap:8px">
           <button type="button" class="btn btn-secondary" onclick="App.closeModal()">Cancel</button>
           <button type="submit" class="btn btn-primary">${project ? 'Save' : 'Create'}</button>
+        </div>
+      </form>`;
+  },
+
+  smtpTestModal(defaultEmail = '') {
+    return `
+      <form onsubmit="App.handleSendTestEmail(event)" class="form-grid">
+        <p style="font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 16px;">
+          Enter the email address where you would like to receive the test message.
+        </p>
+        <div class="form-group">
+          <label>Recipient Email</label>
+          <input type="email" name="test_email" value="${defaultEmail}" required placeholder="e.g. you@example.com" class="form-input">
+        </div>
+        <div style="margin-top:20px; display:flex; justify-content:flex-end; gap:10px;">
+          <button type="button" class="btn btn-secondary" onclick="App.closeModal()">Cancel</button>
+          <button type="submit" class="btn btn-primary" id="send-test-btn">Send Test</button>
         </div>
       </form>`;
   },

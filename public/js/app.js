@@ -313,27 +313,36 @@ const App = {
   async testSMTP(e) {
     if (e) e.preventDefault();
     const btn = e?.target;
-    if (btn) { btn.disabled = true; btn.textContent = 'Sending...'; }
-    try {
-      const email = prompt("Enter an email address to send the test to:", this.currentUser?.email || "");
-      if (!email) throw new Error("Email cancelled");
-      
-      // Before testing, save the current form settings so we test what's on screen
-      const form = btn.closest('form');
-      if (form) {
+    
+    // First, save current settings so we test what is on screen
+    const form = btn.closest('form');
+    if (form) {
+      try {
         const fd = new FormData(form);
         const data = Object.fromEntries(fd.entries());
         await API.saveSMTPSettings(data);
+      } catch(e) { 
+        return this.toast('Failed to save settings before test: ' + e.message, 'error'); 
       }
+    }
+    
+    this.openModal('Test SMTP Connection', UI.smtpTestModal(this.currentUser?.email || ""));
+  },
 
+  async handleSendTestEmail(e) {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const email = fd.get('test_email');
+    const btn = document.getElementById('send-test-btn');
+
+    if (btn) { btn.disabled = true; btn.textContent = 'Sending...'; }
+    try {
       await API.testSMTP({ email });
       this.toast('Test email sent successfully! Check your inbox.', 'success');
-    } catch(err) {
-      if (err.message !== "Email cancelled") {
-        this.toast(err.message, 'error');
-      }
-    } finally {
-      if (btn) { btn.disabled = false; btn.textContent = 'Send Test Email'; }
+      this.closeModal();
+    } catch(e) { 
+      this.toast(e.message, 'error'); 
+      if (btn) { btn.disabled = false; btn.textContent = 'Send Test'; }
     }
   },
   

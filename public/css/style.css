@@ -268,6 +268,7 @@ select option{background:#1a1a2e;color:#e2e8f0}
 .activity-item{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border);font-size:.875rem}
 .activity-item:last-child{border-bottom:none}
 .activity-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.color-dot{width:10px;height:10px;border-radius:50%;display:inline-block;margin-right:8px;vertical-align:middle}
 
 /* ─── Skeleton Loading ──────────────────────────────────────────────────── */
 .skeleton{background:linear-gradient(90deg,var(--bg-tertiary) 25%,rgba(255,255,255,0.04) 50%,var(--bg-tertiary) 75%);background-size:200% 100%;animation:shimmer 1.5s infinite;border-radius:var(--radius-sm)}
