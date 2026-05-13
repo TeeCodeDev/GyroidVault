@@ -72,7 +72,7 @@
 /* ─── Reset ─────────────────────────────────────────────────────────────── */
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 html{font-size:16px;scroll-behavior:smooth}
-body{font-family:var(--font);background:var(--bg-primary);color:var(--text-primary);min-height:100vh;line-height:1.6;-webkit-font-smoothing:antialiased}
+body{font-family:var(--font);background:var(--bg-primary);color:var(--text-primary);min-height:100vh;line-height:1.6;-webkit-font-smoothing:antialiased;display:flex;flex-direction:column}
 a{color:var(--accent-cyan);text-decoration:none;transition:color var(--transition)}
 a:hover{color:#33dfff}
 img{max-width:100%;display:block}
@@ -105,7 +105,7 @@ input,select,textarea{font-family:var(--font)}
 .btn-success:hover{background:rgba(16,185,129,0.2)}
 
 /* ─── Main Content ──────────────────────────────────────────────────────── */
-.main-content{margin-top:64px;padding:28px;min-height:calc(100vh - 64px);animation:fadeIn .3s ease}
+.main-content{margin-top:64px;padding:28px;flex:1;animation:fadeIn .3s ease}
 @keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
 
 /* ─── Page Header ───────────────────────────────────────────────────────── */
