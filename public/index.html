@@ -39,13 +39,23 @@
           isConditionalMediationAvailable: mockFn
         };
         
+        // Polyfill window properties
         if (typeof window.PublicKeyCredential === 'undefined') {
           window.PublicKeyCredential = function() {};
         }
-        
-        // Apply to both constructor and prototype
         Object.assign(window.PublicKeyCredential, mockObj);
-        Object.assign(window.PublicKeyCredential.prototype, mockObj);
+        if (window.PublicKeyCredential.prototype) {
+          Object.assign(window.PublicKeyCredential.prototype, mockObj);
+        }
+
+        // Polyfill navigator.credentials if needed
+        if (navigator.credentials) {
+          // If signalUnknownCredential is being accessed on an undefined object, 
+          // let's ensure common objects have it if they are being intercepted
+          if (!navigator.credentials.signalUnknownCredential) {
+            navigator.credentials.signalUnknownCredential = mockFn;
+          }
+        }
       } catch(e) {}
     })();
   </script>
