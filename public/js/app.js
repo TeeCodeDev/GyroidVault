@@ -779,7 +779,7 @@ const App = {
         } else if (tab === 'smtp') {
           const config = await API.getSMTPSettings();
           content.innerHTML = `
-            <div class="glass-panel" style="max-width:800px">
+            <div class="glass-panel">
               <div class="panel-header"><div class="panel-title">SMTP Mail Configuration</div></div>
               <div class="panel-body">${UI.smtpSettingsForm(config)}</div>
             </div>`;
@@ -787,11 +787,11 @@ const App = {
           const config = await API.getSystemSettings();
           const logs = await API.getSystemLogs();
           content.innerHTML = `
-            <div class="glass-panel" style="max-width:800px;margin-bottom:24px">
+            <div class="glass-panel" style="margin-bottom:24px">
               <div class="panel-header"><div class="panel-title">System Settings</div></div>
               <div class="panel-body">${UI.systemSettingsForm(config)}</div>
             </div>
-            <div class="glass-panel" style="max-width:800px">
+            <div class="glass-panel">
               <div class="panel-header">
                 <div class="panel-title">System Logs</div>
                 <button class="btn btn-ghost btn-xs" onclick="App.handleClearLogs()" style="color:var(--error)">Clear Logs</button>

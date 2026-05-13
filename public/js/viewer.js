@@ -75,6 +75,7 @@ const Viewer = {
     loader.load(
       fileUrl,
       (object) => {
+        let targetObject = null;
         if (is3MF) {
           const box = new THREE.Box3().setFromObject(object);
           const size = new THREE.Vector3();
@@ -91,6 +92,7 @@ const Viewer = {
           object.position.y = (-center.y * scale) + (size.y * scale) / 2;
           object.position.z = -center.z * scale;
           
+          targetObject = object;
           scene.add(object);
         } else {
           const geometry = object;
@@ -125,11 +127,12 @@ const Viewer = {
           // geometry Y (width) -> world Y? No, rotation is around X.
           // geometry Z (height) -> world Y.
           mesh.position.y = (size.z * scale) / 2;
+          targetObject = mesh;
           scene.add(mesh);
         }
 
         // Auto-frame: look at the center of the scaled object
-        const box = new THREE.Box3().setFromObject(is3MF ? object : mesh);
+        const box = new THREE.Box3().setFromObject(targetObject);
         const center = new THREE.Vector3();
         box.getCenter(center);
         const size = new THREE.Vector3();
