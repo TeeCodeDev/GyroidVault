@@ -2,7 +2,20 @@
 
 **GyroidVault** is a modern, self-hosted 3D model library and print management platform designed for enthusiasts and professionals. Organize your STL, 3MF, and Gcode files, track your print history, and manage your projects in a beautiful, responsive dashboard.
 
-![GyroidVault Dashboard](https://via.placeholder.com/1200x600.png?text=GyroidVault+Premium+Dashboard)
+![GyroidVault Dashboard](screenshots/GyroidVault-Dashboard_page.png)
+
+## 📸 Gallery
+
+<table style="border: none; border-collapse: collapse;">
+  <tr>
+    <td style="padding: 5px; border: none;"><img src="screenshots/GyroidVault-Models_page.png" alt="Models Gallery"></td>
+    <td style="padding: 5px; border: none;"><img src="screenshots/GyroidVault-Collection_page.png" alt="Collections Management"></td>
+  </tr>
+  <tr>
+    <td style="padding: 5px; border: none;"><img src="screenshots/GyroidVault-Single_model_page.png" alt="Model Detail View"></td>
+    <td style="padding: 5px; border: none;"><img src="screenshots/GyroidVault-Dashboard_page.png" alt="Dashboard Statistics"></td>
+  </tr>
+</table>
 
 ## ✨ Features
 
