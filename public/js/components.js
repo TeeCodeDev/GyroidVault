@@ -588,10 +588,12 @@ const UI = {
           <option value="prints">Most Printed</option>
         </select>
         <button class="btn btn-secondary btn-sm" onclick="App.selectAll()">
-          <span class="btn-icon">☑️</span> Select All
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px"><polyline points="9 11 12 14 22 4"></polyline><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg>
+          Select All
         </button>
         <button class="btn btn-primary btn-sm" id="scan-btn" onclick="App.handleScanLibrary()">
-          <span class="btn-icon">🔄</span> Scan Library
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+          Scan Library
         </button>
       </div>`;
   },
@@ -607,7 +609,7 @@ const UI = {
         <span class="settings-item-name">${color} ${item.name}${preset}</span>
         <div class="settings-item-actions">
           ${count}
-          ${canDelete ? `<button class="btn btn-ghost btn-xs" onclick="App.deleteSettingsItem('${type}',${item.id},'${item.name.replace(/'/g, "\\'")}')">🗑</button>` : ''}
+          ${canDelete ? `<button class="btn btn-ghost btn-xs" style="color:var(--error);padding:4px" onclick="App.deleteSettingsItem('${type}',${item.id},'${item.name.replace(/'/g, "\\'")}')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg></button>` : ''}
         </div>
       </div>`;
     }).join('');
@@ -969,7 +971,7 @@ const UI = {
 
   aboutSection(versionInfo = {}) {
     return `
-      <div class="glass-panel" style="max-width:800px">
+      <div class="glass-panel">
         <div class="panel-header"><div class="panel-title">About GyroidVault</div></div>
         <div class="panel-body">
           <div style="display:flex;gap:24px;align-items:flex-start;margin-bottom:24px">
