@@ -253,6 +253,15 @@ select option{background:var(--bg-secondary);color:var(--text-primary)}
 .detail-description{color:var(--text-secondary);font-size:.9rem;line-height:1.7;white-space:pre-wrap}
 .detail-tips{background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.15);border-radius:var(--radius-md);padding:16px;color:var(--text-secondary);font-size:.875rem;line-height:1.7;white-space:pre-wrap}
 
+/* ─── Forms ─────────────────────────────────────────────────────────────── */
+.tag-pill-checkbox{cursor:pointer}
+.tag-pill-checkbox input{display:none}
+.tag-pill{display:inline-flex;align-items:center;padding:6px 14px;background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:20px;font-size:.8rem;color:var(--text-secondary);transition:all .2s ease;user-select:none}
+.tag-pill-checkbox:hover .tag-pill{background:rgba(255,255,255,0.08);border-color:var(--text-muted)}
+.tag-pill-checkbox input:checked + .tag-pill{background:rgba(0,212,255,0.15);border-color:var(--accent-cyan);color:var(--accent-cyan);box-shadow:0 0 12px rgba(0,212,255,0.1)}
+.tag-pill.new{border-style:dashed;border-color:var(--accent-pink);color:var(--accent-pink);background:rgba(236,72,153,0.05)}
+.tag-pill-checkbox input:checked + .tag-pill.new{background:rgba(236,72,153,0.15);border-color:var(--accent-pink);color:var(--accent-pink);box-shadow:0 0 12px rgba(236,72,153,0.1)}
+
 /* ─── Settings ──────────────────────────────────────────────────────────── */
 .settings-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:24px}
 .settings-item{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--border);background:rgba(255,255,255,0.01);margin-bottom:2px;border-radius:6px}

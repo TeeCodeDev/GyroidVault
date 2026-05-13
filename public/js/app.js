@@ -882,9 +882,11 @@ const App = {
     if (!val) return;
     
     const label = document.createElement('label');
-    label.className = 'form-checkbox';
+    label.className = 'tag-pill-checkbox';
     // Use a prefix to identify it as a new tag string rather than an ID
-    label.innerHTML = `<input type="checkbox" name="tags" value="NEW:${val}" checked> <span class="badge badge-tag" style="background:none;border-color:var(--accent-cyan);color:var(--accent-cyan)">${val} (new)</span>`;
+    label.innerHTML = `
+      <input type="checkbox" name="tags" value="NEW:${val}" checked> 
+      <span class="tag-pill new">${val}</span>`;
     container.appendChild(label);
     input.value = '';
     input.focus();

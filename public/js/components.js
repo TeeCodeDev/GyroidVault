@@ -371,7 +371,10 @@ const UI = {
       `<option value="${c.id}" ${model?.category_id == c.id ? 'selected' : ''}>${c.name}</option>`
     ).join('');
     const tagCheckboxes = tags.map(t =>
-      `<label class="form-checkbox"><input type="checkbox" name="tags" value="${t.id}" ${selTags.includes(t.id) ? 'checked' : ''}> ${t.name}</label>`
+      `<label class="tag-pill-checkbox">
+        <input type="checkbox" name="tags" value="${t.id}" ${selTags.includes(t.id) ? 'checked' : ''}>
+        <span class="tag-pill">${t.name}</span>
+      </label>`
     ).join('');
 
     return `
