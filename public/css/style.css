@@ -243,8 +243,8 @@ select option{background:var(--bg-secondary);color:var(--text-primary)}
 .print-notes{font-size:.8rem;color:var(--text-secondary);margin-top:2px;font-style:italic}
 
 /* ─── Model Detail ──────────────────────────────────────────────────────── */
-.detail-layout{display:grid;grid-template-columns:1fr 340px;gap:24px}
-.detail-header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:24px;gap:16px}
+.detail-layout{display:grid;grid-template-columns:1fr 420px;gap:24px;max-width:1600px;margin:0 auto}
+.detail-header{display:flex;align-items:flex-start;justify-content:space-between;margin:0 auto 24px;gap:16px;max-width:1600px}
 .detail-title{font-size:1.5rem;font-weight:800;letter-spacing:-0.02em}
 .detail-actions{display:flex;gap:8px;flex-shrink:0}
 .detail-meta{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap}
