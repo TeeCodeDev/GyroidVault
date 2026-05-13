@@ -6,11 +6,13 @@
 
 ## ✨ Features
 
+- **🌓 Theme Support**: Seamlessly toggle between a sleek dark mode and a crisp light mode.
+- **⚡️ Batch Operations**: Select multiple models to move, delete, or add to collections in one go.
 - **📂 Smart Library**: Automatic background scanning of your local folders or manual web-based uploads.
 - **🔮 Interactive 3D Viewer**: High-performance STL and 3MF preview directly in your browser.
 - **🏗 Project Collections**: Group related models together for complex, multi-part builds.
 - **🔄 Design Iterations**: Keep track of versioning (v1, v2, v3) under a single model entry.
-- **🖨 Print History Log**: Track material usage (PLA, PETG, etc.), print times, and success rates.
+- **🖨 Print History Log**: Track material usage, print times, and success rates.
 - **🔗 Secure Public Sharing**: Generate temporary, secure links to share specific models with others.
 - **🔌 One-Click Slicing**: Open files directly in **Bambu Studio**, **PrusaSlicer**, **OrcaSlicer**, or **Elegoo Slicer**.
 - **🔑 User Management**: Role-based access control (Admin/User) to keep your vault private.
