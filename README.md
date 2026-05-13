@@ -31,30 +31,36 @@
 - **🔑 User Management**: Role-based access control (Admin/User) to keep your vault private.
 - **🎨 Premium Aesthetics**: Sleek dark mode interface with glassmorphism and smooth animations.
 
-## 🚀 Quick Start with Docker
+## 🚀 Quick Start (Docker Compose)
 
-The easiest way to run GyroidVault is using Docker Compose.
+The fastest way to get GyroidVault up and running is using Docker Compose. You don't even need to clone the repository!
 
-1.  **Clone the repository**:
-    ```bash
-    git clone https://github.com/YOUR_USERNAME/GyroidVault.git
-    cd GyroidVault
-    ```
-
-2.  **Configure your library**:
-    Open `docker-compose.yml` and map your 3D prints folder to `/library`:
+1. **Create a file** named `docker-compose.yml`:
     ```yaml
-    volumes:
-      - ./data:/app/data
-      - /path/to/your/3dprints:/library
+    services:
+      gyroidvault:
+        image: ghcr.io/teecodedev/gyroidvault:latest
+        container_name: gyroidvault
+        ports:
+          - "3457:3000"
+        volumes:
+          - ./data:/app/data
+          - /path/to/your/3dprints:/library
+        environment:
+          - NODE_ENV=production
+          - PORT=3000
+          - LIBRARY_PATH=/library
+        restart: unless-stopped
     ```
 
-3.  **Start the application**:
+2. **Configure your library**: Replace `/path/to/your/3dprints` with the actual path on your host machine where your models are stored.
+
+3. **Start the application**:
     ```bash
-    docker-compose up -d --build
+    docker-compose up -d
     ```
 
-4.  **Access GyroidVault**:
+4. **Access GyroidVault**:
     Open [http://localhost:3457](http://localhost:3457) in your browser.
 
 ## 🛠 Manual Installation
