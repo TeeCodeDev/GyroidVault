@@ -677,7 +677,7 @@ const App = {
       if (stlFile && typeof Viewer !== 'undefined') {
         const stlUrl = `${stlFile.url || '/uploads/'+stlFile.filename}?t=${Date.now()}`;
         setTimeout(async () => {
-          const v = Viewer.create(`stl-viewer-${model.id}`, stlUrl);
+          const v = Viewer.create(`stl-viewer-${model.id}`, stlUrl, stlFile.file_type);
           if (v && !model.thumbnail_url) {
             setTimeout(() => Viewer.takeSnapshot(model.id, v.renderer, v.scene, v.camera), 2500);
           }

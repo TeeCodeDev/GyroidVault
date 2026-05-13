@@ -12,10 +12,10 @@ const Viewer = {
     this.activeViewers = [];
   },
 
-  create(containerId, fileUrl) {
+  create(containerId, fileUrl, fileType = null) {
     const container = document.getElementById(containerId);
     if (!container || typeof THREE === 'undefined') return;
-    const is3MF = fileUrl.toLowerCase().includes('.3mf');
+    const is3MF = fileType === '3mf' || (!fileType && fileUrl.toLowerCase().includes('.3mf'));
     if (typeof fflate !== 'undefined') { 
       window.fflate = fflate; 
       THREE.fflate = fflate; 

@@ -12,7 +12,6 @@
      * These errors are external and do not affect the application's functionality.
      */
     (function() {
-      // 1. SILENCE CONSOLE
       const originalError = console.error;
       console.error = function() {
         const msg = String(arguments[0] || '');
@@ -20,7 +19,6 @@
         originalError.apply(console, arguments);
       };
       
-      // 2. CATCH ERRORS
       window.addEventListener('error', (e) => {
         const msg = e.message || (e.error && e.error.message);
         if (msg && (msg.includes('signalUnknownCredential') || msg.includes('webauthnInterceptor'))) {
@@ -29,41 +27,23 @@
         }
       }, true);
 
-      // 3. ROBUST POLYFILL
       try {
         const mockFn = () => Promise.resolve();
+        const mockObj = {
+          signalUnknownCredential: mockFn,
+          signalUnknownCredentialAsync: mockFn,
+          isUserVerifyingPlatformAuthenticatorAvailable: mockFn,
+          isConditionalMediationAvailable: mockFn
+        };
         if (typeof window.PublicKeyCredential === 'undefined') {
-          window.PublicKeyCredential = {
-            signalUnknownCredential: mockFn,
-            signalUnknownCredentialAsync: mockFn,
-            isUserVerifyingPlatformAuthenticatorAvailable: mockFn,
-            isConditionalMediationAvailable: mockFn
-          };
-        } else if (window.PublicKeyCredential) {
-          if (!window.PublicKeyCredential.signalUnknownCredential) window.PublicKeyCredential.signalUnknownCredential = mockFn;
-          if (!window.PublicKeyCredential.signalUnknownCredentialAsync) window.PublicKeyCredential.signalUnknownCredentialAsync = mockFn;
+          window.PublicKeyCredential = mockObj;
+        } else {
+          Object.assign(window.PublicKeyCredential, mockObj);
+        }
+        if (navigator.credentials && !navigator.credentials.signalUnknownCredential) {
+          navigator.credentials.signalUnknownCredential = mockFn;
         }
       } catch (e) {}
-    })();
-        
-        // Polyfill window properties
-        if (typeof window.PublicKeyCredential === 'undefined') {
-          window.PublicKeyCredential = function() {};
-        }
-        Object.assign(window.PublicKeyCredential, mockObj);
-        if (window.PublicKeyCredential.prototype) {
-          Object.assign(window.PublicKeyCredential.prototype, mockObj);
-        }
-
-        // Polyfill navigator.credentials if needed
-        if (navigator.credentials) {
-          // If signalUnknownCredential is being accessed on an undefined object, 
-          // let's ensure common objects have it if they are being intercepted
-          if (!navigator.credentials.signalUnknownCredential) {
-            navigator.credentials.signalUnknownCredential = mockFn;
-          }
-        }
-      } catch(e) {}
     })();
   </script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
