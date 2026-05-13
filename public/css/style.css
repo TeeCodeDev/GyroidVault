@@ -137,6 +137,13 @@ input,select,textarea{font-family:var(--font)}
 .stat-value{font-size:2rem;font-weight:800;letter-spacing:-0.03em;line-height:1}
 .stat-label{color:var(--text-secondary);font-size:.8125rem;margin-top:4px;font-weight:500}
 
+/* ─── Breadcrumbs ───────────────────────────────────────────────────────── */
+.breadcrumbs{display:inline-flex;align-items:center;gap:8px;padding:6px 14px;background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:20px;font-size:.8rem;margin-bottom:16px;backdrop-filter:blur(4px)}
+.breadcrumbs a{color:var(--text-secondary);transition:color var(--transition);display:flex;align-items:center;gap:4px}
+.breadcrumbs a:hover{color:var(--accent-cyan)}
+.breadcrumbs span{color:var(--text-muted);opacity:.5}
+.breadcrumbs .current{color:var(--text-primary);font-weight:600}
+
 /* ─── Card / Glass Panel ───────────────────────────────────────────────── */
 .glass-panel{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-lg);backdrop-filter:blur(12px);overflow:hidden}
 .panel-header{display:flex;align-items:center;justify-content:space-between;padding:18px 22px;border-bottom:1px solid var(--border)}

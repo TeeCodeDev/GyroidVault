@@ -675,9 +675,6 @@ const App = {
     try {
       const model = await API.getModel(id);
       this.el.innerHTML = `
-        <div style="margin-bottom:16px">
-          <a href="#/models" style="color:var(--text-secondary);font-size:.85rem;display:inline-flex;align-items:center;gap:4px">← Back to Models</a>
-        </div>
         ${UI.modelDetail(model)}`;
       // Initialize 3D viewer if STL or 3MF file exists (prefer STL as it's more stable)
       const files = model.files || [];

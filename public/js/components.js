@@ -291,11 +291,11 @@ const UI = {
     `).join('');
 
     const breadcrumbs = `
-      <div style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 12px; display: flex; gap: 8px; align-items: center;">
-        <a href="#/models" style="color: var(--text-secondary);">Library</a>
+      <div class="breadcrumbs">
+        <a href="#/models">Library</a>
         <span>/</span>
-        ${model.category_id ? `<a href="#/models?category=${model.category_id}" style="color: var(--text-secondary);">${model.category_name}</a><span>/</span>` : ''}
-        <span style="color: var(--text-primary); font-weight: 500;">${model.name}</span>
+        ${model.category_id ? `<a href="#/models?category=${model.category_id}">${model.category_name}</a><span>/</span>` : ''}
+        <span class="current">${model.name}</span>
       </div>
     `;
 
@@ -856,8 +856,10 @@ const UI = {
     return `
       <div class="page-header">
         <div>
-          <a href="#/collections" style="color:var(--text-secondary);font-size:.85rem">← Back to Collections</a>
-          <h1 class="page-title" style="margin-top:8px">${project.name}</h1>
+          <div class="breadcrumbs" style="margin-bottom:8px">
+            <a href="#/collections"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg> Back to Collections</a>
+          </div>
+          <h1 class="page-title">${project.name}</h1>
           <p class="page-subtitle">${project.description || 'No description'}</p>
         </div>
         <div style="display:flex;gap:8px">
