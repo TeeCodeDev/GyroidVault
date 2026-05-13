@@ -936,9 +936,14 @@ const UI = {
               <h3 style="margin:0 0 4px 0;font-size:1.4rem;background:var(--accent-gradient);-webkit-background-clip:text;-webkit-text-fill-color:transparent">GyroidVault</h3>
               <p style="margin:0;font-size:.9rem;color:var(--text-secondary)">Self-hosted 3D model management for enthusiasts and professionals.</p>
               <div style="margin-top:12px;display:flex;gap:12px">
-                <a href="https://github.com/TeeCodeDev/GyroidVault" target="_blank" class="btn btn-secondary btn-xs">🐙 GitHub Repository</a>
-                <a href="https://ko-fi.com/D1D51ZGUNL" target="_blank" class="btn btn-secondary btn-xs" style="color:#f59e0b;border-color:rgba(245,158,11,0.3)">☕ Buy me a Coffee</a>
-              </div>
+                <a href="https://github.com/TeeCodeDev/GyroidVault" target="_blank" class="btn btn-secondary btn-xs">
+                  <svg height="14" viewBox="0 0 16 16" width="14" style="vertical-align:middle;margin-right:6px"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"></path></svg>
+                  GitHub Repository
+                </a>
+                <a href="https://ko-fi.com/D1D51ZGUNL" target="_blank" class="btn btn-secondary btn-xs" style="color:#f59e0b;border-color:rgba(245,158,11,0.3)">
+                  <svg height="14" viewBox="0 0 24 24" width="14" style="vertical-align:middle;margin-right:6px"><path fill="currentColor" d="M23.881 8.948c-.773-4.085-4.859-4.593-4.859-4.593H.724c-.304 0-.55.245-.55.55v14.23c0 .305.246.55.55.55h16.471c.305 0 .55-.245.55-.55 0-2.81 2.503-2.658 2.503-6.19 0-1.63-.231-3.081-.231-3.081s4.536.852 3.864-1.416zm-7.653 4.295c-.328.328-.775.464-1.121.353-.346-.111-.57-.424-.57-.751 0-.327.224-.64.57-.751.346-.111.793.025 1.121.353.328.328.328.86 0 1.188z"></path></svg>
+                  Buy me a Coffee
+                </a>
             </div>
           </div>
           
