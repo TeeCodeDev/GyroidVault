@@ -74,7 +74,10 @@ const UI = {
     const isAdmin = App.currentUser?.role === 'admin';
     const plusBtn = isAdmin ? `<button class="btn btn-ghost btn-xs" onclick="event.stopPropagation();App.addToProject(${m.id})" title="Add to project" style="margin-top:-4px;margin-right:-8px;padding:4px">➕</button>` : '';
 
-    return `<div class="model-card" onclick="App.navigate('/models/${m.id}')" data-model-id="${m.id}">
+    const isSelected = App.selectedModelIds?.includes(m.id);
+
+    return `<div class="model-card ${isSelected ? 'selected' : ''}" onclick="App.handleModelCardClick(event, ${m.id})" data-model-id="${m.id}">
+      <div class="model-card-checkbox" onclick="App.toggleModelSelection(event, ${m.id})"></div>
       <div class="model-card-thumb">${thumb}<div class="model-card-badges">${types}</div></div>
       <div class="model-card-body">
         <div style="display:flex;justify-content:space-between;align-items:flex-start">
@@ -88,6 +91,74 @@ const UI = {
         <span style="font-size:.75rem;color:var(--text-muted)">${this.formatDate(m.updated_at)}</span>
       </div>
     </div>`;
+  },
+
+  bulkActionBar(count) {
+    return `
+      <div class="bulk-action-bar ${count > 0 ? 'active' : ''}">
+        <div class="bulk-count">${count} items selected</div>
+        <div class="bulk-actions">
+          <button class="btn btn-secondary btn-sm" onclick="App.openBulkMove()">📁 Move</button>
+          <button class="btn btn-secondary btn-sm" onclick="App.openBulkAddToCollection()">➕ Collection</button>
+          <button class="btn btn-danger btn-sm" onclick="App.openBulkDelete()">🗑 Delete</button>
+          <button class="btn btn-ghost btn-sm" onclick="App.clearSelection()">✕ Clear</button>
+        </div>
+      </div>`;
+  },
+
+  bulkDeleteForm(count) {
+    return `
+      <form id="bulk-delete-form" onsubmit="App.handleBulkDelete(event)">
+        <div style="margin-bottom: 20px; color: var(--text-secondary)">
+          Are you sure you want to delete <strong>${count} models</strong>?<br>
+          This action cannot be undone.
+        </div>
+        <div class="form-group" style="padding: 12px; background: rgba(239, 68, 68, 0.1); border-radius: 6px; border: 1px solid rgba(239, 68, 68, 0.2)">
+          <label class="form-checkbox" style="color: #ef4444; font-weight: 600; margin: 0">
+            <input type="checkbox" name="delete_disk"> 
+            Also permanently delete physical files from disk
+          </label>
+        </div>
+        <div class="form-actions" style="margin-top: 24px">
+          <button type="button" class="btn btn-secondary" onclick="App.closeModal()">Cancel</button>
+          <button type="submit" class="btn btn-danger">Delete ${count} Models</button>
+        </div>
+      </form>`;
+  },
+
+  bulkMoveForm(categories = []) {
+    const options = categories.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+    return `
+      <form onsubmit="App.handleBulkMove(event)">
+        <div class="form-group">
+          <label class="form-label">Select Category</label>
+          <select class="form-select" name="category_id">
+            <option value="">(None)</option>
+            ${options}
+          </select>
+        </div>
+        <div class="form-actions">
+          <button type="button" class="btn btn-secondary" onclick="App.closeModal()">Cancel</button>
+          <button type="submit" class="btn btn-primary">Move Models</button>
+        </div>
+      </form>`;
+  },
+
+  bulkCollectionForm(projects = []) {
+    const options = projects.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
+    return `
+      <form onsubmit="App.handleBulkAddToCollectionSubmit(event)">
+        <div class="form-group">
+          <label class="form-label">Select Collection</label>
+          <select class="form-select" name="project_id">
+            ${options}
+          </select>
+        </div>
+        <div class="form-actions">
+          <button type="button" class="btn btn-secondary" onclick="App.closeModal()">Cancel</button>
+          <button type="submit" class="btn btn-primary">Add to Collection</button>
+        </div>
+      </form>`;
   },
 
   modelDetail(model) {
@@ -480,6 +551,9 @@ const UI = {
           <option value="name">Name</option>
           <option value="prints">Most Printed</option>
         </select>
+        <button class="btn btn-secondary btn-sm" onclick="App.selectAll()">
+          <span class="btn-icon">☑️</span> Select All
+        </button>
         <button class="btn btn-primary btn-sm" id="scan-btn" onclick="App.handleScanLibrary()">
           <span class="btn-icon">🔄</span> Scan Library
         </button>

@@ -69,6 +69,12 @@ const API = {
   createVersion(id, data) {
     return this.request(`/api/models/${id}/versions`, { method: 'POST', body: JSON.stringify(data) });
   },
+  bulkDeleteModels(ids, deleteDisk = false) {
+    return this.request('/api/models/bulk-delete', { method: 'POST', body: JSON.stringify({ ids, deleteDisk }) });
+  },
+  bulkUpdateModels(ids, data) {
+    return this.request('/api/models/bulk-update', { method: 'POST', body: JSON.stringify({ ids, ...data }) });
+  },
 
   // Files
   async uploadFiles(modelId, files) {
@@ -121,6 +127,7 @@ const API = {
   createProject(data) { return this.request('/api/projects', { method: 'POST', body: JSON.stringify(data) }); },
   deleteProject(id) { return this.request(`/api/projects/${id}`, { method: 'DELETE' }); },
   addModelToProject(projectId, modelId) { return this.request(`/api/projects/${projectId}/models`, { method: 'POST', body: JSON.stringify({ model_id: modelId }) }); },
+  bulkAddModelsToProject(projectId, modelIds) { return this.request(`/api/projects/${projectId}/models/bulk`, { method: 'POST', body: JSON.stringify({ model_ids: modelIds }) }); },
   removeModelFromProject(projectId, modelId) { return this.request(`/api/projects/${projectId}/models/${modelId}`, { method: 'DELETE' }); },
 
   // Sharing

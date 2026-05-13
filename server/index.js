@@ -341,43 +341,85 @@ app.put('/api/models/:id', (req, res) => {
   } catch (e) { console.error(e); res.status(500).json({ error: 'Failed to update model' }); }
 });
 
-app.delete('/api/models/:id', (req, res) => {
+// Helper to delete a single model and its associated files
+function deleteModelInternal(id, deleteDisk = false) {
+  const model = get('SELECT * FROM models WHERE id=?', [id]);
+  if (!model) return false;
+  const files = all('SELECT filename, library_path FROM files WHERE model_id=?', [id]);
+
+  for (const f of files) { 
+    const p = path.join(UPLOADS_DIR, f.filename); 
+    if (fs.existsSync(p)) fs.unlinkSync(p); 
+    if (deleteDisk && f.library_path && fs.existsSync(f.library_path)) {
+      try { fs.unlinkSync(f.library_path); } catch(err) { console.error('Failed to delete physical file:', err); }
+    }
+  }
+  
+  if (model.thumbnail) { 
+    const p = path.join(UPLOADS_DIR, model.thumbnail); 
+    if (fs.existsSync(p)) fs.unlinkSync(p); 
+    if (deleteDisk && model.library_path && fs.existsSync(path.join(model.library_path, model.thumbnail))) {
+      try { fs.unlinkSync(path.join(model.library_path, model.thumbnail)); } catch(err) { console.error('Failed to delete physical thumbnail:', err); }
+    }
+  }
+  
+  if (deleteDisk && model.library_path && fs.existsSync(model.library_path)) {
+    try {
+      if (fs.readdirSync(model.library_path).length === 0) {
+        fs.rmdirSync(model.library_path);
+      }
+    } catch(err) {}
+  }
+  run('DELETE FROM models WHERE id=?', [id]);
+  return true;
+}
+
+app.delete('/api/models/:id', authenticate, (req, res) => {
   try {
     const id = Number(req.params.id);
-    const model = get('SELECT * FROM models WHERE id=?', [id]);
-    if (!model) return res.status(404).json({ error: 'Model not found' });
-    const files = all('SELECT filename, library_path FROM files WHERE model_id=?', [id]);
     const deleteDisk = req.query.deleteDisk === 'true';
-
-    for (const f of files) { 
-      const p = path.join(UPLOADS_DIR, f.filename); 
-      if (fs.existsSync(p)) fs.unlinkSync(p); 
-      if (deleteDisk && f.library_path && fs.existsSync(f.library_path)) {
-        try { fs.unlinkSync(f.library_path); } catch(err) { console.error('Failed to delete physical file:', err); }
-      }
-    }
-    
-    if (model.thumbnail) { 
-      const p = path.join(UPLOADS_DIR, model.thumbnail); 
-      if (fs.existsSync(p)) fs.unlinkSync(p); 
-      if (deleteDisk && model.library_path && fs.existsSync(path.join(model.library_path, model.thumbnail))) {
-        try { fs.unlinkSync(path.join(model.library_path, model.thumbnail)); } catch(err) { console.error('Failed to delete physical thumbnail:', err); }
-      }
-    }
-    
-    if (deleteDisk && model.library_path && fs.existsSync(model.library_path)) {
-      // Optional: If you want to delete the whole directory, you can. But it might contain other files.
-      // For safety, we only deleted the known files above. 
-      // If the directory is now empty, we could remove it.
-      try {
-        if (fs.readdirSync(model.library_path).length === 0) {
-          fs.rmdirSync(model.library_path);
-        }
-      } catch(err) {}
-    }
-    run('DELETE FROM models WHERE id=?', [id]);
+    const success = deleteModelInternal(id, deleteDisk);
+    if (!success) return res.status(404).json({ error: 'Model not found' });
     res.json({ success: true });
   } catch (e) { console.error(e); res.status(500).json({ error: 'Failed to delete model' }); }
+});
+
+app.post('/api/models/bulk-delete', authenticate, (req, res) => {
+  try {
+    const { ids, deleteDisk } = req.body;
+    if (!Array.isArray(ids)) return res.status(400).json({ error: 'IDs array required' });
+    for (const id of ids) {
+      deleteModelInternal(Number(id), !!deleteDisk);
+    }
+    res.json({ success: true, count: ids.length });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Failed bulk delete' }); }
+});
+
+app.post('/api/models/bulk-update', authenticate, (req, res) => {
+  try {
+    const { ids, category_id, tags } = req.body;
+    if (!Array.isArray(ids)) return res.status(400).json({ error: 'IDs array required' });
+    
+    for (const id of ids) {
+      if (category_id !== undefined) {
+        run("UPDATE models SET category_id=?, updated_at=datetime('now') WHERE id=?", [category_id || null, id]);
+      }
+      if (tags !== undefined) {
+        run('DELETE FROM model_tags WHERE model_id=?', [id]);
+        if (tags?.length) {
+          for (const t of tags) {
+            let tagId = t;
+            if (typeof t === 'string') {
+              run('INSERT OR IGNORE INTO tags (name) VALUES (?)', [t]);
+              tagId = get('SELECT id FROM tags WHERE name=?', [t]).id;
+            }
+            run('INSERT OR IGNORE INTO model_tags (model_id,tag_id) VALUES (?,?)', [id, tagId]);
+          }
+        }
+      }
+    }
+    res.json({ success: true, count: ids.length });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Failed bulk update' }); }
 });
 
 // ─── FILES ──────────────────────────────────────────────────────────────────
@@ -505,6 +547,18 @@ app.post('/api/projects/:id/models', authenticate, (req, res) => {
     run('INSERT OR IGNORE INTO project_models (project_id, model_id) VALUES (?, ?)', [Number(req.params.id), Number(model_id)]);
     res.json({ success: true });
   } catch (e) { console.error(e); res.status(500).json({ error: 'Failed to add model to project' }); }
+});
+
+app.post('/api/projects/:id/models/bulk', authenticate, (req, res) => {
+  try {
+    const { model_ids } = req.body;
+    if (!Array.isArray(model_ids)) return res.status(400).json({ error: 'model_ids array required' });
+    const projectId = Number(req.params.id);
+    for (const mid of model_ids) {
+      run('INSERT OR IGNORE INTO project_models (project_id, model_id) VALUES (?, ?)', [projectId, Number(mid)]);
+    }
+    res.json({ success: true, count: model_ids.length });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Failed bulk add to project' }); }
 });
 
 app.delete('/api/projects/:id/models/:modelId', authenticate, (req, res) => {

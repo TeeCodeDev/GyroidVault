@@ -4,6 +4,7 @@ const App = {
   searchTimeout: null,
   cache: { categories: [], tags: [], materials: [], users: [] },
   pendingFiles: [],
+  selectedModelIds: [],
 
   // ── Init ──
   async init() {
@@ -65,6 +66,10 @@ const App = {
 
     const links = document.querySelectorAll('.nav-link');
     links.forEach(l => l.classList.remove('active'));
+    
+    // Clear selection when navigating
+    this.selectedModelIds = [];
+    this.renderBulkBar();
 
     if (path === '/' || path === '/dashboard') {
       document.getElementById('nav-dashboard')?.classList.add('active');
@@ -177,6 +182,7 @@ const App = {
         return;
       }
       grid.innerHTML = `<div class="model-grid">${models.map(m => UI.modelCard(m)).join('')}</div>`;
+      this.renderBulkBar();
       if (typeof Viewer !== 'undefined' && Viewer.generateThumbnails) {
         setTimeout(() => Viewer.generateThumbnails(), 50);
       }
@@ -184,6 +190,90 @@ const App = {
       console.error(e);
       document.getElementById('models-grid').innerHTML = '<div class="empty-state"><div class="empty-state-icon">⚠️</div><div class="empty-state-text">Failed to load models</div></div>';
     }
+  },
+
+  renderBulkBar() {
+    let bar = document.getElementById('bulk-action-bar-container');
+    if (!bar) {
+      bar = document.createElement('div');
+      bar.id = 'bulk-action-bar-container';
+      document.body.appendChild(bar);
+    }
+    bar.innerHTML = UI.bulkActionBar(this.selectedModelIds.length);
+  },
+
+  toggleModelSelection(e, id) {
+    if (e) e.stopPropagation();
+    const idx = this.selectedModelIds.indexOf(id);
+    if (idx > -1) this.selectedModelIds.splice(idx, 1);
+    else this.selectedModelIds.push(id);
+    
+    // Update UI without full re-render
+    const card = document.querySelector(`.model-card[data-model-id="${id}"]`);
+    if (card) card.classList.toggle('selected');
+    this.renderBulkBar();
+  },
+
+  handleModelCardClick(e, id) {
+    if (this.selectedModelIds.length > 0) {
+      this.toggleModelSelection(e, id);
+    } else {
+      this.navigate(`/models/${id}`);
+    }
+  },
+
+  clearSelection() {
+    this.selectedModelIds = [];
+    document.querySelectorAll('.model-card.selected').forEach(c => c.classList.remove('selected'));
+    this.renderBulkBar();
+  },
+
+  selectAll() {
+    const cards = document.querySelectorAll('.model-card');
+    this.selectedModelIds = Array.from(cards).map(c => Number(c.dataset.modelId));
+    cards.forEach(c => c.classList.add('selected'));
+    this.renderBulkBar();
+  },
+
+  openBulkDelete() { this.openModal('Bulk Delete', UI.bulkDeleteForm(this.selectedModelIds.length)); },
+  async handleBulkDelete(e) {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    try {
+      await API.bulkDeleteModels(this.selectedModelIds, fd.get('delete_disk') === 'on');
+      this.toast(`Deleted ${this.selectedModelIds.length} models`);
+      this.clearSelection();
+      this.closeModal();
+      this.route();
+    } catch(e) { this.toast(e.message, 'error'); }
+  },
+
+  openBulkMove() { this.openModal('Move to Category', UI.bulkMoveForm(this.cache.categories)); },
+  async handleBulkMove(e) {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    try {
+      await API.bulkUpdateModels(this.selectedModelIds, { category_id: fd.get('category_id') });
+      this.toast(`Moved ${this.selectedModelIds.length} models`);
+      this.clearSelection();
+      this.closeModal();
+      this.route();
+    } catch(e) { this.toast(e.message, 'error'); }
+  },
+
+  async openBulkAddToCollection() {
+    const projects = await API.getProjects();
+    this.openModal('Add to Collection', UI.bulkCollectionForm(projects));
+  },
+  async handleBulkAddToCollectionSubmit(e) {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    try {
+      await API.bulkAddModelsToProject(fd.get('project_id'), this.selectedModelIds);
+      this.toast(`Added ${this.selectedModelIds.length} models to collection`);
+      this.clearSelection();
+      this.closeModal();
+    } catch(e) { this.toast(e.message, 'error'); }
   },
 
   handleSearch(val) {

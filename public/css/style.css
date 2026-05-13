@@ -131,6 +131,12 @@ input,select,textarea{font-family:var(--font)}
 .model-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:20px}
 .model-card{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;transition:all .25s cubic-bezier(.4,0,.2,1);cursor:pointer;position:relative}
 .model-card:hover{border-color:var(--border-hover);transform:translateY(-4px);box-shadow:var(--shadow-lg),var(--shadow-glow)}
+.model-card.selected{border-color:var(--accent-cyan);box-shadow:0 0 0 2px var(--accent-cyan), var(--shadow-lg)}
+
+.model-card-checkbox{position:absolute;top:12px;left:12px;z-index:20;width:22px;height:22px;border-radius:6px;background:rgba(0,0,0,0.5);border:2px solid rgba(255,255,255,0.4);display:flex;align-items:center;justify-content:center;color:#fff;opacity:0;transition:all .2s;pointer-events:none}
+.model-card:hover .model-card-checkbox, .model-card.selected .model-card-checkbox{opacity:1;pointer-events:auto}
+.model-card.selected .model-card-checkbox{background:var(--accent-cyan);border-color:var(--accent-cyan)}
+.model-card.selected .model-card-checkbox::after{content:'✓';font-size:14px;font-weight:bold}
 .model-card-thumb{height:180px;position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center}
 .model-card-thumb img{width:100%;height:100%;object-fit:cover}
 .model-card-placeholder{width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:3rem;opacity:.6}
@@ -336,6 +342,12 @@ select option{background:var(--bg-secondary);color:var(--text-primary)}
   .detail-header{flex-direction:column}
   .page-header{flex-direction:column;align-items:flex-start}
 }
+
+/* ─── Bulk Action Bar ───────────────────────────────────────────────────── */
+.bulk-action-bar{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(100px);background:var(--bg-secondary);border:1px solid var(--accent-cyan);box-shadow:var(--shadow-lg), 0 0 20px rgba(0,212,255,0.2);padding:12px 24px;border-radius:var(--radius-xl);z-index:1000;display:flex;align-items:center;gap:20px;transition:transform 0.4s cubic-bezier(.175,.885,.32,1.275);backdrop-filter:blur(10px)}
+.bulk-action-bar.active{transform:translateX(-50%) translateY(0)}
+.bulk-count{font-weight:700;color:var(--accent-cyan);padding-right:15px;border-right:1px solid var(--border)}
+.bulk-actions{display:flex;gap:8px}
 
 @keyframes rotate { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 .rotating { display: inline-block; animation: rotate 2s linear infinite; }
