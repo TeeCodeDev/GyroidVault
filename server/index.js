@@ -522,10 +522,11 @@ app.post('/api/models/:id/files', upload.array('files', 20), (req, res) => {
           finalDest = path.join(libPath, `${base}_${counter}${ext}`);
           counter++;
         }
-        fs.renameSync(file.path, finalDest);
+        fs.copyFileSync(file.path, finalDest);
+        fs.unlinkSync(file.path);
         finalPath = finalDest;
       } catch (err) {
-        console.error('Failed to move uploaded file to library:', err);
+        console.error('Failed to move uploaded file to library (using copy fallback):', err);
       }
 
       const r = run('INSERT INTO files (model_id,filename,original_name,file_type,file_size,metadata,library_path) VALUES (?,?,?,?,?,?,?)',

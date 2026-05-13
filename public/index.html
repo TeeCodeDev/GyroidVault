@@ -32,12 +32,19 @@
       // 3. ROBUST POLYFILL
       try {
         const mockFn = () => Promise.resolve();
-        const mockObj = {
-          signalUnknownCredential: mockFn,
-          signalUnknownCredentialAsync: mockFn,
-          isUserVerifyingPlatformAuthenticatorAvailable: mockFn,
-          isConditionalMediationAvailable: mockFn
-        };
+        if (typeof window.PublicKeyCredential === 'undefined') {
+          window.PublicKeyCredential = {
+            signalUnknownCredential: mockFn,
+            signalUnknownCredentialAsync: mockFn,
+            isUserVerifyingPlatformAuthenticatorAvailable: mockFn,
+            isConditionalMediationAvailable: mockFn
+          };
+        } else if (window.PublicKeyCredential) {
+          if (!window.PublicKeyCredential.signalUnknownCredential) window.PublicKeyCredential.signalUnknownCredential = mockFn;
+          if (!window.PublicKeyCredential.signalUnknownCredentialAsync) window.PublicKeyCredential.signalUnknownCredentialAsync = mockFn;
+        }
+      } catch (e) {}
+    })();
         
         // Polyfill window properties
         if (typeof window.PublicKeyCredential === 'undefined') {

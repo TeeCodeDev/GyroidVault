@@ -16,7 +16,10 @@ const Viewer = {
     const container = document.getElementById(containerId);
     if (!container || typeof THREE === 'undefined') return;
     const is3MF = fileUrl.toLowerCase().includes('.3mf');
-    if (is3MF && typeof fflate !== 'undefined') { window.fflate = fflate; THREE.fflate = fflate; }
+    if (typeof fflate !== 'undefined') { 
+      window.fflate = fflate; 
+      THREE.fflate = fflate; 
+    }
     const loaderClass = is3MF ? (THREE.ThreeMFLoader || THREE['3MFLoader'] || THREE.MFLoader) : (THREE.STLLoader);
     if (!loaderClass) return;
     const loader = new loaderClass();
