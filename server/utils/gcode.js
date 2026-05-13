@@ -44,8 +44,9 @@ function parseGcodeMetadata(filePath) {
         /;\s*estimated_time\s*:\s*([^\n\r]+)/i
       ],
       filamentUsed: [
-        /;\s*filament_used\s*=\s*([\d.]+)/i, 
+        /;\s*filament used \[m\]\s*=\s*([\d.]+)/i,
         /;\s*Filament used:\s*([\d.]+m)/i,
+        /;\s*filament_used\s*=\s*([\d.]+)/i, 
         /;\s*filament used \[mm\]\s*=\s*([\d.]+)/i
       ],
       slicer: [
@@ -64,18 +65,22 @@ function parseGcodeMetadata(filePath) {
       ],
       weight: [
         /;\s*total filament used \[g\]\s*=\s*([\d.]+)/i,
-        /;\s*filament_weight\s*=\s*([\d.]+)/i
+        /;\s*filament_weight\s*=\s*([\d.]+)/i,
+        /;\s*filament used \[g\]\s*=\s*([\d.]+)/i
       ],
       supports: [
         /;\s*support_material\s*=\s*([01])/i
       ],
       tempNozzle: [
-        /M104\s+S(\d+)/i,
-        /;\s*temperature\s*=\s*(\d+)/i
+        /;\s*nozzle_temperature\s*=\s*(\d+)/i,
+        /;\s*first_layer_temperature\s*=\s*(\d+)/i,
+        /;\s*temperature\s*=\s*(\d+)/i,
+        /M104\s+S([1-9]\d{2,})/i // Only match 100+ to avoid preheat/standby temps like 140
       ],
       tempBed: [
-        /M140\s+S(\d+)/i,
-        /;\s*bed_temperature\s*=\s*(\d+)/i
+        /;\s*bed_temperature\s*=\s*(\d+)/i,
+        /;\s*first_layer_bed_temperature\s*=\s*(\d+)/i,
+        /M140\s+S([3-9]\d+)/i // Only match 30+ to avoid standby
       ]
     };
 

@@ -20,8 +20,8 @@
       };
       
       window.addEventListener('error', (e) => {
-        const msg = e.message || (e.error && e.error.message);
-        if (msg && (msg.includes('signalUnknownCredential') || msg.includes('webauthnInterceptor'))) {
+        const msg = e.message || (e.error && e.error.message) || String(e);
+        if (msg.includes('signalUnknownCredential') || msg.includes('webauthnInterceptor')) {
           e.preventDefault();
           e.stopImmediatePropagation();
         }
@@ -29,19 +29,23 @@
 
       try {
         const mockFn = () => Promise.resolve();
-        const mockObj = {
-          signalUnknownCredential: mockFn,
-          signalUnknownCredentialAsync: mockFn,
-          isUserVerifyingPlatformAuthenticatorAvailable: mockFn,
-          isConditionalMediationAvailable: mockFn
-        };
+        const props = ['signalUnknownCredential', 'signalUnknownCredentialAsync', 'isUserVerifyingPlatformAuthenticatorAvailable', 'isConditionalMediationAvailable'];
+        
         if (typeof window.PublicKeyCredential === 'undefined') {
-          window.PublicKeyCredential = mockObj;
-        } else {
-          Object.assign(window.PublicKeyCredential, mockObj);
+          window.PublicKeyCredential = function() {};
         }
+        
+        props.forEach(p => {
+          if (window.PublicKeyCredential && !window.PublicKeyCredential[p]) {
+            Object.defineProperty(window.PublicKeyCredential, p, { value: mockFn, writable: true });
+          }
+          if (window.PublicKeyCredential.prototype && !window.PublicKeyCredential.prototype[p]) {
+            Object.defineProperty(window.PublicKeyCredential.prototype, p, { value: mockFn, writable: true });
+          }
+        });
+
         if (navigator.credentials && !navigator.credentials.signalUnknownCredential) {
-          navigator.credentials.signalUnknownCredential = mockFn;
+          Object.defineProperty(navigator.credentials, 'signalUnknownCredential', { value: mockFn, writable: true });
         }
       } catch (e) {}
     })();

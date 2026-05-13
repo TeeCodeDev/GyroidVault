@@ -16,11 +16,13 @@ const Viewer = {
     const container = document.getElementById(containerId);
     if (!container || typeof THREE === 'undefined') return;
     const is3MF = fileType === '3mf' || (!fileType && fileUrl.toLowerCase().includes('.3mf'));
+    console.log('[Viewer] Create:', { fileUrl, fileType, is3MF });
     if (typeof fflate !== 'undefined') { 
       window.fflate = fflate; 
       THREE.fflate = fflate; 
     }
     const loaderClass = is3MF ? (THREE.ThreeMFLoader || THREE['3MFLoader'] || THREE.MFLoader) : (THREE.STLLoader);
+    console.log('[Viewer] Using loader:', loaderClass?.name || 'Unknown');
     if (!loaderClass) return;
     const loader = new loaderClass();
 

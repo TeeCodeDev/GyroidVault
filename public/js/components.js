@@ -231,10 +231,18 @@ const UI = {
           if (meta.tempNozzle && meta.tempBed) items.push(`<span><b>Temp:</b> ${meta.tempNozzle}°C/${meta.tempBed}°C</span>`);
           else if (meta.tempNozzle) items.push(`<span><b>Temp:</b> ${meta.tempNozzle}°C</span>`);
           if (meta.filamentType) items.push(`<span><b>Mat:</b> ${meta.filamentType}</span>`);
-          if (meta.weight) items.push(`<span><b>Weight:</b> ${meta.weight}g</span>`);
+          
+          // Improved filament usage display
+          if (meta.weight) items.push(`<span><b>Used:</b> ${meta.weight}g</span>`);
+          else if (meta.filamentUsed) {
+            const val = meta.filamentUsed;
+            const unit = val.endsWith('m') ? '' : 'm';
+            items.push(`<span><b>Used:</b> ${val}${unit}</span>`);
+          }
+
           if (meta.supports === '1') items.push(`<span><b>Supports:</b> Yes</span>`);
           if (meta.printerModel) items.push(`<span><b>Printer:</b> ${meta.printerModel}</span>`);
-          if (items.length) metaHtml = `<div class="file-gcode-meta" style="display:flex;flex-wrap:wrap;gap:8px;font-size:0.8rem;color:var(--text-secondary);margin-top:4px;">${items.join('')}</div>`;
+          if (items.length) metaHtml = `<div class="file-gcode-meta" style="display:flex;flex-wrap:wrap;gap:12px;font-size:0.75rem;color:var(--text-secondary);margin-top:6px;background:rgba(255,255,255,0.03);padding:4px 8px;border-radius:4px;border:1px solid var(--border)">${items.join('')}</div>`;
         } catch(e) {}
       }
 
