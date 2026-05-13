@@ -1,24 +1,24 @@
 # 🗄️ GyroidVault
 
-**GyroidVault** is a modern, self-hosted 3D model library and print management platform. Organize your STL, 3MF, and Gcode files, track your print history, and manage your projects in a beautiful, responsive dashboard.
+**GyroidVault** is a modern, self-hosted 3D model library and print management platform designed for enthusiasts and professionals. Organize your STL, 3MF, and Gcode files, track your print history, and manage your projects in a beautiful, responsive dashboard.
 
-![GyroidVault Dashboard](https://via.placeholder.com/1200x600.png?text=GyroidVault+Dashboard+Preview)
+![GyroidVault Dashboard](https://via.placeholder.com/1200x600.png?text=GyroidVault+Premium+Dashboard)
 
 ## ✨ Features
 
-- **📂 Smart Library**: Automatic scanning of your local folders or manual uploads.
-- **🔮 3D Viewer**: Interactive STL preview directly in your browser.
-- **🏗 Project Collections**: Group related models together (e.g., multi-part builds).
-- **🔄 Versioning**: Keep track of design iterations (v1, v2, v3) under a single entry.
-- **🖨 Print History**: Log your prints, material usage, and success rates.
-- **🔗 Public Sharing**: Generate temporary, secure links to share models with friends.
-- **🔑 Multi-User**: Role-based access control (Admin/User).
-- **🔌 Slicer Integration**: Open files directly in Bambu Studio, PrusaSlicer, or OrcaSlicer.
-- **📧 Password Recovery**: Built-in SMTP support for account management.
+- **📂 Smart Library**: Automatic background scanning of your local folders or manual web-based uploads.
+- **🔮 Interactive 3D Viewer**: High-performance STL and 3MF preview directly in your browser.
+- **🏗 Project Collections**: Group related models together for complex, multi-part builds.
+- **🔄 Design Iterations**: Keep track of versioning (v1, v2, v3) under a single model entry.
+- **🖨 Print History Log**: Track material usage (PLA, PETG, etc.), print times, and success rates.
+- **🔗 Secure Public Sharing**: Generate temporary, secure links to share specific models with others.
+- **🔌 One-Click Slicing**: Open files directly in **Bambu Studio**, **PrusaSlicer**, **OrcaSlicer**, or **Elegoo Slicer**.
+- **🔑 User Management**: Role-based access control (Admin/User) to keep your vault private.
+- **🎨 Premium Aesthetics**: Sleek dark mode interface with glassmorphism and smooth animations.
 
 ## 🚀 Quick Start with Docker
 
-The easiest way to run PrintVault is using Docker Compose.
+The easiest way to run GyroidVault is using Docker Compose.
 
 1.  **Clone the repository**:
     ```bash
@@ -40,23 +40,24 @@ The easiest way to run PrintVault is using Docker Compose.
     ```
 
 4.  **Access GyroidVault**:
-    Open [http://localhost:3000](http://localhost:3000) in your browser.
+    Open [http://localhost:3457](http://localhost:3457) in your browser.
 
 ## 🛠 Manual Installation
 
-If you prefer to run it without Docker:
-
 1.  Install [Node.js](https://nodejs.org/) (v18+).
 2.  Clone this repo and run `npm install`.
-3.  Set your library path in `server/index.js` or via `LIBRARY_PATH` environment variable.
+3.  Copy `.env.example` to `.env` and configure your settings.
 4.  Run `npm start`.
 
-## 🛡 Security
+## 🛡 Security & Privacy
 
-- First registered user automatically becomes the **Admin**.
-- All uploads and system settings are restricted to authenticated users.
-- Database is stored locally in SQLite for privacy and easy backups.
+- **SQLite Database**: Your data stays on your hardware. No external cloud database required.
+- **Admin Control**: The first registered user automatically becomes the Admin.
+- **Encrypted Files**: Files are handled securely and can be managed directly from the UI.
 
 ## 📜 License
 
-MIT License - feel free to use and contribute!
+This project is licensed under the **GNU Affero General Public License v3.0 (AGPL-3.0)**. See the [LICENSE](LICENSE) file for details. This ensures that the software remains free and that any improvements made by the community are shared back.
+
+---
+*Built with ❤️ for the 3D Printing Community.*

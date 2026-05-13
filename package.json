@@ -23,7 +23,7 @@
     "url": "https://github.com/TeeCodeDev/GyroidVault/issues"
   },
   "homepage": "https://github.com/TeeCodeDev/GyroidVault#readme",
-  "license": "MIT",
+  "license": "AGPL-3.0",
   "dependencies": {
     "bcryptjs": "^3.0.3",
     "express": "^4.21.0",
