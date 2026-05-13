@@ -5,6 +5,7 @@ const App = {
   cache: { categories: [], tags: [], materials: [], users: [] },
   pendingFiles: [],
   selectedModelIds: [],
+  versionInfo: null,
 
   // ── Init ──
   async init() {
@@ -16,9 +17,32 @@ const App = {
     
     window.addEventListener('hashchange', () => this.route());
     await this.loadCache();
+    this.checkUpdates();
     this.updateUserNav();
     this.updateThemeIcon();
     this.route();
+  },
+
+  async checkUpdates() {
+    try {
+      const info = await API.getUpdateStatus();
+      if (info) {
+        this.versionInfo = info;
+        const verEl = document.getElementById('app-version');
+        if (verEl) verEl.textContent = `v${info.currentVersion}`;
+        
+        if (info.hasUpdate) {
+          const badge = document.getElementById('update-badge');
+          if (badge) badge.style.display = 'inline-flex';
+        }
+      }
+    } catch(e) { console.warn('Update check failed', e); }
+  },
+
+  showUpdateInfo() {
+    if (this.versionInfo) {
+      this.openModal('Update Available', UI.aboutSection(this.versionInfo));
+    }
   },
 
   toggleTheme() {
@@ -719,6 +743,7 @@ const App = {
         ${this.currentUser?.role === 'admin' ? '<button class="tab-btn" data-tab="system" style="background:none;border:none;color:var(--text-secondary);padding:10px 20px;cursor:pointer;font-weight:600;border-bottom:2px solid transparent;transition:all .2s">System</button>' : ''}
         ${this.currentUser?.role === 'admin' ? '<button class="tab-btn" data-tab="smtp" style="background:none;border:none;color:var(--text-secondary);padding:10px 20px;cursor:pointer;font-weight:600;border-bottom:2px solid transparent;transition:all .2s">SMTP & Mail</button>' : ''}
         ${this.currentUser?.role === 'admin' ? '<button class="tab-btn" data-tab="users" style="background:none;border:none;color:var(--text-secondary);padding:10px 20px;cursor:pointer;font-weight:600;border-bottom:2px solid transparent;transition:all .2s">Users</button>' : ''}
+        <button class="tab-btn" data-tab="about" style="background:none;border:none;color:var(--text-secondary);padding:10px 20px;cursor:pointer;font-weight:600;border-bottom:2px solid transparent;transition:all .2s">About</button>
       </div>
       <div id="settings-content"></div>`;
 
@@ -778,6 +803,8 @@ const App = {
                 </table>
               </div>
             </div>`;
+        } else if (tab === 'about') {
+          content.innerHTML = UI.aboutSection(this.versionInfo || { currentVersion: '1.0.0' });
         }
       } catch (e) { console.error(e); }
     };

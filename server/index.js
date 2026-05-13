@@ -651,6 +651,44 @@ app.delete('/api/categories/:id', (req, res) => {
   catch (e) { res.status(500).json({ error: 'Failed' }); }
 });
 
+// ── SYSTEM & UPDATES ───────────────────────────────────────────────────────
+let lastUpdateCheck = { time: 0, data: null };
+
+app.get('/api/system/updates', async (req, res) => {
+  try {
+    const pkg = require('../package.json');
+    const currentVersion = pkg.version;
+    
+    // Cache for 1 hour to stay under GitHub rate limits
+    if (lastUpdateCheck.data && (Date.now() - lastUpdateCheck.time < 3600000)) {
+      return res.json({ ...lastUpdateCheck.data, currentVersion });
+    }
+
+    const githubRes = await fetch('https://api.github.com/repos/systemedic/GyroidVault/releases/latest', {
+      headers: { 'User-Agent': 'GyroidVault-Server' }
+    });
+    
+    if (githubRes.ok) {
+      const release = await githubRes.json();
+      const latestVersion = release.tag_name.replace('v', '');
+      const data = {
+        latestVersion,
+        hasUpdate: latestVersion !== currentVersion,
+        changelog: release.body,
+        published_at: release.published_at,
+        url: release.html_url
+      };
+      lastUpdateCheck = { time: Date.now(), data };
+      res.json({ ...data, currentVersion });
+    } else {
+      res.status(githubRes.status).json({ error: 'GitHub API unreachable' });
+    }
+  } catch (e) {
+    console.error('Update check failed:', e);
+    res.status(500).json({ error: 'Failed to check for updates' });
+  }
+});
+
 // ─── TAGS ───────────────────────────────────────────────────────────────────
 
 app.get('/api/tags', (req, res) => {

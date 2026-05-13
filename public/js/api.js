@@ -134,6 +134,7 @@ const API = {
   createShare(modelId, expiresDays) { return this.request('/api/shares', { method: 'POST', body: JSON.stringify({ model_id: modelId, expires_days: expiresDays }) }); },
   getSharedModel(slug) { return this.request(`/api/shares/${slug}`); },
 
-  // Stats
+  // Stats & System
   getStats() { return this.request('/api/stats'); },
+  getUpdateStatus() { return this.request('/api/system/updates'); },
 };

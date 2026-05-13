@@ -923,5 +923,43 @@ const UI = {
           </div>
         </div>
       </div>`;
-  }
+  },
+
+  aboutSection(versionInfo = {}) {
+    return `
+      <div class="glass-panel" style="max-width:800px">
+        <div class="panel-header"><div class="panel-title">About GyroidVault</div></div>
+        <div class="panel-body">
+          <div style="display:flex;gap:24px;align-items:flex-start;margin-bottom:24px">
+            <div style="width:80px;height:80px;background:var(--accent-gradient);border-radius:16px;display:flex;align-items:center;justify-content:center;font-size:3rem;box-shadow:0 8px 16px rgba(0,0,0,0.2)">🗄️</div>
+            <div style="flex:1">
+              <h3 style="margin:0 0 4px 0;font-size:1.4rem;background:var(--accent-gradient);-webkit-background-clip:text;-webkit-text-fill-color:transparent">GyroidVault</h3>
+              <p style="margin:0;font-size:.9rem;color:var(--text-secondary)">Self-hosted 3D model management for enthusiasts and professionals.</p>
+              <div style="margin-top:12px;display:flex;gap:12px">
+                <a href="https://github.com/systemedic/GyroidVault" target="_blank" class="btn btn-secondary btn-xs">🐙 GitHub Repository</a>
+                <a href="https://ko-fi.com/systemedic" target="_blank" class="btn btn-secondary btn-xs" style="color:#f59e0b;border-color:rgba(245,158,11,0.3)">☕ Buy me a Coffee</a>
+              </div>
+            </div>
+          </div>
+          
+          <div style="border-top:1px solid var(--border);padding-top:20px;margin-top:20px">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+              <div style="font-weight:600;font-size:.95rem">Version Information</div>
+              <span class="badge badge-tag" style="background:var(--bg-input)">v${versionInfo.currentVersion || '1.0.0'}</span>
+            </div>
+            
+            ${versionInfo.hasUpdate ? `
+              <div style="background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.2);padding:16px;border-radius:8px;margin-bottom:20px">
+                <div style="display:flex;justify-content:space-between;align-items:center">
+                  <div style="color:#f59e0b;font-weight:600">🚀 Update available: v${versionInfo.latestVersion}</div>
+                  <a href="${versionInfo.url}" target="_blank" class="btn btn-primary btn-xs">View on GitHub</a>
+                </div>
+              </div>
+            ` : '<div style="color:var(--success);font-size:.85rem;margin-bottom:20px">✓ You are running the latest version</div>'}
+
+            <div style="font-weight:600;font-size:.95rem;margin-bottom:12px">What\'s New</div>
+            <div class="changelog-body" style="background:var(--bg-dark);padding:16px;border-radius:8px;font-size:.85rem;line-height:1.6;color:var(--text-secondary);max-height:300px;overflow-y:auto;white-space:pre-wrap">${versionInfo.changelog || 'No release notes available.'}</div>
+          </div>
+        </div>
+      </div>`;
 };

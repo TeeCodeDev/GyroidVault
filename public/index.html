@@ -136,6 +136,21 @@
     <!-- Dynamic content rendered here by JS -->
   </main>
 
+  <footer class="app-footer">
+    <div class="footer-content">
+      <div class="footer-left">
+        GyroidVault <span id="app-version">v1.0.0</span>
+      </div>
+      <div class="footer-right">
+        <a href="https://github.com/systemedic/GyroidVault" target="_blank" class="footer-link">🐙 GitHub</a>
+        <a href="https://ko-fi.com/systemedic" target="_blank" class="footer-link">☕ Support</a>
+        <div id="update-badge" class="update-badge" style="display:none" onclick="App.showUpdateInfo()">
+          <span class="pulse"></span> New version available!
+        </div>
+      </div>
+    </div>
+  </footer>
+
   <!-- Modal Container -->
   <div class="modal-overlay" id="modal-overlay">
     <div class="modal" id="modal">
