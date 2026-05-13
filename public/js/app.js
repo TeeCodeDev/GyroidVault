@@ -672,8 +672,9 @@ const App = {
           <a href="#/models" style="color:var(--text-secondary);font-size:.85rem;display:inline-flex;align-items:center;gap:4px">← Back to Models</a>
         </div>
         ${UI.modelDetail(model)}`;
-      // Initialize 3D viewer if STL or 3MF file exists
-      const stlFile = (model.files || []).find(f => f.file_type === 'stl' || f.file_type === '3mf');
+      // Initialize 3D viewer if STL or 3MF file exists (prefer STL as it's more stable)
+      const files = model.files || [];
+      const stlFile = files.find(f => f.file_type === 'stl') || files.find(f => f.file_type === '3mf');
       if (stlFile && typeof Viewer !== 'undefined') {
         const stlUrl = `${stlFile.url || '/uploads/'+stlFile.filename}?t=${Date.now()}`;
         setTimeout(async () => {
