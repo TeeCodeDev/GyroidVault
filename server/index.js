@@ -258,10 +258,10 @@ app.post('/api/library/scan', authenticate, async (req, res) => {
 app.post('/api/models', authenticate, (req, res) => {
   const userId = req.user.id;
   try {
-    const { name, description, print_tips, category_id, tags } = req.body;
+    const { name, description, print_tips, source_url, category_id, tags } = req.body;
     if (!name?.trim()) return res.status(400).json({ error: 'Name is required' });
-    const r = run('INSERT INTO models (name,description,print_tips,category_id,user_id) VALUES (?,?,?,?,?)',
-      [name.trim(), description||'', print_tips||'', category_id||null, userId]);
+    const r = run('INSERT INTO models (name,description,print_tips,source_url,category_id,user_id) VALUES (?,?,?,?,?,?)',
+      [name.trim(), description||'', print_tips||'', source_url||'', category_id||null, userId]);
     if (tags?.length) { for (const t of tags) run('INSERT OR IGNORE INTO model_tags (model_id,tag_id) VALUES (?,?)', [r.lastId, t]); }
     res.status(201).json(get('SELECT * FROM models WHERE id=?', [r.lastId]));
   } catch (e) { console.error(e); res.status(500).json({ error: 'Failed to create model' }); }
@@ -272,9 +272,9 @@ app.put('/api/models/:id', (req, res) => {
     const id = Number(req.params.id);
     const model = get('SELECT * FROM models WHERE id=?', [id]);
     if (!model) return res.status(404).json({ error: 'Model not found' });
-    const { name, description, print_tips, category_id, tags } = req.body;
-    run("UPDATE models SET name=?,description=?,print_tips=?,category_id=?,updated_at=datetime('now') WHERE id=?",
-      [name||model.name, description!==undefined?description:model.description, print_tips!==undefined?print_tips:model.print_tips, category_id!==undefined?category_id:model.category_id, id]);
+    const { name, description, print_tips, source_url, category_id, tags } = req.body;
+    run("UPDATE models SET name=?,description=?,print_tips=?,source_url=?,category_id=?,updated_at=datetime('now') WHERE id=?",
+      [name||model.name, description!==undefined?description:model.description, print_tips!==undefined?print_tips:model.print_tips, source_url!==undefined?source_url:model.source_url, category_id!==undefined?category_id:model.category_id, id]);
     if (tags !== undefined) {
       run('DELETE FROM model_tags WHERE model_id=?', [id]);
       if (tags?.length) for (const t of tags) run('INSERT OR IGNORE INTO model_tags (model_id,tag_id) VALUES (?,?)', [id, t]);
@@ -288,9 +288,35 @@ app.delete('/api/models/:id', (req, res) => {
     const id = Number(req.params.id);
     const model = get('SELECT * FROM models WHERE id=?', [id]);
     if (!model) return res.status(404).json({ error: 'Model not found' });
-    const files = all('SELECT filename FROM files WHERE model_id=?', [id]);
-    for (const f of files) { const p = path.join(UPLOADS_DIR, f.filename); if (fs.existsSync(p)) fs.unlinkSync(p); }
-    if (model.thumbnail) { const p = path.join(UPLOADS_DIR, model.thumbnail); if (fs.existsSync(p)) fs.unlinkSync(p); }
+    const files = all('SELECT filename, library_path FROM files WHERE model_id=?', [id]);
+    const deleteDisk = req.query.deleteDisk === 'true';
+
+    for (const f of files) { 
+      const p = path.join(UPLOADS_DIR, f.filename); 
+      if (fs.existsSync(p)) fs.unlinkSync(p); 
+      if (deleteDisk && f.library_path && fs.existsSync(f.library_path)) {
+        try { fs.unlinkSync(f.library_path); } catch(err) { console.error('Failed to delete physical file:', err); }
+      }
+    }
+    
+    if (model.thumbnail) { 
+      const p = path.join(UPLOADS_DIR, model.thumbnail); 
+      if (fs.existsSync(p)) fs.unlinkSync(p); 
+      if (deleteDisk && model.library_path && fs.existsSync(path.join(model.library_path, model.thumbnail))) {
+        try { fs.unlinkSync(path.join(model.library_path, model.thumbnail)); } catch(err) { console.error('Failed to delete physical thumbnail:', err); }
+      }
+    }
+    
+    if (deleteDisk && model.library_path && fs.existsSync(model.library_path)) {
+      // Optional: If you want to delete the whole directory, you can. But it might contain other files.
+      // For safety, we only deleted the known files above. 
+      // If the directory is now empty, we could remove it.
+      try {
+        if (fs.readdirSync(model.library_path).length === 0) {
+          fs.rmdirSync(model.library_path);
+        }
+      } catch(err) {}
+    }
     run('DELETE FROM models WHERE id=?', [id]);
     res.json({ success: true });
   } catch (e) { console.error(e); res.status(500).json({ error: 'Failed to delete model' }); }
@@ -358,7 +384,18 @@ app.delete('/api/files/:id', (req, res) => {
   try {
     const file = get('SELECT * FROM files WHERE id=?', [Number(req.params.id)]);
     if (!file) return res.status(404).json({ error: 'File not found' });
-    const p = path.join(UPLOADS_DIR, file.filename); if (fs.existsSync(p)) fs.unlinkSync(p);
+    
+    const deleteDisk = req.query.deleteDisk === 'true';
+    
+    // Always delete from uploads dir if it exists there
+    const p = path.join(UPLOADS_DIR, file.filename); 
+    if (fs.existsSync(p)) fs.unlinkSync(p);
+    
+    // Delete from physical library path if requested
+    if (deleteDisk && file.library_path && fs.existsSync(file.library_path)) {
+      try { fs.unlinkSync(file.library_path); } catch(err) { console.error('Failed to delete physical file:', err); }
+    }
+    
     run('DELETE FROM files WHERE id=?', [file.id]);
     run("UPDATE models SET updated_at=datetime('now') WHERE id=?", [file.model_id]);
     res.json({ success: true });

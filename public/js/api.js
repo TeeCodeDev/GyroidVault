@@ -59,8 +59,8 @@ const API = {
   updateModel(id, data) {
     return this.request(`/api/models/${id}`, { method: 'PUT', body: JSON.stringify(data) });
   },
-  deleteModel(id) {
-    return this.request(`/api/models/${id}`, { method: 'DELETE' });
+  deleteModel(id, deleteDisk = false) {
+    return this.request(`/api/models/${id}?deleteDisk=${deleteDisk}`, { method: 'DELETE' });
   },
   createVersion(id, data) {
     return this.request(`/api/models/${id}/versions`, { method: 'POST', body: JSON.stringify(data) });
@@ -87,7 +87,9 @@ const API = {
     if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || 'Upload failed'); }
     return res.json();
   },
-  deleteFile(id) { return this.request(`/api/files/${id}`, { method: 'DELETE' }); },
+  deleteFile(id, deleteDisk = false) { 
+    return this.request(`/api/files/${id}?deleteDisk=${deleteDisk}`, { method: 'DELETE' }); 
+  },
 
   // Prints
   addPrint(modelId, data) {

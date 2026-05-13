@@ -682,14 +682,21 @@ const App = {
     } catch (e) { this.toast(e.message, 'error'); }
   },
 
-  async confirmDeleteModel(id, name) {
+  confirmDeleteModel(id, name) {
     if (!this.currentUser) return;
-    if (!confirm(`Are you sure you want to delete "${name}"? This will also delete all files and print history.`)) return;
+    this.openModal('Delete Model', UI.deleteModelForm(id, name));
+  },
+
+  async handleDeleteModel(e, id) {
+    e.preventDefault();
+    const form = new FormData(e.target);
+    const deleteDisk = form.get('delete_disk') === 'on';
     try {
-      await API.deleteModel(id);
+      await API.deleteModel(id, deleteDisk);
       this.toast('Model deleted');
+      this.closeModal();
       this.navigate('/models');
-    } catch (e) { this.toast(e.message, 'error'); }
+    } catch (err) { this.toast(err.message, 'error'); }
   },
 
   copyToClipboard(text) {
@@ -746,13 +753,20 @@ const App = {
     }
   },
 
-  async deleteFile(fileId, modelId) {
-    if (!confirm('Delete this file?')) return;
+  confirmDeleteFile(fileId, filename, modelId) {
+    this.openModal('Delete File', UI.deleteFileForm(fileId, filename, modelId));
+  },
+
+  async handleDeleteFile(e, fileId, modelId) {
+    e.preventDefault();
+    const form = new FormData(e.target);
+    const deleteDisk = form.get('delete_disk') === 'on';
     try {
-      await API.deleteFile(fileId);
+      await API.deleteFile(fileId, deleteDisk);
       this.toast('File deleted');
+      this.closeModal();
       this.renderModelDetail(modelId);
-    } catch (e) { this.toast(e.message, 'error'); }
+    } catch (err) { this.toast(err.message, 'error'); }
   },
 
   // ── Prints ──

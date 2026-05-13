@@ -99,6 +99,9 @@ const UI = {
     const printed = model.has_printed
       ? '<span class="badge badge-printed">✓ Printed</span>'
       : '<span class="badge badge-not-printed">Not printed</span>';
+    const sourceLink = model.source_url
+      ? `<a href="${model.source_url}" target="_blank" class="badge badge-category" style="background:var(--bg-tertiary);color:var(--accent-cyan);text-decoration:none;border:1px solid var(--border)">🔗 Bron</a>`
+      : '';
 
     // Find first STL or 3MF file for 3D preview
     const stlFile = (model.files || []).find(f => f.file_type === 'stl' || f.file_type === '3mf');
@@ -185,7 +188,7 @@ const UI = {
           ` : ''}
           ${f.file_type === 'stl' && stlFile && f.id !== stlFile.id ? `<button class="btn btn-ghost" style="padding:6px;color:var(--accent-cyan)" onclick="event.stopPropagation();App.previewStl(${model.id},'${f.url || '/uploads/'+f.filename}')" title="Preview"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg></button>` : ''}
           <a href="/api/files/${f.id}/download" class="btn btn-ghost" style="padding:6px" title="Download"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg></a>
-          ${isAdmin ? `<button class="btn btn-ghost" style="padding:6px;color:var(--error)" onclick="event.stopPropagation();App.deleteFile(${f.id},${model.id})" title="Delete"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg></button>` : ''}
+          ${isAdmin ? `<button class="btn btn-ghost" style="padding:6px;color:var(--error)" onclick="event.stopPropagation();App.confirmDeleteFile(${f.id},'${(f.original_name || f.filename).replace(/'/g, "\\'")}',${model.id})" title="Delete"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg></button>` : ''}
         </div>
       </div>`;
     }).join('');
@@ -206,7 +209,7 @@ const UI = {
       <div class="detail-header">
         <div>
           <div class="detail-title">${model.name}</div>
-          <div class="detail-meta">${cat} ${printed} ${tags}</div>
+          <div class="detail-meta">${cat} ${printed} ${tags} ${sourceLink}</div>
         </div>
         <div class="detail-actions">
           ${isAdmin ? `
@@ -297,6 +300,10 @@ const UI = {
           </select>
         </div>
         <div class="form-group">
+          <label class="form-label">Source URL (optional)</label>
+          <input class="form-input" type="url" name="source_url" value="${model?.source_url || ''}" placeholder="e.g. https://www.printables.com/...">
+        </div>
+        <div class="form-group">
           <label class="form-label">Description</label>
           <textarea class="form-textarea" name="description" placeholder="Describe this model...">${model?.description || ''}</textarea>
         </div>
@@ -373,6 +380,48 @@ const UI = {
           <button type="submit" class="btn btn-primary">Log Print</button>
         </div>
       </form>`;
+  },
+
+  // ── Delete Confirmations ──
+  deleteModelForm(id, name) {
+    return `
+      <form id="delete-model-form" onsubmit="App.handleDeleteModel(event, ${id})">
+        <div style="margin-bottom: 20px; color: var(--text-secondary)">
+          Are you sure you want to delete <strong>"${name}"</strong>?<br>
+          This will remove the model, all its files, and print history from GyroidVault.
+        </div>
+        <div class="form-group" style="padding: 12px; background: rgba(239, 68, 68, 0.1); border-radius: 6px; border: 1px solid rgba(239, 68, 68, 0.2)">
+          <label class="form-checkbox" style="color: #ef4444; font-weight: 600; margin: 0">
+            <input type="checkbox" name="delete_disk"> 
+            Also permanently delete physical files from disk
+          </label>
+        </div>
+        <div class="form-actions" style="margin-top: 24px">
+          <button type="button" class="btn btn-secondary" onclick="App.closeModal()">Cancel</button>
+          <button type="submit" class="btn btn-danger">Delete Model</button>
+        </div>
+      </form>
+    `;
+  },
+
+  deleteFileForm(fileId, filename, modelId) {
+    return `
+      <form id="delete-file-form" onsubmit="App.handleDeleteFile(event, ${fileId}, ${modelId})">
+        <div style="margin-bottom: 20px; color: var(--text-secondary)">
+          Are you sure you want to delete <strong>"${filename}"</strong> from GyroidVault?
+        </div>
+        <div class="form-group" style="padding: 12px; background: rgba(239, 68, 68, 0.1); border-radius: 6px; border: 1px solid rgba(239, 68, 68, 0.2)">
+          <label class="form-checkbox" style="color: #ef4444; font-weight: 600; margin: 0">
+            <input type="checkbox" name="delete_disk"> 
+            Also permanently delete physical file from disk
+          </label>
+        </div>
+        <div class="form-actions" style="margin-top: 24px">
+          <button type="button" class="btn btn-secondary" onclick="App.closeModal()">Cancel</button>
+          <button type="submit" class="btn btn-danger">Delete File</button>
+        </div>
+      </form>
+    `;
   },
 
   // ── Toolbar ──

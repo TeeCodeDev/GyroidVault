@@ -118,6 +118,7 @@ async function initDatabase() {
       name TEXT NOT NULL,
       description TEXT DEFAULT '',
       print_tips TEXT DEFAULT '',
+      source_url TEXT DEFAULT '',
       category_id INTEGER,
       thumbnail TEXT,
       library_path TEXT UNIQUE, -- Path to the model directory
@@ -191,6 +192,7 @@ async function initDatabase() {
     if (!uCols.some(c => c.name === 'password_reset_expires')) db.run('ALTER TABLE users ADD COLUMN password_reset_expires DATETIME');
     
     if (!mCols.some(c => c.name === 'parent_id')) db.run('ALTER TABLE models ADD COLUMN parent_id INTEGER');
+    if (!mCols.some(c => c.name === 'source_url')) db.run('ALTER TABLE models ADD COLUMN source_url TEXT');
   } catch (e) { console.error('User migration failed:', e); }
 
   // Ensure metadata and library_path columns exist for existing databases
