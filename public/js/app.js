@@ -16,7 +16,27 @@ const App = {
     window.addEventListener('hashchange', () => this.route());
     await this.loadCache();
     this.updateUserNav();
+    this.updateThemeIcon();
     this.route();
+  },
+
+  toggleTheme() {
+    const isLight = document.documentElement.getAttribute('data-theme') === 'light';
+    if (isLight) {
+      document.documentElement.removeAttribute('data-theme');
+      localStorage.setItem('theme', 'dark');
+    } else {
+      document.documentElement.setAttribute('data-theme', 'light');
+      localStorage.setItem('theme', 'light');
+    }
+    this.updateThemeIcon();
+  },
+
+  updateThemeIcon() {
+    const btn = document.getElementById('theme-toggle');
+    if (!btn) return;
+    const isLight = document.documentElement.getAttribute('data-theme') === 'light';
+    btn.textContent = isLight ? '🌙' : '☀️';
   },
 
   async loadCache() {
@@ -55,11 +75,11 @@ const App = {
     } else if (path.startsWith('/models/')) {
       document.getElementById('nav-models')?.classList.add('active');
       this.renderModelDetail(path.split('/')[2]);
-    } else if (path === '/projects') {
-      document.getElementById('nav-projects')?.classList.add('active');
+    } else if (path === '/projects' || path === '/collections') {
+      document.getElementById('nav-collections')?.classList.add('active');
       this.renderProjects();
-    } else if (path.startsWith('/projects/')) {
-      document.getElementById('nav-projects')?.classList.add('active');
+    } else if (path.startsWith('/projects/') || path.startsWith('/collections/')) {
+      document.getElementById('nav-collections')?.classList.add('active');
       this.renderProjectDetail(path.split('/')[2]);
     } else if (path.startsWith('/share/')) {
       this.renderSharedModel(path.split('/')[2]);
@@ -280,6 +300,16 @@ const App = {
     } catch(e) { this.toast(e.message, 'error'); }
   },
   
+  async handleSaveSystemSettings(e) {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const data = Object.fromEntries(fd.entries());
+    try {
+      await API.saveSystemSettings(data);
+      this.toast('System settings saved');
+    } catch(e) { this.toast(e.message, 'error'); }
+  },
+  
   async testSMTP(e) {
     if (e) e.preventDefault();
     const btn = e?.target;
@@ -317,10 +347,10 @@ const App = {
   },
   
   updateUserNav() {
-    const sec = document.getElementById('nav-user-section');
-    if (!sec) return;
+    const wrapper = document.getElementById('nav-login-wrapper');
+    if (!wrapper) return;
     if (this.currentUser) {
-      sec.innerHTML = `
+      wrapper.innerHTML = `
         <div class="dropdown">
           <button class="btn btn-ghost" style="display:flex;align-items:center;gap:8px;padding:8px 12px">
             👤 ${this.currentUser.username}
@@ -332,7 +362,7 @@ const App = {
           </div>
         </div>`;
     } else {
-      sec.innerHTML = `<button class="btn btn-ghost" onclick="App.showLogin()">🔑 Login</button>`;
+      wrapper.innerHTML = `<button class="btn btn-ghost" onclick="App.showLogin()">🔑 Login</button>`;
     }
   },
 
@@ -341,17 +371,17 @@ const App = {
     this.el.innerHTML = UI.profilePage(this.currentUser);
   },
 
-  // ─── Projects ────────────────────────────────────────────────────────
+  // ─── Collections ────────────────────────────────────────────────────────
   async renderProjects() {
     if (!this.currentUser) {
-      this.el.innerHTML = '<div class="empty-state"><div class="empty-state-icon">🔐</div><div class="empty-state-text">Login to view projects</div><div class="empty-state-sub">Projects are private and require an account</div><button class="btn btn-primary btn-sm" onclick="App.showLogin()" style="margin-top:16px">Login</button></div>';
+      this.el.innerHTML = '<div class="empty-state"><div class="empty-state-icon">🔐</div><div class="empty-state-text">Login to view collections</div><div class="empty-state-sub">Collections are private and require an account</div><button class="btn btn-primary btn-sm" onclick="App.showLogin()" style="margin-top:16px">Login</button></div>';
       return;
     }
     this.el.innerHTML = '<div class="skeleton-grid"></div>';
     try {
       const projects = await API.getProjects();
       this.el.innerHTML = UI.projectsPage(projects);
-    } catch (e) { this.toast('Failed to load projects', 'error'); }
+    } catch (e) { this.toast('Failed to load collections', 'error'); }
   },
 
   async renderProjectDetail(id) {
@@ -362,11 +392,11 @@ const App = {
       if (typeof Viewer !== 'undefined' && Viewer.generateThumbnails) {
         setTimeout(() => Viewer.generateThumbnails(), 50);
       }
-    } catch (e) { this.toast('Failed to load project', 'error'); }
+    } catch (e) { this.toast('Failed to load collection', 'error'); }
   },
 
   showCreateProject() {
-    this.openModal('New Project', UI.projectForm());
+    this.openModal('New Collection', UI.projectForm());
   },
 
   async handleProjectSubmit(e, id) {
@@ -378,7 +408,7 @@ const App = {
         // Update (TBD if needed)
       } else {
         await API.createProject(data);
-        this.toast('Project created');
+        this.toast('Collection created');
         this.closeModal();
         this.renderProjects();
       }
@@ -386,36 +416,36 @@ const App = {
   },
 
   async deleteProject(id) {
-    if (!confirm('Are you sure you want to delete this project? Models will not be deleted.')) return;
+    if (!confirm('Are you sure you want to delete this collection? Models will not be deleted.')) return;
     try {
       await API.deleteProject(id);
-      this.toast('Project deleted');
-      this.navigate('/projects');
+      this.toast('Collection deleted');
+      this.navigate('/collections');
     } catch (e) { this.toast(e.message, 'error'); }
   },
 
   async addToProject(modelId) {
     const projects = await API.getProjects();
     if (!projects.length) {
-      if (confirm('No projects found. Create one now?')) this.showCreateProject();
+      if (confirm('No collections found. Create one now?')) this.showCreateProject();
       return;
     }
     const html = `
       <div class="form-grid">
-        <label>Select Project</label>
+        <label>Select Collection</label>
         <select id="project-select" class="form-input">
           ${projects.map(p => `<option value="${p.id}">${p.name}</option>`).join('')}
         </select>
-        <button class="btn btn-primary" onclick="App.handleAddToProject(${modelId})" style="margin-top:16px;width:100%">Add to Project</button>
+        <button class="btn btn-primary" onclick="App.handleAddToProject(${modelId})" style="margin-top:16px;width:100%">Add to Collection</button>
       </div>`;
-    this.openModal('Add to Project', html);
+    this.openModal('Add to Collection', html);
   },
 
   async handleAddToProject(modelId) {
     const projectId = document.getElementById('project-select').value;
     try {
       await API.addModelToProject(projectId, modelId);
-      this.toast('Added to project');
+      this.toast('Added to collection');
       this.closeModal();
     } catch (e) { this.toast(e.message, 'error'); }
   },
@@ -587,6 +617,7 @@ const App = {
         <button class="tab-btn active" data-tab="categories" style="background:none;border:none;color:var(--text-secondary);padding:10px 20px;cursor:pointer;font-weight:600;border-bottom:2px solid transparent;transition:all .2s">Categories</button>
         <button class="tab-btn" data-tab="tags" style="background:none;border:none;color:var(--text-secondary);padding:10px 20px;cursor:pointer;font-weight:600;border-bottom:2px solid transparent;transition:all .2s">Tags</button>
         <button class="tab-btn" data-tab="materials" style="background:none;border:none;color:var(--text-secondary);padding:10px 20px;cursor:pointer;font-weight:600;border-bottom:2px solid transparent;transition:all .2s">Materials</button>
+        ${this.currentUser?.role === 'admin' ? '<button class="tab-btn" data-tab="system" style="background:none;border:none;color:var(--text-secondary);padding:10px 20px;cursor:pointer;font-weight:600;border-bottom:2px solid transparent;transition:all .2s">System</button>' : ''}
         ${this.currentUser?.role === 'admin' ? '<button class="tab-btn" data-tab="smtp" style="background:none;border:none;color:var(--text-secondary);padding:10px 20px;cursor:pointer;font-weight:600;border-bottom:2px solid transparent;transition:all .2s">SMTP & Mail</button>' : ''}
         ${this.currentUser?.role === 'admin' ? '<button class="tab-btn" data-tab="users" style="background:none;border:none;color:var(--text-secondary);padding:10px 20px;cursor:pointer;font-weight:600;border-bottom:2px solid transparent;transition:all .2s">Users</button>' : ''}
       </div>
@@ -619,6 +650,13 @@ const App = {
             <div class="glass-panel" style="max-width:800px">
               <div class="panel-header"><div class="panel-title">SMTP Mail Configuration</div></div>
               <div class="panel-body">${UI.smtpSettingsForm(config)}</div>
+            </div>`;
+        } else if (tab === 'system') {
+          const config = await API.getSystemSettings();
+          content.innerHTML = `
+            <div class="glass-panel" style="max-width:800px">
+              <div class="panel-header"><div class="panel-title">System Settings</div></div>
+              <div class="panel-body">${UI.systemSettingsForm(config)}</div>
             </div>`;
         } else if (tab === 'users') {
           const users = await API.getUsers();

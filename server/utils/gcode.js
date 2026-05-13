@@ -53,6 +53,29 @@ function parseGcodeMetadata(filePath) {
         /;\s*Slicer: ([\w\s.]+)/i, 
         /;\s*Slicer\s*:\s*([\w\s.]+)/i,
         /;\s*Klipper info: ([\w\s.]+)/i
+      ],
+      filamentType: [
+        /;\s*filament_type\s*=\s*([A-Za-z0-9]+)/i,
+        /;\s*material_type\s*=\s*([A-Za-z0-9]+)/i
+      ],
+      printerModel: [
+        /;\s*printer_model\s*=\s*([^\n\r]+)/i,
+        /;\s*machine_type\s*=\s*([^\n\r]+)/i
+      ],
+      weight: [
+        /;\s*total filament used \[g\]\s*=\s*([\d.]+)/i,
+        /;\s*filament_weight\s*=\s*([\d.]+)/i
+      ],
+      supports: [
+        /;\s*support_material\s*=\s*([01])/i
+      ],
+      tempNozzle: [
+        /M104\s+S(\d+)/i,
+        /;\s*temperature\s*=\s*(\d+)/i
+      ],
+      tempBed: [
+        /M140\s+S(\d+)/i,
+        /;\s*bed_temperature\s*=\s*(\d+)/i
       ]
     };
 

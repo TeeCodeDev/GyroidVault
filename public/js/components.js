@@ -157,7 +157,13 @@ const UI = {
           if (meta.layerHeight) items.push(`<span><b>LH:</b> ${meta.layerHeight}mm</span>`);
           if (meta.infill) items.push(`<span><b>Infill:</b> ${meta.infill}%</span>`);
           if (meta.printTime) items.push(`<span><b>Time:</b> ${meta.printTime}</span>`);
-          if (items.length) metaHtml = `<div class="file-gcode-meta">${items.join(' · ')}</div>`;
+          if (meta.tempNozzle && meta.tempBed) items.push(`<span><b>Temp:</b> ${meta.tempNozzle}°C/${meta.tempBed}°C</span>`);
+          else if (meta.tempNozzle) items.push(`<span><b>Temp:</b> ${meta.tempNozzle}°C</span>`);
+          if (meta.filamentType) items.push(`<span><b>Mat:</b> ${meta.filamentType}</span>`);
+          if (meta.weight) items.push(`<span><b>Weight:</b> ${meta.weight}g</span>`);
+          if (meta.supports === '1') items.push(`<span><b>Supports:</b> Yes</span>`);
+          if (meta.printerModel) items.push(`<span><b>Printer:</b> ${meta.printerModel}</span>`);
+          if (items.length) metaHtml = `<div class="file-gcode-meta" style="display:flex;flex-wrap:wrap;gap:8px;font-size:0.8rem;color:var(--text-secondary);margin-top:4px;">${items.join('')}</div>`;
         } catch(e) {}
       }
 
@@ -205,7 +211,17 @@ const UI = {
       </div>
     `).join('');
 
+    const breadcrumbs = `
+      <div style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 12px; display: flex; gap: 8px; align-items: center;">
+        <a href="#/models" style="color: var(--text-secondary);">Library</a>
+        <span>/</span>
+        ${model.category_id ? `<a href="#/models?category=${model.category_id}" style="color: var(--text-secondary);">${model.category_name}</a><span>/</span>` : ''}
+        <span style="color: var(--text-primary); font-weight: 500;">${model.name}</span>
+      </div>
+    `;
+
     return `
+      ${breadcrumbs}
       <div class="detail-header">
         <div>
           <div class="detail-title">${model.name}</div>
@@ -214,7 +230,7 @@ const UI = {
         <div class="detail-actions">
           ${isAdmin ? `
           <button class="btn btn-ghost btn-sm" onclick="App.showShareModal(${model.id})" title="Share Model">🔗 Share</button>
-          <button class="btn btn-ghost btn-sm" onclick="App.addToProject(${model.id})" title="Add to Project">📁 Project</button>
+          <button class="btn btn-ghost btn-sm" onclick="App.addToProject(${model.id})" title="Add to Collection">📁 Collection</button>
           <button class="btn btn-secondary btn-sm" onclick="App.showCreateVersion(${model.id},'${model.name.replace(/'/g, "\\'")}')">➕ New Version</button>
           <button class="btn btn-secondary btn-sm" onclick="App.showEditModel(${model.id})">✏️ Edit</button>
           <button class="btn btn-danger btn-sm" onclick="App.confirmDeleteModel(${model.id},'${model.name.replace(/'/g, "\\'")}')">🗑 Delete</button>
@@ -612,6 +628,20 @@ const UI = {
       </form>`;
   },
 
+  systemSettingsForm(config = {}) {
+    return `
+      <form onsubmit="App.handleSaveSystemSettings(event)" class="form-grid">
+        <div class="form-group">
+          <label>Auto-Scan Interval (Hours)</label>
+          <input type="number" name="auto_scan_interval" value="${config.auto_scan_interval !== undefined ? config.auto_scan_interval : 24}" min="0" max="168" class="form-input">
+          <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;">Set to 0 to disable background scanning. Default is 24.</p>
+        </div>
+        <div style="margin-top:20px">
+          <button type="submit" class="btn btn-primary">Save System Settings</button>
+        </div>
+      </form>`;
+  },
+
   smtpSettingsForm(config = {}) {
     return `
       <form onsubmit="App.handleSaveSMTP(event)" class="form-grid">
@@ -679,11 +709,11 @@ const UI = {
     const list = projects.map(p => this.projectCard(p)).join('');
     return `
       <div class="page-header">
-        <div><h1 class="page-title">Projects</h1><p class="page-subtitle">Group models into collections</p></div>
-        <button class="btn btn-primary" onclick="App.showCreateProject()">+ New Project</button>
+        <div><h1 class="page-title">Collections</h1><p class="page-subtitle">Group models into collections</p></div>
+        <button class="btn btn-primary" onclick="App.showCreateProject()">+ New Collection</button>
       </div>
       <div class="model-grid">
-        ${list || '<div class="empty-state" style="grid-column: 1/-1">No projects yet</div>'}
+        ${list || '<div class="empty-state" style="grid-column: 1/-1">No collections yet</div>'}
       </div>`;
   },
 
@@ -705,7 +735,7 @@ const UI = {
     return `
       <div class="page-header">
         <div>
-          <a href="#/projects" style="color:var(--text-secondary);font-size:.85rem">← Back to Projects</a>
+          <a href="#/collections" style="color:var(--text-secondary);font-size:.85rem">← Back to Collections</a>
           <h1 class="page-title" style="margin-top:8px">${project.name}</h1>
           <p class="page-subtitle">${project.description || 'No description'}</p>
         </div>
@@ -714,7 +744,7 @@ const UI = {
         </div>
       </div>
       <div class="model-grid">
-        ${models || '<div class="empty-state" style="grid-column: 1/-1">No models in this project yet</div>'}
+        ${models || '<div class="empty-state" style="grid-column: 1/-1">No models in this collection yet</div>'}
       </div>`;
   },
 
@@ -722,12 +752,12 @@ const UI = {
     return `
       <form onsubmit="App.handleProjectSubmit(event, ${project?.id || 'null'})" class="form-grid">
         <div class="form-group">
-          <label>Project Name</label>
+          <label>Collection Name</label>
           <input type="text" name="name" value="${project?.name || ''}" required class="form-input" placeholder="e.g. Iron Man Helm">
         </div>
         <div class="form-group">
           <label>Description</label>
-          <textarea name="description" class="form-textarea" placeholder="What is this project about?">${project?.description || ''}</textarea>
+          <textarea name="description" class="form-textarea" placeholder="What is this collection about?">${project?.description || ''}</textarea>
         </div>
         <div style="margin-top:20px;display:flex;justify-content:flex-end;gap:8px">
           <button type="button" class="btn btn-secondary" onclick="App.closeModal()">Cancel</button>

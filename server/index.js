@@ -644,6 +644,31 @@ app.delete('/api/materials/:id', (req, res) => {
 
 // ─── SETTINGS ───────────────────────────────────────────────────────────────
 
+app.get('/api/settings/system', authenticate, (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
+  const settings = all('SELECT * FROM system_settings WHERE key NOT LIKE "smtp_%"');
+  const config = {};
+  settings.forEach(s => config[s.key] = s.value);
+  res.json(config);
+});
+
+app.post('/api/settings/system', authenticate, (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
+  try {
+    const config = req.body;
+    for (const [key, value] of Object.entries(config)) {
+      run('INSERT OR REPLACE INTO system_settings (key, value) VALUES (?, ?)', [key, String(value)]);
+    }
+    
+    // Refresh background scanner if interval changed
+    if (config.auto_scan_interval !== undefined) {
+      setupBackgroundScanner();
+    }
+    
+    res.json({ success: true });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Failed to save system settings' }); }
+});
+
 app.get('/api/settings/smtp', authenticate, (req, res) => {
   if (req.user.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
   const settings = all('SELECT * FROM system_settings WHERE key LIKE "smtp_%"');
@@ -724,7 +749,41 @@ app.use((err, req, res, next) => { console.error(err); res.status(500).json({ er
 (async () => {
   await initDatabase();
   setUploadsDir(UPLOADS_DIR);
-  app.listen(PORT, '0.0.0.0', () => {
-    console.log(`\n  🗄️  GyroidVault running on http://localhost:${PORT}\n`);
-  });
+
+// ─── BACKGROUND TASKS ───────────────────────────────────────────────────────
+let scanIntervalId = null;
+
+function setupBackgroundScanner() {
+  if (scanIntervalId) {
+    clearInterval(scanIntervalId);
+    scanIntervalId = null;
+  }
+  
+  const setting = get('SELECT value FROM system_settings WHERE key="auto_scan_interval"');
+  // Default to 24 hours if not set
+  const hours = setting && setting.value !== undefined ? Number(setting.value) : 24;
+  
+  if (hours > 0) {
+    console.log(`Starting background library scanner (interval: ${hours} hours)`);
+    scanIntervalId = setInterval(async () => {
+      console.log('Running scheduled library scan...');
+      try {
+        const { scanLibrary } = require('./utils/library');
+        await scanLibrary();
+        console.log('Scheduled library scan completed.');
+      } catch (e) {
+        console.error('Scheduled library scan failed:', e);
+      }
+    }, hours * 3600 * 1000);
+  } else {
+    console.log('Background library scanner is disabled.');
+  }
+}
+
+// ─── STARTUP ────────────────────────────────────────────────────────────────
+
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`GyroidVault running on http://0.0.0.0:${PORT}`);
+  setupBackgroundScanner();
+});
 })();

@@ -45,6 +45,8 @@ const API = {
   inviteUser(email) { return this.request('/api/auth/invite', { method: 'POST', body: JSON.stringify({ email }) }); },
 
   // Settings
+  getSystemSettings() { return this.request('/api/settings/system'); },
+  saveSystemSettings(data) { return this.request('/api/settings/system', { method: 'POST', body: JSON.stringify(data) }); },
   getSMTPSettings() { return this.request('/api/settings/smtp'); },
   saveSMTPSettings(data) { return this.request('/api/settings/smtp', { method: 'POST', body: JSON.stringify(data) }); },
   testSMTP(data) { return this.request('/api/settings/smtp/test', { method: 'POST', body: JSON.stringify(data) }); },
