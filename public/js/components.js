@@ -304,15 +304,30 @@ const UI = {
       <div class="detail-header">
         <div>
           <div class="detail-title">${model.name}</div>
-          <div class="detail-meta">${cat} ${printed} ${tags} ${sourceLink}</div>
+          <div class="detail-meta">${cat} ${printed}</div>
         </div>
-        <div class="detail-actions">
+        <div class="detail-actions" style="display:flex;gap:8px;flex-wrap:wrap">
           ${isAdmin ? `
-          <button class="btn btn-ghost btn-sm" onclick="App.showShareModal(${model.id})" title="Share Model">🔗 Share</button>
-          <button class="btn btn-ghost btn-sm" onclick="App.addToProject(${model.id})" title="Add to Collection">📁 Collection</button>
-          <button class="btn btn-secondary btn-sm" onclick="App.showCreateVersion(${model.id},'${model.name.replace(/'/g, "\\'")}')">➕ New Version</button>
-          <button class="btn btn-secondary btn-sm" onclick="App.showEditModel(${model.id})">✏️ Edit</button>
-          <button class="btn btn-danger btn-sm" onclick="App.confirmDeleteModel(${model.id},'${model.name.replace(/'/g, "\\'")}')">🗑 Delete</button>
+          <button class="btn btn-secondary btn-sm" onclick="App.showShareModal(${model.id})" title="Share Model">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+            Share
+          </button>
+          <button class="btn btn-secondary btn-sm" onclick="App.addToProject(${model.id})" title="Add to Collection">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+            Collection
+          </button>
+          <button class="btn btn-secondary btn-sm" onclick="App.showCreateVersion(${model.id},'${model.name.replace(/'/g, "\\'")}')">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            New Version
+          </button>
+          <button class="btn btn-secondary btn-sm" onclick="App.showEditModel(${model.id})">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+            Edit
+          </button>
+          <button class="btn btn-danger btn-sm" onclick="App.confirmDeleteModel(${model.id},'${model.name.replace(/'/g, "\\'")}')">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+            Delete
+          </button>
           ` : ''}
         </div>
       </div>
@@ -324,6 +339,16 @@ const UI = {
           <div class="glass-panel" style="margin-bottom:24px">
             <div class="panel-header"><div class="panel-title">📝 Description</div></div>
             <div class="panel-body"><div class="detail-description">${model.description}</div></div>
+          </div>` : ''}
+          ${(tags || sourceLink) ? `
+          <div class="glass-panel" style="margin-bottom:24px">
+            <div class="panel-header"><div class="panel-title">🏷️ Tags & Links</div></div>
+            <div class="panel-body">
+              <div style="display:flex;gap:8px;flex-wrap:wrap">
+                ${tags}
+                ${sourceLink}
+              </div>
+            </div>
           </div>` : ''}
           ${model.print_tips ? `
           <div class="glass-panel" style="margin-bottom:24px">
