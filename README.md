@@ -70,6 +70,17 @@ The easiest way to run GyroidVault is using Docker Compose.
 - **Admin Control**: The first registered user automatically becomes the Admin.
 - **Encrypted Files**: Files are handled securely and can be managed directly from the UI.
 
+## 🔧 Troubleshooting & Support
+
+### Common Issues
+- **Viewer not loading**: Ensure your browser supports WebGL and you are not using an aggressive ad-blocker that might interfere with Three.js.
+- **File scanning issues**: Verify that the `LIBRARY_PATH` or the volume mapping in Docker is correct and that the app has read permissions for that directory.
+- **Slicer links not opening**: Make sure the slicer (Bambu Studio, etc.) is installed and has registered its URL scheme on your OS.
+
+### Support
+- **Unraid Users**: Please use the dedicated support thread on the Unraid Forums.
+- **General Issues**: Open an issue on [GitHub Issues](https://github.com/TeeCodeDev/GyroidVault/issues).
+
 ## 📜 License
 
 This project is licensed under the **GNU Affero General Public License v3.0 (AGPL-3.0)**. See the [LICENSE](LICENSE) file for details. This ensures that the software remains free and that any improvements made by the community are shared back.
