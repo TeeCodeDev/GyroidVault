@@ -761,13 +761,13 @@ const App = {
       try {
         if (tab === 'categories') {
           const cats = await API.getCategories();
-          content.innerHTML = `<div class="settings-grid">${UI.settingsPanel('📁 Categories', cats, 'categories')}</div>`;
+          content.innerHTML = `<div class="settings-grid">${UI.settingsPanel('Categories', cats, 'categories')}</div>`;
         } else if (tab === 'tags') {
           const tags = await API.getTags();
-          content.innerHTML = `<div class="settings-grid">${UI.settingsPanel('🏷 Tags', tags, 'tags')}</div>`;
+          content.innerHTML = `<div class="settings-grid">${UI.settingsPanel('Tags', tags, 'tags')}</div>`;
         } else if (tab === 'materials') {
           const mats = await API.getMaterials();
-          content.innerHTML = `<div class="settings-grid">${UI.settingsPanel('🧵 Materials', mats, 'materials')}</div>`;
+          content.innerHTML = `<div class="settings-grid">${UI.settingsPanel('Materials', mats, 'materials')}</div>`;
         } else if (tab === 'smtp') {
           const config = await API.getSMTPSettings();
           content.innerHTML = `

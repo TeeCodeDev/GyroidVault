@@ -581,8 +581,14 @@ const UI = {
         <input type="color" id="add-${type}-color" value="#8b5cf6" style="width:150%;height:150%;position:absolute;top:-25%;left:-25%;border:none;background:none;cursor:pointer">
       </div>` : '';
 
+    const iconMap = {
+      categories: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity:.6"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>',
+      tags: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity:.6"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path><line x1="7" y1="7" x2="7.01" y2="7"/></svg>',
+      materials: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity:.6"><path d="M12 2L2 7l10 5 10-5-10-5z"></path><path d="M2 17l10 5 10-5"></path><path d="M2 12l10 5 10-5"></path></svg>'
+    };
+
     return `<div class="glass-panel">
-      <div class="panel-header"><div class="panel-title">${title}</div></div>
+      <div class="panel-header"><div class="panel-title">${iconMap[type] || ''} ${title}</div></div>
       <div class="panel-body">
         ${listHtml || '<div style="color:var(--text-muted);font-size:.875rem;padding:8px 0">None yet</div>'}
         <div class="add-inline">
