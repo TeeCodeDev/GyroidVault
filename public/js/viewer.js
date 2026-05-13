@@ -71,21 +71,28 @@ const Viewer = {
       fileUrl,
       (object) => {
         if (is3MF) {
-          scene.add(object);
           const box = new THREE.Box3().setFromObject(object);
-          const center = new THREE.Vector3();
-          box.getCenter(center);
-          object.position.sub(center);
-          
           const size = new THREE.Vector3();
           box.getSize(size);
+          const center = new THREE.Vector3();
+          box.getCenter(center);
+          
           const maxDim = Math.max(size.x, size.y, size.z);
           const scale = 60 / maxDim;
           object.scale.set(scale, scale, scale);
-          object.position.y = (size.y * scale) / 2;
+          
+          // Center and sit on floor
+          object.position.x = -center.x * scale;
+          object.position.y = (-center.y * scale) + (size.y * scale) / 2;
+          object.position.z = -center.z * scale;
+          
+          scene.add(object);
         } else {
           const geometry = object;
           if (!geometry.attributes.normal || geometry.attributes.normal.count === 0) geometry.computeVertexNormals();
+          
+          // Use built-in centering for STL geometry
+          geometry.center();
           
           const material = new THREE.MeshPhongMaterial({
             color: 0x00ccee,
@@ -96,15 +103,12 @@ const Viewer = {
 
           const mesh = new THREE.Mesh(geometry, material);
 
-          // Center and scale
+          // Get size after centering
           geometry.computeBoundingBox();
           const box = geometry.boundingBox;
-          const center = new THREE.Vector3();
-          box.getCenter(center);
-          mesh.position.sub(center);
-
           const size = new THREE.Vector3();
           box.getSize(size);
+          
           const maxDim = Math.max(size.x, size.y, size.z);
           const scale = 60 / maxDim;
           mesh.scale.set(scale, scale, scale);
@@ -112,7 +116,9 @@ const Viewer = {
           // STL is often Z-up, rotate to Y-up
           mesh.rotation.x = -Math.PI / 2;
           
-          // Make it sit on the grid floor
+          // After rotation: 
+          // geometry Y (width) -> world Y? No, rotation is around X.
+          // geometry Z (height) -> world Y.
           mesh.position.y = (size.z * scale) / 2;
           scene.add(mesh);
         }
@@ -241,34 +247,36 @@ const Viewer = {
         let modelCenterY = 0;
 
         if (is3MF) {
-          scene.add(object);
           const box = new THREE.Box3().setFromObject(object);
-          const center = new THREE.Vector3();
-          box.getCenter(center);
-          object.position.sub(center);
-          
           const size = new THREE.Vector3();
           box.getSize(size);
-          maxDim = Math.max(size.x, size.y, size.z);
+          const center = new THREE.Vector3();
+          box.getCenter(center);
+          
+          const maxDim = Math.max(size.x, size.y, size.z);
           const scale = 60 / maxDim;
           object.scale.set(scale, scale, scale);
+          
+          object.position.x = -center.x * scale;
+          object.position.y = (-center.y * scale) + (size.y * scale) / 2;
+          object.position.z = -center.z * scale;
+          
           modelCenterY = (size.y * scale) / 2;
-          object.position.y = modelCenterY;
+          scene.add(object);
         } else {
           const geometry = object;
           if (!geometry.attributes.normal || geometry.attributes.normal.count === 0) geometry.computeVertexNormals();
+          geometry.center();
+          
           const material = new THREE.MeshPhongMaterial({ color: 0x00ccee, specular: 0x333355, shininess: 35 });
           const mesh = new THREE.Mesh(geometry, material);
           
           geometry.computeBoundingBox();
           const box = geometry.boundingBox;
-          const center = new THREE.Vector3();
-          box.getCenter(center);
-          mesh.position.sub(center);
-          
           const size = new THREE.Vector3();
           box.getSize(size);
-          maxDim = Math.max(size.x, size.y, size.z);
+          
+          const maxDim = Math.max(size.x, size.y, size.z);
           const scale = 60 / maxDim;
           mesh.scale.set(scale, scale, scale);
           
