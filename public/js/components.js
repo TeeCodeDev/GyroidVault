@@ -962,4 +962,5 @@ const UI = {
           </div>
         </div>
       </div>`;
+  }
 };

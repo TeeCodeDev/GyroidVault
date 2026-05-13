@@ -681,7 +681,14 @@ app.get('/api/system/updates', async (req, res) => {
       lastUpdateCheck = { time: Date.now(), data };
       res.json({ ...data, currentVersion });
     } else {
-      res.status(githubRes.status).json({ error: 'GitHub API unreachable' });
+      // If 404, it just means no releases yet
+      const data = {
+        latestVersion: currentVersion,
+        hasUpdate: false,
+        changelog: '',
+        url: 'https://github.com/systemedic/GyroidVault'
+      };
+      res.json({ ...data, currentVersion });
     }
   } catch (e) {
     console.error('Update check failed:', e);
