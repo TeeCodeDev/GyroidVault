@@ -350,11 +350,6 @@ const UI = {
               </div>
             </div>
           </div>` : ''}
-          ${model.print_tips ? `
-          <div class="glass-panel" style="margin-bottom:24px">
-            <div class="panel-header"><div class="panel-title">💡 Print Tips</div></div>
-            <div class="panel-body"><div class="detail-tips">${model.print_tips}</div></div>
-          </div>` : ''}
         </div>
 
         <div>
@@ -391,6 +386,11 @@ const UI = {
                   <div style="color:var(--accent-cyan);font-size:.8rem">View →</div>
                 </div>`).join('')}
             </div>
+          </div>` : ''}
+          ${model.print_tips ? `
+          <div class="glass-panel" style="margin-top:16px">
+            <div class="panel-header"><div class="panel-title">💡 Print Tips</div></div>
+            <div class="panel-body"><div class="detail-tips">${model.print_tips}</div></div>
           </div>` : ''}
         </div>
       </div>`;
@@ -609,7 +609,7 @@ const UI = {
         <span class="settings-item-name">${color} ${item.name}${preset}</span>
         <div class="settings-item-actions">
           ${count}
-          ${canDelete ? `<button class="btn btn-ghost btn-xs" style="color:var(--error);padding:4px" onclick="App.deleteSettingsItem('${type}',${item.id},'${item.name.replace(/'/g, "\\'")}')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg></button>` : ''}
+          ${canDelete ? `<button class="btn btn-ghost btn-xs" style="color:var(--error);padding:4px" onclick="App.deleteSettingsItem('${type}',${item.id},'${item.name.replace(/'/g, "\\'")}')"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg></button>` : ''}
         </div>
       </div>`;
     }).join('');
@@ -1009,7 +1009,7 @@ const UI = {
             ` : '<div style="color:var(--success);font-size:.85rem;margin-bottom:20px">✓ You are running the latest version</div>'}
 
             <div style="font-weight:600;font-size:.95rem;margin-bottom:12px">What\'s New</div>
-            <div class="changelog-body" style="background:var(--bg-dark);padding:16px;border-radius:8px;font-size:.85rem;line-height:1.6;color:var(--text-secondary);max-height:300px;overflow-y:auto;white-space:pre-wrap">${versionInfo.changelog || 'No release notes available.'}</div>
+            <div class="changelog-body" style="background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:12px;padding:20px;max-height:600px;overflow-y:auto;font-size:.9rem;line-height:1.6;color:var(--text-secondary)">${versionInfo.changelog || 'No release notes available.'}</div>
           </div>
         </div>
       </div>`;
