@@ -117,6 +117,11 @@ const App = {
     } else if (path === '/profile') {
       this.renderProfile();
     } else if (path === '/settings') {
+      if (!this.currentUser || this.currentUser.role !== 'admin') {
+        this.toast('Admin access required', 'error');
+        this.navigate('/');
+        return;
+      }
       document.getElementById('nav-settings')?.classList.add('active');
       this.renderSettings();
     } else if (path === '/register') {
@@ -330,6 +335,10 @@ const App = {
     const fd = new FormData(e.target);
     try {
       const res = await API.login(fd.get('username'), fd.get('password'));
+      if (!res || !res.token) {
+        this.toast('Invalid username or password', 'error');
+        return;
+      }
       localStorage.setItem('pv_token', res.token);
       localStorage.setItem('pv_user', JSON.stringify(res.user));
       this.currentUser = res.user;

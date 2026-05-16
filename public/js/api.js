@@ -14,7 +14,10 @@ const API = {
       ...options,
     });
     if (res.status === 401) {
-      // Don't throw for 401 on background requests to avoid triggering interceptors
+      if (url.includes('/api/auth/login')) {
+        const err = await res.json().catch(() => ({ error: 'Invalid credentials' }));
+        throw new Error(err.error || 'Invalid credentials');
+      }
       return null;
     }
     if (!res.ok) {
