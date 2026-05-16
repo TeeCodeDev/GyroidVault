@@ -972,6 +972,7 @@ const UI = {
   },
 
   aboutSection(versionInfo = {}) {
+    const renderedChangelog = this.renderMarkdown(versionInfo.changelog || 'No release notes available.');
     return `
       <div class="glass-panel">
         <div class="panel-header"><div class="panel-title">About GyroidVault</div></div>
@@ -1009,9 +1010,29 @@ const UI = {
             ` : '<div style="color:var(--success);font-size:.85rem;margin-bottom:20px">✓ You are running the latest version</div>'}
 
             <div style="font-weight:600;font-size:.95rem;margin-bottom:12px">What\'s New</div>
-            <div class="changelog-body" style="background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:12px;padding:20px;max-height:600px;overflow-y:auto;font-size:.9rem;line-height:1.6;color:var(--text-secondary)">${versionInfo.changelog || 'No release notes available.'}</div>
+            <div class="changelog-body" style="background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:12px;padding:20px;max-height:600px;overflow-y:auto;font-size:.9rem;line-height:1.6;color:var(--text-secondary)">${renderedChangelog}</div>
           </div>
         </div>
       </div>`;
+  },
+
+  renderMarkdown(text) {
+    if (!text) return '';
+    return text
+      // Headers
+      .replace(/^### (.*$)/gim, '<h4 style="margin:16px 0 8px;color:var(--text-primary)">$1</h4>')
+      .replace(/^## (.*$)/gim, '<h3 style="margin:20px 0 10px;color:var(--accent-cyan)">$1</h3>')
+      .replace(/^# (.*$)/gim, '<h2 style="margin:24px 0 12px;color:var(--accent-cyan)">$1</h2>')
+      // Bold
+      .replace(/\*\*(.*)\*\*/gim, '<strong>$1</strong>')
+      // Italic
+      .replace(/\*(.*)\*/gim, '<em>$1</em>')
+      // Lists
+      .replace(/^\* (.*$)/gim, '<li style="margin-left:20px;margin-bottom:4px">$1</li>')
+      .replace(/^- (.*$)/gim, '<li style="margin-left:20px;margin-bottom:4px">$1</li>')
+      // Links
+      .replace(/\[([^\]]+)\]\(([^)]+)\)/gim, '<a href="$2" target="_blank" style="color:var(--accent-cyan)">$1</a>')
+      // Newlines to BR
+      .replace(/\n/gim, '<br>');
   }
 };
