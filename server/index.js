@@ -365,7 +365,7 @@ app.post('/api/models', authenticate, (req, res) => {
   } catch (e) { console.error(e); res.status(500).json({ error: 'Failed to create model' }); }
 });
 
-app.put('/api/models/:id', (req, res) => {
+app.put('/api/models/:id', authenticate, (req, res) => {
   try {
     const id = Number(req.params.id);
     const model = get('SELECT * FROM models WHERE id=?', [id]);
@@ -473,7 +473,7 @@ app.post('/api/models/bulk-update', authenticate, (req, res) => {
 
 // ─── FILES ──────────────────────────────────────────────────────────────────
 
-app.post('/api/models/:id/files', upload.array('files', 20), (req, res) => {
+app.post('/api/models/:id/files', authenticate, upload.array('files', 20), (req, res) => {
   try {
     const id = Number(req.params.id);
     const model = get('SELECT * FROM models WHERE id=?', [id]);
@@ -538,7 +538,7 @@ app.post('/api/models/:id/files', upload.array('files', 20), (req, res) => {
   } catch (e) { console.error(e); res.status(500).json({ error: 'Failed to upload files' }); }
 });
 
-app.post('/api/models/:id/thumbnail', upload.single('thumbnail'), (req, res) => {
+app.post('/api/models/:id/thumbnail', authenticate, upload.single('thumbnail'), (req, res) => {
   try {
     const id = Number(req.params.id);
     const model = get('SELECT * FROM models WHERE id=?', [id]);
@@ -560,7 +560,7 @@ app.get('/api/files/:id/download', (req, res) => {
   } catch (e) { console.error(e); res.status(500).json({ error: 'Failed to download' }); }
 });
 
-app.delete('/api/files/:id', (req, res) => {
+app.delete('/api/files/:id', authenticate, (req, res) => {
   try {
     const file = get('SELECT * FROM files WHERE id=?', [Number(req.params.id)]);
     if (!file) return res.status(404).json({ error: 'File not found' });
@@ -591,7 +591,7 @@ app.get('/api/projects', authenticate, (req, res) => {
   } catch (e) { console.error(e); res.status(500).json({ error: 'Failed to fetch projects' }); }
 });
 
-app.get('/api/projects/:id', (req, res) => {
+app.get('/api/projects/:id', authenticate, (req, res) => {
   try {
     const project = get('SELECT * FROM projects WHERE id=?', [Number(req.params.id)]);
     if (!project) return res.status(404).json({ error: 'Project not found' });
@@ -682,7 +682,7 @@ app.get('/api/shares/:slug', (req, res) => {
 
 // ─── PRINT HISTORY ──────────────────────────────────────────────────────────
 
-app.post('/api/models/:id/prints', (req, res) => {
+app.post('/api/models/:id/prints', authenticate, (req, res) => {
   try {
     const id = Number(req.params.id);
     if (!get('SELECT id FROM models WHERE id=?', [id])) return res.status(404).json({ error: 'Model not found' });
@@ -695,7 +695,7 @@ app.post('/api/models/:id/prints', (req, res) => {
   } catch (e) { console.error(e); res.status(500).json({ error: 'Failed to add print' }); }
 });
 
-app.delete('/api/prints/:id', (req, res) => {
+app.delete('/api/prints/:id', authenticate, (req, res) => {
   try {
     const p = get('SELECT * FROM print_history WHERE id=?', [Number(req.params.id)]);
     if (!p) return res.status(404).json({ error: 'Not found' });
@@ -711,7 +711,8 @@ app.get('/api/categories', (req, res) => {
   try { res.json(all('SELECT c.*,(SELECT COUNT(*) FROM models WHERE category_id=c.id) as model_count FROM categories c ORDER BY c.name')); }
   catch (e) { res.status(500).json({ error: 'Failed' }); }
 });
-app.post('/api/categories', (req, res) => {
+app.post('/api/categories', authenticate, (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
   try {
     const { name, color } = req.body;
     if (!name?.trim()) return res.status(400).json({ error: 'Name is required' });
@@ -719,14 +720,16 @@ app.post('/api/categories', (req, res) => {
     res.status(201).json(get('SELECT * FROM categories WHERE id=?', [r.lastId]));
   } catch (e) { res.status(e.message?.includes('UNIQUE') ? 409 : 500).json({ error: e.message?.includes('UNIQUE') ? 'Already exists' : 'Failed' }); }
 });
-app.put('/api/categories/:id', (req, res) => {
+app.put('/api/categories/:id', authenticate, (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
   try {
     const { name, color } = req.body;
     run('UPDATE categories SET name=COALESCE(?,name),color=COALESCE(?,color) WHERE id=?', [name, color, Number(req.params.id)]);
     res.json(get('SELECT * FROM categories WHERE id=?', [Number(req.params.id)]));
   } catch (e) { res.status(500).json({ error: 'Failed' }); }
 });
-app.delete('/api/categories/:id', (req, res) => {
+app.delete('/api/categories/:id', authenticate, (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
   try { run('DELETE FROM categories WHERE id=?', [Number(req.params.id)]); res.json({ success: true }); }
   catch (e) { res.status(500).json({ error: 'Failed' }); }
 });
@@ -782,7 +785,8 @@ app.get('/api/tags', (req, res) => {
   try { res.json(all('SELECT t.*,(SELECT COUNT(*) FROM model_tags WHERE tag_id=t.id) as model_count FROM tags t ORDER BY t.name')); }
   catch (e) { res.status(500).json({ error: 'Failed' }); }
 });
-app.post('/api/tags', (req, res) => {
+app.post('/api/tags', authenticate, (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
   try {
     const { name } = req.body;
     if (!name?.trim()) return res.status(400).json({ error: 'Name is required' });
@@ -790,7 +794,8 @@ app.post('/api/tags', (req, res) => {
     res.status(201).json(get('SELECT * FROM tags WHERE id=?', [r.lastId]));
   } catch (e) { res.status(e.message?.includes('UNIQUE') ? 409 : 500).json({ error: e.message?.includes('UNIQUE') ? 'Already exists' : 'Failed' }); }
 });
-app.delete('/api/tags/:id', (req, res) => {
+app.delete('/api/tags/:id', authenticate, (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
   try { run('DELETE FROM tags WHERE id=?', [Number(req.params.id)]); res.json({ success: true }); }
   catch (e) { res.status(500).json({ error: 'Failed' }); }
 });
@@ -801,7 +806,8 @@ app.get('/api/materials', (req, res) => {
   try { res.json(all('SELECT mat.*,(SELECT COUNT(*) FROM print_history WHERE material_id=mat.id) as usage_count FROM materials mat ORDER BY mat.is_preset DESC,mat.name')); }
   catch (e) { res.status(500).json({ error: 'Failed' }); }
 });
-app.post('/api/materials', (req, res) => {
+app.post('/api/materials', authenticate, (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
   try {
     const { name } = req.body;
     if (!name?.trim()) return res.status(400).json({ error: 'Name is required' });
@@ -809,7 +815,8 @@ app.post('/api/materials', (req, res) => {
     res.status(201).json(get('SELECT * FROM materials WHERE id=?', [r.lastId]));
   } catch (e) { res.status(e.message?.includes('UNIQUE') ? 409 : 500).json({ error: e.message?.includes('UNIQUE') ? 'Already exists' : 'Failed' }); }
 });
-app.delete('/api/materials/:id', (req, res) => {
+app.delete('/api/materials/:id', authenticate, (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
   try {
     const m = get('SELECT * FROM materials WHERE id=?', [Number(req.params.id)]);
     if (!m) return res.status(404).json({ error: 'Not found' });
