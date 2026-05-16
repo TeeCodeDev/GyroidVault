@@ -1,3 +1,6 @@
+# small issue: 17-05-2026: currently there is an issue creating the first user. A update will be released this weekend 
+
+
 # 🗄️ GyroidVault
 
 **GyroidVault** is a modern, self-hosted 3D model library and print management platform designed for enthusiasts and professionals. Organize your STL, 3MF, and Gcode files, track your print history, and manage your projects in a beautiful, responsive dashboard.
