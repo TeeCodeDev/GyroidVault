@@ -23,18 +23,18 @@ async function sendResetEmail(email, token, origin) {
   const transporter = await getTransporter();
   if (!transporter) throw new Error('SMTP not configured');
   
-  const from = get('SELECT value FROM system_settings WHERE key="smtp_from"')?.value || 'PrintVault <noreply@printvault.local>';
+  const from = get('SELECT value FROM system_settings WHERE key="smtp_from"')?.value || 'GyroidVault <noreply@gyroidvault.local>';
   const resetUrl = `${origin}/#/reset-password?token=${token}`;
 
   await transporter.sendMail({
     from,
     to: email,
-    subject: 'Password Reset - PrintVault',
+    subject: 'Password Reset - GyroidVault',
     html: `
       <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 8px;">
-        <h1 style="color: #8b5cf6;">PrintVault</h1>
+        <h1 style="color: #8b5cf6;">GyroidVault</h1>
         <h2 style="color: #1e293b;">Password Reset Request</h2>
-        <p style="color: #475569; line-height: 1.6;">A password reset was requested for your PrintVault account. Click the button below to choose a new password.</p>
+        <p style="color: #475569; line-height: 1.6;">A password reset was requested for your GyroidVault account. Click the button below to choose a new password.</p>
         <div style="margin: 30px 0; text-align: center;">
           <a href="${resetUrl}" style="background-color: #8b5cf6; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: 600; display: inline-block;">Reset Password</a>
         </div>

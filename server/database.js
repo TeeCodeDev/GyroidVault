@@ -3,7 +3,7 @@ const path = require('path');
 const fs = require('fs');
 
 const DATA_DIR = path.join(__dirname, '..', 'data');
-const DB_PATH = path.join(DATA_DIR, 'printvault.db');
+const DB_PATH = path.join(DATA_DIR, 'gyroidvault.db');
 const UPLOADS_DIR = path.join(DATA_DIR, 'uploads');
 
 // Ensure directories exist

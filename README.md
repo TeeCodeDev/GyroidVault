@@ -66,6 +66,20 @@ The fastest way to get GyroidVault up and running is using Docker Compose. You d
 4. **Access GyroidVault**:
     Open [http://localhost:3457](http://localhost:3457) in your browser.
 
+## ⚙️ Initial Setup
+
+### 1. Registering the Admin
+The very first person to register on a new GyroidVault instance **automatically becomes the Administrator**.
+- You do **not** need an invite code for the first registration.
+- If you are prompted for an invite code on a fresh install, ensure your `./data` directory is empty.
+
+### 2. Configuring SMTP (Email)
+To enable features like password resets and user invitations, you need to configure SMTP:
+1. Log in as the **Administrator**.
+2. Go to **Settings** > **SMTP & Mail**.
+3. Enter your SMTP server details (Host, Port, User, Password).
+4. Save and test the configuration.
+
 ## 🛠 Manual Installation
 
 1.  Install [Node.js](https://nodejs.org/) (v18+).
