@@ -4,6 +4,8 @@
 
 ![GyroidVault Dashboard](screenshots/GyroidVault-Dashboard_page.png)
 
+> **⚠️ Early Release Notice:** GyroidVault is a brand-new project and still under active development. You may encounter bugs or rough edges. If you do, please [open an issue](https://github.com/TeeCodeDev/GyroidVault/issues) — your feedback helps make GyroidVault better for everyone!
+
 ## 📸 Gallery
 
 <table style="border: none; border-collapse: collapse;">
