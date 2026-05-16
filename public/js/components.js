@@ -977,7 +977,7 @@ const UI = {
       <div class="glass-panel">
         <div class="panel-header"><div class="panel-title">About GyroidVault</div></div>
         <div class="panel-body">
-          <div style="display:flex;gap:24px;align-items:flex-start;margin-bottom:24px">
+          <div style="display:flex;gap:24px;align-items:flex-start;margin-bottom:24px;flex-wrap:wrap">
             <div style="width:80px;height:80px;background:var(--accent-gradient);border-radius:16px;display:flex;align-items:center;justify-content:center;font-size:3rem;box-shadow:0 8px 16px rgba(0,0,0,0.2)">🗄️</div>
             <div style="flex:1">
               <h3 style="margin:0 0 4px 0;font-size:1.4rem;background:var(--accent-gradient);-webkit-background-clip:text;-webkit-text-fill-color:transparent">GyroidVault</h3>
