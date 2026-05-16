@@ -1,4 +1,4 @@
-# small issue: 17-05-2026: currently there is an issue creating the first user. A update will be released this weekend 
+**Small issue** 17-05-2026: currently there is an issue creating the first user. A update will be released this weekend 
 
 
 # 🗄️ GyroidVault
