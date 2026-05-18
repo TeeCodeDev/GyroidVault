@@ -109,3 +109,5 @@ This project is licensed under the **GNU Affero General Public License v3.0 (AGP
 
 ---
 *Built with ❤️ for the 3D Printing Community.*
+
+🤖 **AI Transparency Disclosure:** This project was developed with the assistance of AI (used as a coding companion for drafting documentation, structuring the README, and debugging/refining code). The core concept, architecture, design choices, and final features are entirely human-guided.
