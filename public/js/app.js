@@ -608,9 +608,9 @@ const App = {
 
   copyShareLink() {
     const input = document.getElementById('share-link-input');
-    input.select();
-    document.execCommand('copy');
-    this.toast('Link copied to clipboard');
+    if (input) {
+      this.copyToClipboard(input.value, 'Link copied to clipboard');
+    }
   },
 
   showCreateVersion(id, name) {
@@ -864,8 +864,19 @@ const App = {
   },
 
   addPendingFiles(files) {
-    this.pendingFiles.push(...files);
-    this.renderPendingFiles();
+    const MAX_SIZE = 500 * 1024 * 1024; // 500MB
+    const validFiles = [];
+    for (const f of files) {
+      if (f.size > MAX_SIZE) {
+        this.toast(`File "${f.name}" exceeds the 500MB size limit.`, 'error');
+      } else {
+        validFiles.push(f);
+      }
+    }
+    if (validFiles.length) {
+      this.pendingFiles.push(...validFiles);
+      this.renderPendingFiles();
+    }
   },
 
   removePendingFile(index) {
@@ -971,9 +982,9 @@ const App = {
     } catch (err) { this.toast(err.message, 'error'); }
   },
 
-  copyToClipboard(text) {
+  copyToClipboard(text, message = 'Copied') {
     if (navigator.clipboard && window.isSecureContext) {
-      navigator.clipboard.writeText(text).then(() => this.toast('Path copied'));
+      navigator.clipboard.writeText(text).then(() => this.toast(message));
     } else {
       const textArea = document.createElement("textarea");
       textArea.value = text;
@@ -985,7 +996,7 @@ const App = {
       textArea.select();
       try {
         document.execCommand('copy');
-        this.toast('Path copied');
+        this.toast(message);
       } catch (err) {
         console.error('Fallback copy failed', err);
         this.toast('Failed to copy', 'error');
@@ -1012,6 +1023,12 @@ const App = {
   },
 
   async uploadFilesAction(modelId, files) {
+    const MAX_SIZE = 500 * 1024 * 1024; // 500MB
+    const tooLarge = files.find(f => f.size > MAX_SIZE);
+    if (tooLarge) {
+      this.toast(`File "${tooLarge.name}" exceeds the 500MB size limit.`, 'error');
+      return;
+    }
     const progress = document.getElementById('upload-progress');
     if (progress) progress.innerHTML = `<div style="color:var(--accent-cyan);font-size:.875rem">⏳ Uploading ${files.length} file(s)...</div>`;
     try {

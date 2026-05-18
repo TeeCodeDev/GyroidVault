@@ -264,10 +264,6 @@ const UI = {
                 <a href="prusaslicer://${window.location.origin}${f.url}" target="_blank">PrusaSlicer</a>
                 <a href="orcaslicer://open?file=${window.location.origin}${f.url}" target="_blank">OrcaSlicer</a>
                 <a href="elegooslicer://open?file=${window.location.origin}${f.url}" target="_blank">Elegoo Slicer</a>
-                ${(isAdmin && f.library_path) ? `
-                <div class="dropdown-divider"></div>
-                <a href="#" onclick="event.preventDefault();App.copyToClipboard('${f.library_path.replace(/\\/g, '\\\\')}')">Copy File Path</a>
-                ` : ''}
               </div>
             </div>
           ` : ''}
