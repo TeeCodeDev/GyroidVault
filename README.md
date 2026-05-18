@@ -107,6 +107,6 @@ To enable password resets and user invitations, you need to configure SMTP:
 This project is licensed under the **GNU Affero General Public License v3.0 (AGPL-3.0)**. See the [LICENSE](LICENSE) file for details. This ensures that the software remains free and that improvements made by the community are shared back.
 
 ---
-*Built with ❤️ for the 3D Printing Community.*
+*Built for the 3D Printing Community.*
 
-🤖 **AI Transparency Disclosure:** This project was developed with the assistance of AI (used as a coding companion for drafting documentation, structuring the README, and debugging/refining code). The core concept, architecture, design choices, and final features are entirely human-guided.
+*Note: Since English isn't my first language, I used AI to help write the documentation, clean up the README, and assist with debugging. The core code, UI design, and features are completely my own.*
