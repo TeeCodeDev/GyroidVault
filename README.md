@@ -109,4 +109,4 @@ This project is licensed under the **GNU Affero General Public License v3.0 (AGP
 ---
 *Built for the 3D Printing Community.*
 
-*Note: Since English isn't my first language, I used AI to help write the documentation, clean up the README, and assist with debugging. The core code, UI design, and features are completely my own.*
+*Note: Since English isn't my first language, I used AI to help write the documentation and structure the README. The application itself, the architecture, the UI, and the features are all my own, with AI helping me debug and iterate faster.*
