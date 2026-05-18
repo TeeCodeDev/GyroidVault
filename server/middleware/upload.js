@@ -19,7 +19,15 @@ const storage = multer.diskStorage({
 const fileFilter = (req, file, cb) => {
   const allowedExtensions = ['.stl', '.gcode', '.3mf', '.obj', '.step', '.stp', '.png', '.jpg', '.jpeg', '.gif', '.webp'];
   const ext = path.extname(file.originalname).toLowerCase();
-  if (allowedExtensions.includes(ext)) {
+  
+  // Check for double extensions or dangerous intermediate extensions
+  const parts = file.originalname.toLowerCase().split('.');
+  const dangerousExtensions = ['js', 'php', 'exe', 'sh', 'bat', 'cmd', 'msi', 'jsp', 'asp', 'aspx', 'vbs', 'scr', 'pif', 'com'];
+  const hasDangerousExt = parts.slice(0, -1).some(part => dangerousExtensions.includes(part));
+  
+  if (hasDangerousExt) {
+    cb(new Error(`Double extension or dangerous intermediate extension detected in "${file.originalname}".`), false);
+  } else if (allowedExtensions.includes(ext)) {
     cb(null, true);
   } else {
     cb(new Error(`File type ${ext} is not supported.`), false);

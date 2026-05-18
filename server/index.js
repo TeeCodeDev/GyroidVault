@@ -9,7 +9,12 @@ const { authenticate, SECRET } = require('./middleware/auth');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const LIBRARY_PATH = process.env.LIBRARY_PATH || (process.platform === 'win32' ? 'C:\\Users\\Systemedic\\Documents\\3Dprints' : '/library');
+const LIBRARY_PATH = process.env.LIBRARY_PATH || path.join(__dirname, '..', 'data', 'library');
+
+// Ensure library directory exists
+if (!fs.existsSync(LIBRARY_PATH)) {
+  fs.mkdirSync(LIBRARY_PATH, { recursive: true });
+}
 
 function logEvent(level, message) {
   try {
@@ -68,6 +73,9 @@ app.post('/api/auth/register', async (req, res) => {
   try {
     const { username, password, email, invite_token } = req.body;
     if (!username || !password || !email) return res.status(400).json({ error: 'Missing fields' });
+    if (password.length < 8 || !/[a-zA-Z]/.test(password) || !/[0-9]/.test(password)) {
+      return res.status(400).json({ error: 'Password must be at least 8 characters long and contain both letters and numbers' });
+    }
     
     const userCount = get('SELECT COUNT(*) as count FROM users').count;
     let role = 'user';
@@ -128,7 +136,8 @@ app.post('/api/auth/login', async (req, res) => {
     if (!user || !(await bcrypt.compare(password, user.password_hash))) {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
-    const token = jwt.sign({ id: user.id, username: user.username, role: user.role, email: user.email }, SECRET, { expiresIn: '30d' });
+    // Securing JWT payload: remove username and email
+    const token = jwt.sign({ id: user.id, role: user.role }, SECRET, { expiresIn: '30d' });
     res.json({ token, user: { id: user.id, username: user.username, role: user.role, email: user.email } });
   } catch (e) { console.error(e); res.status(500).json({ error: 'Login failed' }); }
 });
@@ -145,6 +154,9 @@ app.put('/api/auth/profile', authenticate, async (req, res) => {
     if (username) { updates.push('username=?'); params.push(username); }
     if (email) { updates.push('email=?'); params.push(email); }
     if (password) { 
+      if (password.length < 8 || !/[a-zA-Z]/.test(password) || !/[0-9]/.test(password)) {
+        return res.status(400).json({ error: 'Password must be at least 8 characters long and contain both letters and numbers' });
+      }
       const hash = await bcrypt.hash(password, 10);
       updates.push('password_hash=?'); params.push(hash);
     }
@@ -176,6 +188,10 @@ app.post('/api/auth/forgot-password', async (req, res) => {
 app.post('/api/auth/reset-password', async (req, res) => {
   try {
     const { token, password } = req.body;
+    if (!password) return res.status(400).json({ error: 'Password is required' });
+    if (password.length < 8 || !/[a-zA-Z]/.test(password) || !/[0-9]/.test(password)) {
+      return res.status(400).json({ error: 'Password must be at least 8 characters long and contain both letters and numbers' });
+    }
     const user = get("SELECT * FROM users WHERE password_reset_token=? AND password_reset_expires > datetime('now')", [token]);
     if (!user) return res.status(400).json({ error: 'Token invalid or expired' });
     

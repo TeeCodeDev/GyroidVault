@@ -15,8 +15,12 @@ let db = null;
 // Save database to disk periodically and on changes
 function saveDb() {
   if (!db) return;
-  const data = db.export();
-  fs.writeFileSync(DB_PATH, Buffer.from(data));
+  try {
+    const data = db.export();
+    fs.writeFileSync(DB_PATH, Buffer.from(data));
+  } catch (err) {
+    console.error('CRITICAL: Database wegschrijven naar schijf mislukt:', err);
+  }
 }
 
 async function initDatabase() {
@@ -230,19 +234,6 @@ async function initDatabase() {
       db.run('CREATE UNIQUE INDEX IF NOT EXISTS idx_models_library_path ON models(library_path)');
     }
   } catch (e) { console.error('Migration failed:', e); }
-
-  db.run(`
-    CREATE TABLE IF NOT EXISTS print_history (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      model_id INTEGER NOT NULL,
-      printed_at DATETIME DEFAULT (datetime('now')),
-      material_id INTEGER,
-      successful INTEGER DEFAULT 1,
-      notes TEXT DEFAULT '',
-      FOREIGN KEY (model_id) REFERENCES models(id) ON DELETE CASCADE,
-      FOREIGN KEY (material_id) REFERENCES materials(id) ON DELETE SET NULL
-    )
-  `);
 
   // ─── Seed Data ───────────────────────────────────────────────────────
   const seedMaterials = [
