@@ -985,7 +985,7 @@ function setupBackgroundScanner() {
       console.log('Running scheduled library scan...');
       try {
         const { scanLibrary } = require('./utils/library');
-        await scanLibrary();
+        await scanLibrary(LIBRARY_PATH);
         console.log('Scheduled library scan completed.');
       } catch (e) {
         console.error('Scheduled library scan failed:', e);
