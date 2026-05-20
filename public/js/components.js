@@ -583,6 +583,11 @@ const UI = {
           <option value="name">Name</option>
           <option value="prints">Most Printed</option>
         </select>
+        <select class="filter-select" id="filter-limit" onchange="App.handleFilter()">
+          <option value="24">24 per page</option>
+          <option value="48">48 per page</option>
+          <option value="96">96 per page</option>
+        </select>
         <button class="btn btn-secondary btn-sm" onclick="App.selectAll()">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px"><polyline points="9 11 12 14 22 4"></polyline><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg>
           Select All
@@ -592,6 +597,49 @@ const UI = {
           Scan Library
         </button>
       </div>`;
+  },
+
+  // ── Pagination ──
+  pagination(totalPages, currentPage) {
+    if (totalPages <= 1) return '';
+    
+    let buttons = '';
+    const maxButtons = 5;
+    let startPage = Math.max(1, currentPage - Math.floor(maxButtons / 2));
+    let endPage = Math.min(totalPages, startPage + maxButtons - 1);
+
+    if (endPage - startPage + 1 < maxButtons) {
+      startPage = Math.max(1, endPage - maxButtons + 1);
+    }
+
+    // Always render Prev button to prevent UI jumping
+    const prevDisabled = currentPage <= 1 ? 'disabled style="opacity:0.3;cursor:default"' : `onclick="App.goToPage(${currentPage - 1})"`;
+    buttons += `<button class="btn btn-secondary btn-sm" ${prevDisabled}>← Prev</button>`;
+
+    if (startPage > 1) {
+      buttons += `<button class="btn btn-secondary btn-sm" onclick="App.goToPage(1)">1</button>`;
+      if (startPage > 2) buttons += `<span style="padding: 4px 8px; color: var(--text-muted)">...</span>`;
+    }
+
+    for (let i = startPage; i <= endPage; i++) {
+      const activeClass = i === currentPage ? 'btn-primary' : 'btn-secondary';
+      buttons += `<button class="btn ${activeClass} btn-sm" onclick="App.goToPage(${i})">${i}</button>`;
+    }
+
+    if (endPage < totalPages) {
+      if (endPage < totalPages - 1) buttons += `<span style="padding: 4px 8px; color: var(--text-muted)">...</span>`;
+      buttons += `<button class="btn btn-secondary btn-sm" onclick="App.goToPage(${totalPages})">${totalPages}</button>`;
+    }
+
+    // Always render Next button to prevent UI jumping
+    const nextDisabled = currentPage >= totalPages ? 'disabled style="opacity:0.3;cursor:default"' : `onclick="App.goToPage(${currentPage + 1})"`;
+    buttons += `<button class="btn btn-secondary btn-sm" ${nextDisabled}>Next →</button>`;
+
+    return `
+      <div class="pagination-container" style="display: flex; justify-content: center; gap: 6px; margin-top: 32px; padding-bottom: 24px;">
+        ${buttons}
+      </div>
+    `;
   },
 
   // ── Settings panels ──

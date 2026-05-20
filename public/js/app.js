@@ -193,6 +193,10 @@ const App = {
     if (params.user) document.getElementById('filter-user').value = params.user;
     if (params.printed) document.getElementById('filter-printed').value = params.printed;
     if (params.sort) document.getElementById('filter-sort').value = params.sort;
+    if (params.limit) {
+      const limitSelect = document.getElementById('filter-limit');
+      if (limitSelect) limitSelect.value = params.limit;
+    }
 
     // Hide scan if not admin
     if (!this.currentUser || this.currentUser.role !== 'admin') {
@@ -205,14 +209,24 @@ const App = {
 
   async fetchAndRenderModels(params = {}) {
     try {
-      const models = await API.getModels(params);
+      const response = await API.getModels(params);
+      
+      // Handle the new paginated response format or fallback to array
+      const models = Array.isArray(response) ? response : (response.models || []);
+      const totalPages = response.totalPages || 1;
+      const currentPage = response.currentPage || 1;
+
       const grid = document.getElementById('models-grid');
       if (!grid) return;
       if (!models.length) {
         grid.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📦</div><div class="empty-state-text">No models found</div><div class="empty-state-sub">Create your first model to get started</div></div>';
         return;
       }
-      grid.innerHTML = `<div class="model-grid">${models.map(m => UI.modelCard(m)).join('')}</div>`;
+      
+      grid.innerHTML = `
+        <div class="model-grid">${models.map(m => UI.modelCard(m)).join('')}</div>
+        ${UI.pagination(totalPages, currentPage)}
+      `;
       this.renderBulkBar();
       if (typeof Viewer !== 'undefined' && Viewer.generateThumbnails) {
         setTimeout(() => Viewer.generateThumbnails(), 50);
@@ -320,8 +334,25 @@ const App = {
       user: document.getElementById('filter-user')?.value || '',
       printed: document.getElementById('filter-printed')?.value || '',
       sort: document.getElementById('filter-sort')?.value || 'updated',
+      limit: document.getElementById('filter-limit')?.value || 24,
+      page: 1, // Always reset to page 1 when filtering/searching
     };
     this.fetchAndRenderModels(params);
+  },
+
+  goToPage(pageNumber) {
+    const params = {
+      search: document.getElementById('search-input')?.value || '',
+      category: document.getElementById('filter-category')?.value || '',
+      tag: document.getElementById('filter-tag')?.value || '',
+      user: document.getElementById('filter-user')?.value || '',
+      printed: document.getElementById('filter-printed')?.value || '',
+      sort: document.getElementById('filter-sort')?.value || 'updated',
+      limit: document.getElementById('filter-limit')?.value || 24,
+      page: pageNumber,
+    };
+    this.fetchAndRenderModels(params);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   },
 
   // ── Auth ──

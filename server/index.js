@@ -221,7 +221,7 @@ if (fs.existsSync(LIBRARY_PATH)) {
 
 app.get('/api/models', (req, res) => {
   try {
-    const { search, category, tag, user, printed, sort = 'updated', order = 'desc', project_id } = req.query;
+    const { search, category, tag, user, printed, sort = 'updated', order, project_id, page = 1, limit = 24 } = req.query;
     let query = `SELECT m.*, c.name as category_name, c.color as category_color, u.username as uploader_name,
       (SELECT COUNT(*) FROM files WHERE model_id=m.id) as file_count,
       (SELECT COUNT(*) FROM print_history WHERE model_id=m.id) as print_count,
@@ -249,10 +249,23 @@ app.get('/api/models', (req, res) => {
     else if (printed === 'false') conds.push("m.id NOT IN (SELECT DISTINCT model_id FROM print_history)");
     if (project_id) { conds.push("m.id IN (SELECT model_id FROM project_models WHERE project_id=?)"); params.push(Number(project_id)); }
 
-    if (conds.length) query += ' WHERE ' + conds.join(' AND ');
+    let countQuery = 'SELECT COUNT(m.id) as total FROM models m';
+    if (conds.length) {
+      const whereClause = ' WHERE ' + conds.join(' AND ');
+      query += whereClause;
+      countQuery += whereClause;
+    }
     
+    const totalItems = get(countQuery, params).total;
+    const parsedLimit = Number(limit) || 24;
+    const parsedPage = Math.max(1, Number(page) || 1);
+    const totalPages = Math.ceil(totalItems / parsedLimit);
+    const offset = (parsedPage - 1) * parsedLimit;
+
     const sortMap = { name:'m.name', created:'m.created_at', updated:'m.updated_at', prints:'print_count', files:'file_count' };
-    query += ` ORDER BY ${sortMap[sort]||'m.updated_at'} ${order==='asc'?'ASC':'DESC'}`;
+    const sqlOrder = order ? (order === 'asc' ? 'ASC' : 'DESC') : (sort === 'name' ? 'ASC' : 'DESC');
+    query += ` ORDER BY ${sortMap[sort]||'m.updated_at'} ${sqlOrder} LIMIT ? OFFSET ?`;
+    params.push(parsedLimit, offset);
     
     const models = all(query, params).map(m => {
       let stl_url = null;
@@ -264,8 +277,6 @@ app.get('/api/models', (req, res) => {
       
       let thumb_url = m.thumbnail;
       if (m.thumbnail) {
-        // If it's a library file, it usually contains a path or was found during scan
-        // If it was uploaded via API, it's just a filename in UPLOADS_DIR
         const thumbPath = m.library_path ? path.join(m.library_path, m.thumbnail) : null;
         if (thumbPath && fs.existsSync(thumbPath)) {
           thumb_url = getFileUrl({ filename: m.thumbnail, library_path: thumbPath });
@@ -283,7 +294,14 @@ app.get('/api/models', (req, res) => {
         has_printed: m.print_count > 0,
       };
     });
-    res.json(models);
+    
+    res.json({
+      models,
+      totalItems,
+      totalPages,
+      currentPage: parsedPage,
+      limit: parsedLimit
+    });
   } catch (e) { console.error(e); res.status(500).json({ error: 'Failed to fetch models' }); }
 });
 
