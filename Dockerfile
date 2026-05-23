@@ -16,6 +16,7 @@ COPY . .
 RUN mkdir -p /app/data/uploads
 
 EXPOSE 3000
+ENV LIBRARY_PATH=/library
 
 VOLUME ["/app/data"]
 
