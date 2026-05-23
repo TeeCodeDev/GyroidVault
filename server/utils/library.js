@@ -56,7 +56,7 @@ async function scanLibrary(libraryPath) {
         const r = db.run('INSERT INTO models (name, library_path) VALUES (?, ?)', [modelName, modelPath]);
         model = { id: r.lastId, thumbnail: null };
         results.modelsAdded++;
-        console.log(`[Scanner] Nieuw model toegevoegd: ${modelName}`);
+        console.log(`[Scanner] Added new model: ${modelName}`);
       }
 
       // Add files from this directory
@@ -99,7 +99,7 @@ async function scanLibrary(libraryPath) {
             db.run('INSERT INTO files (model_id, filename, original_name, file_type, file_size, metadata, library_path) VALUES (?, ?, ?, ?, ?, ?, ?)',
               [model.id, filename, filename, ft, stat.size, metadata, filePath]);
             results.filesAdded++;
-            console.log(`[Scanner] Bestand verwerkt: ${filename}`);
+            console.log(`[Scanner] Processed file: ${filename}`);
           } else {
             results.skipped++;
           }
@@ -117,7 +117,7 @@ async function scanLibrary(libraryPath) {
 
   console.log(`[Scanner] Start library scan: ${libraryPath}`);
   await walk(libraryPath);
-  console.log(`[Scanner] Scan voltooid. Modellen: ${results.modelsAdded}, Bestanden: ${results.filesAdded}, Overgeslagen: ${results.skipped}`);
+  console.log(`[Scanner] Scan complete. Models: ${results.modelsAdded}, Files: ${results.filesAdded}, Skipped: ${results.skipped}`);
   return results;
 }
 
