@@ -1,0 +1,60 @@
+name: Update Unraid Template
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  update-template:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Unraid Templates repository
+        uses: actions/checkout@v4
+        with:
+          repository: TeeCodeDev/unraid-templates
+          # Je moet deze Secret zelf aanmaken in GitHub! (Zie de uitleg)
+          token: ${{ secrets.UNRAID_TEMPLATE_TOKEN }}
+          path: unraid-templates
+
+      - name: Update XML File
+        run: |
+          cd unraid-templates
+          
+          # Haal versie, datum en de release notes (body) op uit de GitHub Release
+          VERSION="${{ github.event.release.tag_name }}"
+          DATE=$(date +'%Y-%m-%d')
+          
+          # Escaping nodig voor de sed/awk acties
+          echo "${{ github.event.release.body }}" > release_notes.txt
+          
+          # Update Versie en Datum in de XML
+          sed -i "s|<Version>.*</Version>|<Version>$VERSION</Version>|g" templates/GyroidVault.xml
+          sed -i "s|<Date>.*</Date>|<Date>$DATE</Date>|g" templates/GyroidVault.xml
+          
+          # Nieuwe notities klaarmaken
+          echo "### $VERSION ($DATE)" > new_changes.txt
+          cat release_notes.txt >> new_changes.txt
+          echo "" >> new_changes.txt
+          
+          # Voeg de nieuwe notes in vlak ná de <Changes> tag
+          awk '
+            /<Changes>/ {
+              print
+              while (getline line < "new_changes.txt") { print line }
+              next
+            }
+            {print}
+          ' templates/GyroidVault.xml > temp.xml
+          
+          mv temp.xml templates/GyroidVault.xml
+          rm release_notes.txt new_changes.txt
+
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v6
+        with:
+          path: unraid-templates
+          token: ${{ secrets.UNRAID_TEMPLATE_TOKEN }}
+          commit-message: "update: unraid template for ${{ github.event.release.tag_name }}"
+          title: "Update Unraid template for ${{ github.event.release.tag_name }}"
+          body: "Automated changes by GyroidVault Release GitHub Action."
+          branch: "update-template-${{ github.event.release.tag_name }}"
