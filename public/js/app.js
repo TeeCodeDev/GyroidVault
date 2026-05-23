@@ -5,7 +5,9 @@ const App = {
   cache: { categories: [], tags: [], materials: [], users: [] },
   pendingFiles: [],
   selectedModelIds: [],
+  selectedBrowsePaths: [],
   versionInfo: null,
+  libraryViewMode: 'grid',
 
   // ── Init ──
   async init() {
@@ -17,6 +19,7 @@ const App = {
     
     window.addEventListener('hashchange', () => this.route());
     await this.loadCache();
+    await this.loadViewMode();
     this.checkUpdates();
     this.updateUserNav();
     this.updateThemeIcon();
@@ -79,9 +82,16 @@ const App = {
       if (this.currentUser) {
         try {
           this.cache.users = await API.getUsers();
-        } catch(e) { /* ignore auth error */ }
+        } catch(e) { /* user might not have permissions, just ignore */ }
       }
     } catch (e) { console.error('Cache load failed:', e); }
+  },
+
+  async loadViewMode() {
+    try {
+      const res = await API.getViewMode();
+      if (res) this.libraryViewMode = res.library_view_mode || 'grid';
+    } catch(e) { /* default to grid */ }
   },
 
   // ── Routing ──
@@ -95,7 +105,9 @@ const App = {
     
     // Clear selection when navigating
     this.selectedModelIds = [];
+    this.selectedBrowsePaths = [];
     this.renderBulkBar();
+    this.renderBulkBrowseBar();
 
     if (path === '/' || path === '/dashboard') {
       document.getElementById('nav-dashboard')?.classList.add('active');
@@ -177,6 +189,11 @@ const App = {
 
   // ─── Models List ──────────────────────────────────────────────────────
   async renderModels(params = {}) {
+    // check if we should show folder view instead
+    if (this.libraryViewMode === 'folder') {
+      return this.renderBrowse(params.path || '');
+    }
+
     const toolbar = UI.toolbar(this.cache.categories, this.cache.tags, this.cache.users);
     this.el.innerHTML = `
       <div class="page-header">
@@ -205,6 +222,178 @@ const App = {
     }
 
     await this.fetchAndRenderModels(params);
+  },
+
+  // ─── Folder Browser ─────────────────────────────────────────────────
+  async renderBrowse(browsePath = '') {
+    this.currentBrowsePath = browsePath;
+    const toolbar = UI.toolbar(this.cache.categories, this.cache.tags, this.cache.users);
+    this.el.innerHTML = `
+      <div class="page-header">
+        <div><h1 class="page-title">Browse Library</h1><p class="page-subtitle">Explore your files on disk</p></div>
+        ${this.currentUser ? '<button class="btn btn-primary" onclick="App.showCreateModel()">+ New Model</button>' : ''}
+      </div>
+      ${toolbar}
+      <div id="browse-header" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; min-height:36px;"></div>
+      <div id="browse-wrapper" style="display:flex;gap:20px;align-items:flex-start">
+        <div id="browse-tree" style="min-width:240px"><div class="skeleton" style="width:240px;height:300px;border-radius:8px"></div></div>
+        <div id="browse-content" style="flex:1;min-width:0"><div class="model-grid">${'<div class="model-card"><div class="model-card-thumb"><div class="skeleton" style="width:100%;height:100%"></div></div><div class="model-card-body"><div class="skeleton" style="width:70%;height:18px;margin-bottom:8px"></div><div class="skeleton" style="width:40%;height:14px"></div></div></div>'.repeat(6)}</div></div>
+      </div>`;
+
+    try {
+      // fetch tree and current folder in parallel
+      const [tree, data] = await Promise.all([
+        API.getFolderTree(),
+        API.browseLibrary(browsePath)
+      ]);
+
+      // render tree sidebar
+      const treeEl = document.getElementById('browse-tree');
+      if (treeEl) treeEl.innerHTML = UI.folderTree(tree, browsePath);
+
+      // render header with breadcrumbs, New Folder button, and search
+      const headerEl = document.getElementById('browse-header');
+      if (headerEl) {
+        headerEl.innerHTML = `
+          <div style="flex:1;display:flex;align-items:center;gap:12px">
+            ${UI.breadcrumbs(data.currentPath)}
+            ${this.currentUser ? `<button class="btn btn-secondary btn-sm" onclick="App.handleCreateFolder('${data.currentPath}')">+ New Folder</button>` : ''}
+          </div>
+          <div style="width:250px">
+            <input type="text" id="browse-search" placeholder="Filter this folder..." class="form-input" onkeyup="App.handleBrowseSearch(event)" style="padding:6px 12px; font-size:.9rem;">
+          </div>
+        `;
+      }
+
+      // render folder contents
+      const container = document.getElementById('browse-content');
+      if (!container) return;
+
+      const sortMode = document.getElementById('filter-sort')?.value || 'name';
+      if (sortMode === 'name') {
+        data.files.sort((a,b) => a.name.localeCompare(b.name));
+      } else if (sortMode === 'updated' || sortMode === 'created') {
+        data.files.sort((a,b) => (b.mtime || 0) - (a.mtime || 0));
+      }
+
+      const foldersHtml = data.folders.map(f => UI.folderCard(f)).join('');
+      const filesHtml = data.files.filter(f => f.type !== 'image').map(f => UI.browseFileCard(f)).join('');
+
+      if (!data.folders.length && !data.files.length) {
+        container.innerHTML = `
+          <div class="empty-state"><div class="empty-state-icon">📂</div><div class="empty-state-text">This folder is empty</div><div class="empty-state-sub">No 3D files or subfolders found here</div></div>`;
+        return;
+      }
+
+      container.innerHTML = `
+        <div class="model-grid">
+          ${foldersHtml}
+          ${filesHtml}
+        </div>`;
+
+      this.renderBulkBrowseBar();
+
+      // trigger STL thumbnail rendering
+      if (typeof Viewer !== 'undefined' && Viewer.generateThumbnails) {
+        setTimeout(() => Viewer.generateThumbnails(), 50);
+      }
+    } catch(e) {
+      console.error(e);
+      const container = document.getElementById('browse-content');
+      if (container) container.innerHTML = '<div class="empty-state"><div class="empty-state-icon">⚠️</div><div class="empty-state-text">Failed to load folder</div></div>';
+    }
+  },
+
+  browseTo(folderPath) {
+    this.navigate(`/models?path=${encodeURIComponent(folderPath)}`);
+  },
+
+  handleBrowseSearch(e) {
+    const q = e.target.value;
+    clearTimeout(this.browseSearchTimeout);
+    this.browseSearchTimeout = setTimeout(async () => {
+      const container = document.getElementById('browse-content');
+      if (!container) return;
+      
+      container.innerHTML = '<div class="model-grid">' + '<div class="model-card"><div class="model-card-thumb"><div class="skeleton" style="width:100%;height:100%"></div></div><div class="model-card-body"><div class="skeleton" style="width:70%;height:18px;margin-bottom:8px"></div><div class="skeleton" style="width:40%;height:14px"></div></div></div>'.repeat(6) + '</div>';
+      
+      try {
+        const data = q ? await API.searchLibrary(q) : await API.browseLibrary(new URLSearchParams(location.hash.split('?')[1]).get('path') || '');
+        
+        // Filter based on toolbar settings
+        const sortMode = document.getElementById('filter-sort')?.value || 'name';
+        if (sortMode === 'name') {
+          data.files.sort((a,b) => a.name.localeCompare(b.name));
+        } else if (sortMode === 'updated' || sortMode === 'created') {
+          data.files.sort((a,b) => (b.mtime || 0) - (a.mtime || 0));
+        }
+
+        const foldersHtml = data.folders.map(f => UI.folderCard(f)).join('');
+        const filesHtml = data.files.filter(f => f.type !== 'image').map(f => UI.browseFileCard(f)).join('');
+        
+        if (!data.folders.length && !data.files.length) {
+          container.innerHTML = `<div class="empty-state"><div class="empty-state-icon">🔍</div><div class="empty-state-text">No matches found</div></div>`;
+          return;
+        }
+        
+        container.innerHTML = `<div class="model-grid">${foldersHtml}${filesHtml}</div>`;
+        this.renderBulkBrowseBar();
+        if (typeof Viewer !== 'undefined' && Viewer.generateThumbnails) setTimeout(() => Viewer.generateThumbnails(), 50);
+      } catch(err) {
+        container.innerHTML = '<div class="empty-state"><div class="empty-state-icon">⚠️</div><div class="empty-state-text">Search failed</div></div>';
+      }
+    }, 400);
+  },
+
+  handleDragStart(e, itemPath) {
+    e.dataTransfer.setData('text/plain', itemPath);
+    e.dataTransfer.effectAllowed = 'move';
+
+    const dragIcon = document.createElement('div');
+    dragIcon.style.position = 'absolute';
+    dragIcon.style.top = '-1000px';
+    dragIcon.style.background = 'var(--accent-cyan)';
+    dragIcon.style.color = '#fff';
+    dragIcon.style.padding = '6px 12px';
+    dragIcon.style.borderRadius = '20px';
+    dragIcon.style.fontWeight = 'bold';
+    dragIcon.style.fontSize = '12px';
+    dragIcon.style.boxShadow = '0 4px 8px rgba(0,0,0,0.5)';
+    dragIcon.style.pointerEvents = 'none';
+    dragIcon.innerText = itemPath.split('/').pop();
+    
+    document.body.appendChild(dragIcon);
+    e.dataTransfer.setDragImage(dragIcon, 10, 10);
+    setTimeout(() => dragIcon.remove(), 100);
+  },
+
+  async handleDrop(e, targetFolderPath) {
+    e.preventDefault();
+    e.stopPropagation();
+    e.currentTarget.classList.remove('drag-over');
+    
+    const sourceItemPath = e.dataTransfer.getData('text/plain');
+    if (!sourceItemPath || sourceItemPath === targetFolderPath) return;
+    
+    try {
+      await API.moveItem(sourceItemPath, targetFolderPath);
+      this.toast('Moved successfully');
+      this.renderBrowse(this.currentBrowsePath);
+    } catch(err) {
+      this.toast(err.message, 'error');
+    }
+  },
+
+  async handleCreateFolder(parentPath) {
+    const name = prompt('Enter new folder name:');
+    if (!name) return;
+    try {
+      await API.createFolder(parentPath, name);
+      this.toast('Folder created');
+      this.renderBrowse(this.currentBrowsePath);
+    } catch(err) {
+      this.toast(err.message, 'error');
+    }
   },
 
   async fetchAndRenderModels(params = {}) {
@@ -321,37 +510,173 @@ const App = {
     } catch(e) { this.toast(e.message, 'error'); }
   },
 
+  renderBulkBrowseBar() {
+    let bar = document.getElementById('bulk-browse-action-bar-container');
+    if (!bar) {
+      bar = document.createElement('div');
+      bar.id = 'bulk-browse-action-bar-container';
+      document.body.appendChild(bar);
+    }
+    
+    // Check if all rendered items are selected
+    const allCards = document.querySelectorAll('#browse-content .model-card');
+    const allPaths = Array.from(allCards).map(c => c.dataset.path).filter(Boolean);
+    const isAllSelected = allPaths.length > 0 && allPaths.every(p => this.selectedBrowsePaths.includes(p));
+
+    bar.innerHTML = UI.bulkBrowseActionBar(this.selectedBrowsePaths.length, isAllSelected);
+  },
+
+  toggleBrowseSelection(path) {
+    const idx = this.selectedBrowsePaths.indexOf(path);
+    if (idx > -1) this.selectedBrowsePaths.splice(idx, 1);
+    else this.selectedBrowsePaths.push(path);
+    
+    // Update UI without full re-render
+    const escapedPath = path.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+    const card = document.querySelector(`.model-card[data-path="${escapedPath}"]`);
+    if (card) card.classList.toggle('selected');
+    this.renderBulkBrowseBar();
+  },
+
+  clearBrowseSelection() {
+    this.selectedBrowsePaths = [];
+    document.querySelectorAll('#browse-content .model-card.selected').forEach(c => c.classList.remove('selected'));
+    this.renderBulkBrowseBar();
+  },
+
+  toggleBrowseSelectAll() {
+    const allCards = document.querySelectorAll('#browse-content .model-card');
+    const allPaths = Array.from(allCards).map(c => c.dataset.path).filter(Boolean);
+    
+    const isAllSelected = allPaths.length > 0 && allPaths.every(p => this.selectedBrowsePaths.includes(p));
+    
+    if (isAllSelected) {
+      // Deselect only the currently rendered ones
+      this.selectedBrowsePaths = this.selectedBrowsePaths.filter(p => !allPaths.includes(p));
+      allCards.forEach(c => c.classList.remove('selected'));
+    } else {
+      // Select all rendered ones
+      allPaths.forEach(p => {
+        if (!this.selectedBrowsePaths.includes(p)) this.selectedBrowsePaths.push(p);
+      });
+      allCards.forEach(c => c.classList.add('selected'));
+    }
+    this.renderBulkBrowseBar();
+  },
+
+  openBulkBrowseMove() {
+    this.openModal('Move Items', UI.bulkBrowseMoveForm());
+  },
+  
+  async handleBulkBrowseMoveSubmit(e) {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    try {
+      await API.bulkMoveItems(this.selectedBrowsePaths, fd.get('target_path'));
+      this.toast(`Moved ${this.selectedBrowsePaths.length} items`);
+      this.clearBrowseSelection();
+      this.closeModal();
+      this.renderBrowse(this.currentBrowsePath);
+    } catch(err) { this.toast(err.message, 'error'); }
+  },
+
+  openBulkBrowseDelete() {
+    this.openModal('Bulk Delete', UI.bulkBrowseDeleteForm(this.selectedBrowsePaths.length));
+  },
+
+  async handleBulkBrowseDeleteSubmit(e) {
+    e.preventDefault();
+    try {
+      await API.bulkDeleteItems(this.selectedBrowsePaths);
+      this.toast(`Deleted ${this.selectedBrowsePaths.length} items`);
+      this.clearBrowseSelection();
+      this.closeModal();
+      this.renderBrowse(this.currentBrowsePath);
+    } catch(err) { this.toast(err.message, 'error'); }
+  },
+
+  openBulkBrowseTag() {
+    this.openModal('Bulk Tag Items', UI.bulkBrowseTagForm(this.cache.tags));
+  },
+
+  async handleBulkBrowseTagSubmit(e) {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const selectedTags = fd.getAll('tags');
+    const inlineTagInput = document.getElementById('new-bulk-tag-input');
+    
+    let tagsToApply = [...selectedTags];
+    if (inlineTagInput && inlineTagInput.value.trim()) {
+      const inlineTags = inlineTagInput.value.split(',').map(t => t.trim()).filter(Boolean);
+      tagsToApply = tagsToApply.concat(inlineTags);
+    }
+    
+    if (tagsToApply.length === 0) {
+      this.toast('Please select or enter at least one tag', 'error');
+      return;
+    }
+    
+    try {
+      await API.bulkTagItems(this.selectedBrowsePaths, tagsToApply);
+      this.toast(`Tagged ${this.selectedBrowsePaths.length} items`);
+      this.clearBrowseSelection();
+      this.closeModal();
+      // Tagging might not immediately reflect in folder view without a backend rescan or re-fetch, but re-render is safe
+      this.renderBrowse(this.currentBrowsePath);
+    } catch(err) { this.toast(err.message, 'error'); }
+  },
+
   handleSearch(val) {
     clearTimeout(this.searchTimeout);
     this.searchTimeout = setTimeout(() => this.handleFilter(), 300);
   },
 
   handleFilter() {
-    const params = {
-      search: document.getElementById('search-input')?.value || '',
-      category: document.getElementById('filter-category')?.value || '',
-      tag: document.getElementById('filter-tag')?.value || '',
-      user: document.getElementById('filter-user')?.value || '',
-      printed: document.getElementById('filter-printed')?.value || '',
-      sort: document.getElementById('filter-sort')?.value || 'updated',
-      limit: document.getElementById('filter-limit')?.value || 24,
-      page: 1, // Always reset to page 1 when filtering/searching
-    };
-    this.fetchAndRenderModels(params);
+    const params = new URLSearchParams();
+    const search = document.getElementById('search-input')?.value;
+    const category = document.getElementById('filter-category')?.value;
+    const tag = document.getElementById('filter-tag')?.value;
+    const user = document.getElementById('filter-user')?.value;
+    const printed = document.getElementById('filter-printed')?.value;
+    const sort = document.getElementById('filter-sort')?.value;
+    const limit = document.getElementById('filter-limit')?.value;
+
+    if (search) params.set('search', search);
+    if (category) params.set('category', category);
+    if (tag) params.set('tag', tag);
+    if (user) params.set('user', user);
+    if (printed) params.set('printed', printed);
+    if (sort && sort !== 'updated') params.set('sort', sort);
+    if (limit && limit !== '24') params.set('limit', limit);
+    params.set('page', '1');
+
+    if (this.libraryViewMode === 'folder') {
+      this.renderBrowse(this.currentBrowsePath);
+    } else {
+      window.location.hash = `/models?${params.toString()}`;
+    }
   },
 
   goToPage(pageNumber) {
-    const params = {
-      search: document.getElementById('search-input')?.value || '',
-      category: document.getElementById('filter-category')?.value || '',
-      tag: document.getElementById('filter-tag')?.value || '',
-      user: document.getElementById('filter-user')?.value || '',
-      printed: document.getElementById('filter-printed')?.value || '',
-      sort: document.getElementById('filter-sort')?.value || 'updated',
-      limit: document.getElementById('filter-limit')?.value || 24,
-      page: pageNumber,
-    };
-    this.fetchAndRenderModels(params);
+    const params = new URLSearchParams();
+    const search = document.getElementById('search-input')?.value;
+    const category = document.getElementById('filter-category')?.value;
+    const tag = document.getElementById('filter-tag')?.value;
+    const user = document.getElementById('filter-user')?.value;
+    const printed = document.getElementById('filter-printed')?.value;
+    const sort = document.getElementById('filter-sort')?.value;
+    const limit = document.getElementById('filter-limit')?.value;
+
+    if (search) params.set('search', search);
+    if (category) params.set('category', category);
+    if (tag) params.set('tag', tag);
+    if (user) params.set('user', user);
+    if (printed) params.set('printed', printed);
+    if (sort && sort !== 'updated') params.set('sort', sort);
+    if (limit && limit !== '24') params.set('limit', limit);
+    params.set('page', pageNumber);
+
+    window.location.hash = `/models?${params.toString()}`;
     window.scrollTo({ top: 0, behavior: 'smooth' });
   },
 
@@ -462,6 +787,7 @@ const App = {
     const data = Object.fromEntries(fd.entries());
     try {
       await API.saveSystemSettings(data);
+      await this.loadViewMode(); // refresh the cached view mode
       this.toast('System settings saved');
     } catch(e) { this.toast(e.message, 'error'); }
   },
@@ -880,7 +1206,20 @@ const App = {
   async showCreateModel() {
     await this.loadCache();
     this.pendingFiles = [];
-    this.openModal('New Model', UI.modelForm(null, this.cache.categories, this.cache.tags));
+    let formHtml = UI.modelForm(null, this.cache.categories, this.cache.tags);
+    
+    if (this.libraryViewMode === 'folder' && this.currentBrowsePath) {
+      const folderOptionsHtml = `
+        <div class="form-group">
+          <input type="hidden" name="parent_folder" value="${this.currentBrowsePath}">
+          <label><input type="checkbox" name="create_subfolder" value="true" checked> Create subfolder for this model</label>
+        </div>
+      `;
+      // Inject before form-actions
+      formHtml = formHtml.replace('<div class="form-actions">', folderOptionsHtml + '<div class="form-actions">');
+    }
+    
+    this.openModal('New Model', formHtml);
     setTimeout(() => document.getElementById('model-name-input')?.focus(), 100);
   },
 
@@ -970,6 +1309,14 @@ const App = {
       category_id: form.get('category_id') || null,
       tags,
     };
+    
+    if (form.has('parent_folder')) {
+      data.parent_folder = form.get('parent_folder');
+    }
+    if (form.has('create_subfolder')) {
+      data.create_subfolder = form.get('create_subfolder') === 'true';
+    }
+
     try {
       if (id) {
         await API.updateModel(id, data);
@@ -981,7 +1328,11 @@ const App = {
         // Upload pending files if any
         if (this.pendingFiles.length > 0) {
           try {
-            await API.uploadFiles(model.id, this.pendingFiles);
+            const uploadOpts = {
+              parent_folder: data.parent_folder,
+              create_subfolder: data.create_subfolder
+            };
+            await API.uploadFiles(model.id, this.pendingFiles, uploadOpts);
             this.toast(`Model created with ${this.pendingFiles.length} file(s)`);
           } catch (ue) {
             this.toast('Model created but file upload failed: ' + ue.message, 'error');
@@ -1136,6 +1487,7 @@ const App = {
       else if (type === 'materials') await API.createMaterial(data);
 
       this.toast(`${type.slice(0,-1)} added`);
+      await this.loadCache();
       this.renderSettings();
     } catch (e) { this.toast(e.message, 'error'); }
   },
@@ -1148,6 +1500,7 @@ const App = {
       else if (type === 'materials') await API.deleteMaterial(id);
 
       this.toast(`${type.slice(0,-1)} deleted`);
+      await this.loadCache();
       this.renderSettings();
     } catch (e) { this.toast(e.message, 'error'); }
   },

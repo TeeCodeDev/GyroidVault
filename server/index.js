@@ -24,14 +24,17 @@ function logEvent(level, message) {
   }
 }
 
-// ─── FILE WATCHER / SYNC ──────────────────────────────────────────────────
-// Periodically check if files in DB still exist on disk
-function syncLibraryWithDisk() {
+// ─── FILE SYNC ──────────────────────────────────────────────────
+// Quick hack to make sure files in DB didn't get manualy deleted from disk
+async function syncLibraryWithDisk() {
   try {
     const files = all('SELECT id, library_path, original_name FROM files WHERE library_path IS NOT NULL');
     let deletedCount = 0;
     for (const file of files) {
-      if (!fs.existsSync(file.library_path)) {
+      await new Promise(setImmediate); // Yield to event loop
+      try {
+        await fs.promises.access(file.library_path);
+      } catch (err) {
         const msg = `File missing from disk, removing from DB: ${file.original_name}`;
         console.log(`[Sync] ${msg}`);
         logEvent('warning', msg);
@@ -40,13 +43,14 @@ function syncLibraryWithDisk() {
       }
     }
     
-    // Also cleanup models with no files and no sub-versions
+    // Cleanup empty models, otherwise the UI gets cluttered with ghost entries
     const emptyModels = all(`
       SELECT m.id, m.name FROM models m 
       LEFT JOIN files f ON f.model_id = m.id 
       WHERE f.id IS NULL AND m.library_path IS NOT NULL
     `);
     for (const model of emptyModels) {
+      await new Promise(setImmediate); // Yield to event loop
       const msg = `Model directory empty/missing, removing model: ${model.name}`;
       console.log(`[Sync] ${msg}`);
       logEvent('warning', msg);
@@ -60,7 +64,7 @@ function syncLibraryWithDisk() {
   }
 }
 
-// Run sync every 5 minutes
+// run it every 5 mins
 setInterval(syncLibraryWithDisk, 300000);
 // Initial sync after boot
 setTimeout(syncLibraryWithDisk, 10000);
@@ -540,7 +544,8 @@ app.post('/api/models/:id/files', authenticate, upload.array('files', 20), (req,
       if (!libPath) {
         // Create a folder for the model in library
         const safeName = model.name.replace(/[<>:"/\\|?*]/g, '').trim() || `model_${id}`;
-        libPath = path.join(LIBRARY_PATH, safeName);
+        const basePath = req.body.parent_folder ? path.join(LIBRARY_PATH, req.body.parent_folder) : LIBRARY_PATH;
+        libPath = req.body.create_subfolder !== 'false' ? path.join(basePath, safeName) : basePath;
         if (!fs.existsSync(libPath)) fs.mkdirSync(libPath, { recursive: true });
         run('UPDATE models SET library_path=? WHERE id=?', [libPath, id]);
       }
@@ -876,7 +881,383 @@ app.delete('/api/system/logs', authenticate, (req, res) => {
   } catch (e) { res.status(500).json({ error: 'Failed to clear logs' }); }
 });
 
-// ─── SETTINGS ───────────────────────────────────────────────────────────────
+// public setting so all users know which view mode to use
+app.get('/api/settings/view-mode', (req, res) => {
+  const row = get("SELECT value FROM system_settings WHERE key='library_view_mode'");
+  res.json({ library_view_mode: row?.value || 'grid' });
+});
+
+app.post('/api/browse/move', authenticate, (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
+  try {
+    const { source, target } = req.body;
+    if (!source || !target) return res.status(400).json({ error: 'Missing source or target' });
+    
+    const srcAbs = path.join(LIBRARY_PATH, source);
+    const targetAbs = path.join(LIBRARY_PATH, target, path.basename(source));
+    
+    if (!srcAbs.startsWith(path.resolve(LIBRARY_PATH)) || !targetAbs.startsWith(path.resolve(LIBRARY_PATH))) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    
+    fs.renameSync(srcAbs, targetAbs);
+    
+    const likePattern = srcAbs + '%';
+    run('UPDATE files SET library_path = REPLACE(library_path, ?, ?) WHERE library_path LIKE ?', [srcAbs, targetAbs, likePattern]);
+    run('UPDATE models SET library_path = REPLACE(library_path, ?, ?) WHERE library_path LIKE ?', [srcAbs, targetAbs, likePattern]);
+    
+    res.json({ success: true });
+  } catch (e) {
+    console.error('[Move] Error:', e);
+    res.status(500).json({ error: 'Failed to move folder/file' });
+  }
+});
+
+app.post('/api/browse/mkdir', authenticate, (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
+  try {
+    const { parentPath, folderName } = req.body;
+    if (!folderName) return res.status(400).json({ error: 'Missing folder name' });
+    
+    const fullPath = path.join(LIBRARY_PATH, parentPath || '', folderName);
+    
+    if (!fullPath.startsWith(path.resolve(LIBRARY_PATH))) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    
+    fs.mkdirSync(fullPath, { recursive: true });
+    
+    res.json({ success: true });
+  } catch (e) {
+    console.error('[Mkdir] Error:', e);
+    res.status(500).json({ error: 'Failed to create directory' });
+  }
+});
+
+app.post('/api/browse/bulk-move', authenticate, (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
+  try {
+    const { paths, target } = req.body;
+    if (!Array.isArray(paths) || typeof target !== 'string') return res.status(400).json({ error: 'Missing paths or target' });
+
+    for (const source of paths) {
+      const srcAbs = path.join(LIBRARY_PATH, source);
+      const targetAbs = path.join(LIBRARY_PATH, target, path.basename(source));
+      
+      if (!srcAbs.startsWith(path.resolve(LIBRARY_PATH)) || !targetAbs.startsWith(path.resolve(LIBRARY_PATH))) {
+        return res.status(403).json({ error: 'Access denied' });
+      }
+
+      if (fs.existsSync(srcAbs)) {
+        fs.renameSync(srcAbs, targetAbs);
+      }
+      
+      const likePattern = srcAbs + '%';
+      run('UPDATE files SET library_path = REPLACE(library_path, ?, ?) WHERE library_path LIKE ?', [srcAbs, targetAbs, likePattern]);
+      run('UPDATE models SET library_path = REPLACE(library_path, ?, ?) WHERE library_path LIKE ?', [srcAbs, targetAbs, likePattern]);
+    }
+    
+    res.json({ success: true });
+  } catch (e) {
+    console.error('[Bulk Move] Error:', e);
+    res.status(500).json({ error: 'Failed to bulk move' });
+  }
+});
+
+app.post('/api/browse/bulk-delete', authenticate, (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
+  try {
+    const { paths } = req.body;
+    if (!Array.isArray(paths)) return res.status(400).json({ error: 'Missing paths' });
+
+    for (const source of paths) {
+      const absPath = path.join(LIBRARY_PATH, source);
+      if (!absPath.startsWith(path.resolve(LIBRARY_PATH))) {
+        return res.status(403).json({ error: 'Access denied' });
+      }
+      
+      if (fs.existsSync(absPath)) {
+        fs.rmSync(absPath, { recursive: true, force: true });
+      }
+      
+      const likePattern = absPath + '%';
+      
+      const matchingModels = all('SELECT DISTINCT model_id FROM files WHERE library_path LIKE ?', [likePattern]);
+      
+      run('DELETE FROM files WHERE library_path LIKE ?', [likePattern]);
+      run('DELETE FROM models WHERE library_path LIKE ?', [likePattern]);
+
+      for (const row of matchingModels) {
+        if (row.model_id) {
+          const fileCount = get('SELECT COUNT(*) as c FROM files WHERE model_id = ?', [row.model_id]).c;
+          if (fileCount === 0) {
+            run('DELETE FROM models WHERE id = ?', [row.model_id]);
+          }
+        }
+      }
+    }
+    res.json({ success: true });
+  } catch (e) {
+    console.error('[Bulk Delete] Error:', e);
+    res.status(500).json({ error: 'Failed to bulk delete' });
+  }
+});
+
+app.post('/api/browse/bulk-tag', authenticate, (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
+  try {
+    const { paths, tags } = req.body;
+    if (!Array.isArray(paths) || !Array.isArray(tags)) return res.status(400).json({ error: 'Missing paths or tags' });
+
+    const modelIds = new Set();
+
+    for (const source of paths) {
+      const absPath = path.join(LIBRARY_PATH, source);
+      if (!absPath.startsWith(path.resolve(LIBRARY_PATH))) {
+        return res.status(403).json({ error: 'Access denied' });
+      }
+      const likePattern = absPath + '%';
+      
+      const filesModels = all('SELECT DISTINCT model_id FROM files WHERE library_path LIKE ?', [likePattern]);
+      for (const row of filesModels) {
+         if (row.model_id) modelIds.add(row.model_id);
+      }
+      
+      const mainModels = all('SELECT id FROM models WHERE library_path LIKE ?', [likePattern]);
+      for (const row of mainModels) {
+         modelIds.add(row.id);
+      }
+    }
+
+    if (modelIds.size > 0) {
+      const finalTagIds = [];
+      for (const t of tags) {
+        if (typeof t === 'string' && t.startsWith('NEW:')) {
+          const tagName = t.substring(4).trim();
+          if (tagName) {
+            run('INSERT OR IGNORE INTO tags (name) VALUES (?)', [tagName]);
+            const row = get('SELECT id FROM tags WHERE name = ?', [tagName]);
+            if (row) finalTagIds.push(row.id);
+          }
+        } else {
+          finalTagIds.push(Number(t));
+        }
+      }
+
+      for (const modelId of modelIds) {
+        for (const tagId of finalTagIds) {
+          run('INSERT OR IGNORE INTO model_tags (model_id, tag_id) VALUES (?, ?)', [modelId, tagId]);
+        }
+        run("UPDATE models SET updated_at=datetime('now') WHERE id=?", [modelId]);
+      }
+    }
+
+    res.json({ success: true });
+  } catch (e) {
+    console.error('[Bulk Tag] Error:', e);
+    res.status(500).json({ error: 'Failed to bulk tag' });
+  }
+});
+
+// browse the library folder structure on disk
+app.get('/api/browse', (req, res) => {
+  try {
+    const reqPath = req.query.path || '';
+    const fullPath = path.resolve(LIBRARY_PATH, reqPath);
+    
+    // security: make sure we stay inside LIBRARY_PATH
+    if (!fullPath.startsWith(path.resolve(LIBRARY_PATH))) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    
+    if (!fs.existsSync(fullPath) || !fs.statSync(fullPath).isDirectory()) {
+      return res.status(404).json({ error: 'Directory not found' });
+    }
+    
+    const items = fs.readdirSync(fullPath, { withFileTypes: true });
+    const supportedExts = ['.stl', '.gcode', '.3mf', '.step', '.obj'];
+    const imageExts = ['.png', '.jpg', '.jpeg'];
+    
+    const dbThumbs = all('SELECT f.library_path, m.thumbnail FROM files f JOIN models m ON f.model_id = m.id WHERE m.thumbnail IS NOT NULL AND f.library_path IS NOT NULL');
+    const thumbMap = new Map();
+    for (const row of dbThumbs) thumbMap.set(row.library_path, row.thumbnail);
+
+    const folders = [];
+    const files = [];
+    
+    for (const item of items) {
+      if (item.name.startsWith('.')) continue; // skip hidden files
+      
+      if (item.isDirectory()) {
+        // count how many items are inside (non-recursive, just immediate children)
+        let itemCount = 0;
+        try {
+          itemCount = fs.readdirSync(path.join(fullPath, item.name)).filter(f => !f.startsWith('.')).length;
+        } catch(e) { /* permission error, just show 0 */ }
+        
+        folders.push({
+          name: item.name,
+          path: reqPath ? `${reqPath}/${item.name}` : item.name,
+          itemCount
+        });
+      } else {
+        const ext = path.extname(item.name).toLowerCase();
+        if (supportedExts.includes(ext) || imageExts.includes(ext)) {
+          const filePath = path.join(fullPath, item.name);
+          const stat = fs.statSync(filePath);
+          const relPath = path.relative(LIBRARY_PATH, filePath).replace(/\\/g, '/');
+          const encodedUrl = '/library-files/' + relPath.split('/').map(s => encodeURIComponent(s)).join('/');
+          
+          let fileType = 'other';
+          if (ext === '.stl') fileType = 'stl';
+          else if (ext === '.gcode') fileType = 'gcode';
+          else if (ext === '.3mf') fileType = '3mf';
+          else if (ext === '.step') fileType = 'step';
+          else if (ext === '.obj') fileType = 'obj';
+          else if (imageExts.includes(ext)) fileType = 'image';
+          
+          let thumbnailUrl = null;
+          if (fileType === 'stl' || fileType === '3mf') {
+             const thumb = thumbMap.get(filePath);
+             if (thumb) {
+               thumbnailUrl = thumb.startsWith('http') ? thumb : `/uploads/${thumb}`;
+             }
+          }
+
+          files.push({
+            name: item.name,
+            size: stat.size,
+            type: fileType,
+            url: encodedUrl,
+            thumbnailUrl,
+            folderPath: reqPath
+          });
+        }
+      }
+    }
+    
+    // sort folders alphabetically, files by name
+    folders.sort((a, b) => a.name.localeCompare(b.name));
+    files.sort((a, b) => a.name.localeCompare(b.name));
+    
+    // figure out parent path for the breadcrumb "go up" button
+    const parts = reqPath.split('/').filter(Boolean);
+    const parentPath = parts.length > 1 ? parts.slice(0, -1).join('/') : (parts.length === 1 ? '' : null);
+    
+    res.json({
+      currentPath: reqPath,
+      parentPath,
+      folders,
+      files
+    });
+  } catch (e) {
+    console.error('[Browse] Error:', e);
+    res.status(500).json({ error: 'Failed to browse directory' });
+  }
+});
+
+// folder tree for sidebar nav (recursive, folders only)
+app.get('/api/browse/tree', (req, res) => {
+  try {
+    const maxDepth = 4; // dont go too deep, keeps it snappy
+    
+    function scanTree(dirPath, relPath, depth) {
+      if (depth >= maxDepth) return [];
+      
+      let entries;
+      try { entries = fs.readdirSync(dirPath, { withFileTypes: true }); }
+      catch(e) { return []; }
+      
+      return entries
+        .filter(e => e.isDirectory() && !e.name.startsWith('.'))
+        .sort((a, b) => a.name.localeCompare(b.name))
+        .map(entry => {
+          const childRel = relPath ? `${relPath}/${entry.name}` : entry.name;
+          const childFull = path.join(dirPath, entry.name);
+          return {
+            name: entry.name,
+            path: childRel,
+            children: scanTree(childFull, childRel, depth + 1)
+          };
+        });
+    }
+    
+    res.json(scanTree(LIBRARY_PATH, '', 0));
+  } catch(e) {
+    console.error('[Tree] Error:', e);
+    res.status(500).json({ error: 'Failed to load folder tree' });
+  }
+});
+
+// global folder search (recursive)
+app.get('/api/browse/search', (req, res) => {
+  try {
+    const q = (req.query.q || '').toLowerCase();
+    if (!q) return res.json({ folders: [], files: [] });
+    
+    const dbThumbs = all('SELECT f.library_path, m.thumbnail FROM files f JOIN models m ON f.model_id = m.id WHERE m.thumbnail IS NOT NULL AND f.library_path IS NOT NULL');
+    const thumbMap = new Map();
+    for (const row of dbThumbs) thumbMap.set(row.library_path, row.thumbnail);
+
+    const folders = [];
+    const files = [];
+    const supportedExts = ['.stl', '.gcode', '.3mf', '.step', '.obj'];
+    const imageExts = ['.png', '.jpg', '.jpeg'];
+    
+    function walk(dir, relPath) {
+      let entries;
+      try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch(e) { return; }
+      
+      for (const item of entries) {
+        if (item.name.startsWith('.')) continue;
+        
+        const childRel = relPath ? `${relPath}/${item.name}` : item.name;
+        const childFull = path.join(dir, item.name);
+        
+        if (item.isDirectory()) {
+          if (item.name.toLowerCase().includes(q)) {
+            let itemCount = 0;
+            try { itemCount = fs.readdirSync(childFull).filter(f => !f.startsWith('.')).length; } catch(e){}
+            folders.push({ name: item.name, path: childRel, itemCount });
+          }
+          walk(childFull, childRel);
+        } else {
+          if (item.name.toLowerCase().includes(q)) {
+            const ext = path.extname(item.name).toLowerCase();
+            if (supportedExts.includes(ext) || imageExts.includes(ext)) {
+              let fileType = 'other';
+              if (ext === '.stl') fileType = 'stl';
+              else if (ext === '.gcode') fileType = 'gcode';
+              else if (ext === '.3mf') fileType = '3mf';
+              else if (ext === '.step') fileType = 'step';
+              else if (ext === '.obj') fileType = 'obj';
+              else if (imageExts.includes(ext)) fileType = 'image';
+              
+              const stat = fs.statSync(childFull);
+              const encodedUrl = '/library-files/' + childRel.split('/').map(s => encodeURIComponent(s)).join('/');
+              
+              let thumbnailUrl = null;
+              if (fileType === 'stl' || fileType === '3mf') {
+                 const thumb = thumbMap.get(childFull);
+                 if (thumb) {
+                   thumbnailUrl = thumb.startsWith('http') ? thumb : `/uploads/${thumb}`;
+                 }
+              }
+
+              files.push({ name: item.name, size: stat.size, type: fileType, url: encodedUrl, thumbnailUrl, folderPath: relPath });
+            }
+          }
+        }
+      }
+    }
+    
+    walk(LIBRARY_PATH, '');
+    res.json({ folders, files });
+  } catch(e) {
+    console.error('[Browse Search] Error:', e);
+    res.status(500).json({ error: 'Failed to search library' });
+  }
+});
 
 app.get('/api/settings/system', authenticate, (req, res) => {
   if (req.user.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
@@ -978,12 +1359,6 @@ app.get('/uploads/:filename', (req, res) => {
 app.get('*', (req, res) => { res.sendFile(path.join(__dirname, '..', 'public', 'index.html')); });
 app.use((err, req, res, next) => { console.error(err); res.status(500).json({ error: 'Internal server error' }); });
 
-// ─── Bootstrap ──────────────────────────────────────────────────────────────
-
-(async () => {
-  await initDatabase();
-  setUploadsDir(UPLOADS_DIR);
-
 // ─── BACKGROUND TASKS ───────────────────────────────────────────────────────
 let scanIntervalId = null;
 
@@ -994,7 +1369,6 @@ function setupBackgroundScanner() {
   }
   
   const setting = get('SELECT value FROM system_settings WHERE key="auto_scan_interval"');
-  // Default to 24 hours if not set
   const hours = setting && setting.value !== undefined ? Number(setting.value) : 24;
   
   if (hours > 0) {
@@ -1014,10 +1388,14 @@ function setupBackgroundScanner() {
   }
 }
 
-// ─── STARTUP ────────────────────────────────────────────────────────────────
+// ─── Bootstrap ──────────────────────────────────────────────────────────────
 
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`GyroidVault running on http://0.0.0.0:${PORT}`);
-  setupBackgroundScanner();
-});
+(async () => {
+  await initDatabase();
+  setUploadsDir(UPLOADS_DIR);
+
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`GyroidVault running on http://0.0.0.0:${PORT}`);
+    setupBackgroundScanner();
+  });
 })();

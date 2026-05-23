@@ -40,13 +40,111 @@ const UI = {
     return `<div class="file-icon ${type}">${icon}</div>`;
   },
 
-  // ── Stats Cards ──
+  // dashboard stats 
   statsCards(stats) {
     return `<div class="stats-grid">
       <div class="stat-card"><div class="stat-icon cyan">📦</div><div class="stat-value">${stats.totalModels}</div><div class="stat-label">Total Models</div></div>
       <div class="stat-card"><div class="stat-icon green">✅</div><div class="stat-value">${stats.printedModels}</div><div class="stat-label">Printed Models</div></div>
       <div class="stat-card"><div class="stat-icon purple">🎯</div><div class="stat-value">${stats.successRate}%</div><div class="stat-label">Success Rate</div></div>
       <div class="stat-card"><div class="stat-icon pink">📁</div><div class="stat-value">${stats.totalFiles}</div><div class="stat-label">Total Files (${this.formatSize(stats.totalSize)})</div></div>
+    </div>`;
+  },
+  // breadcrumb nav for folder browser
+  breadcrumbs(currentPath) {
+    const parts = currentPath ? currentPath.split('/').filter(Boolean) : [];
+    let crumbs = `<a href="#" onclick="event.preventDefault();App.browseTo('')" style="color:var(--accent-cyan);text-decoration:none;font-weight:600">🏠 Home</a>`;
+    
+    let accumulated = '';
+    for (let i = 0; i < parts.length; i++) {
+      accumulated += (accumulated ? '/' : '') + parts[i];
+      const isLast = i === parts.length - 1;
+      if (isLast) {
+        crumbs += ` <span style="color:var(--text-muted);margin:0 6px">›</span> <span style="color:var(--text-primary);font-weight:600">${parts[i]}</span>`;
+      } else {
+        const pathCopy = accumulated;
+        crumbs += ` <span style="color:var(--text-muted);margin:0 6px">›</span> <a href="#" onclick="event.preventDefault();App.browseTo('${pathCopy}')" style="color:var(--accent-cyan);text-decoration:none">${parts[i]}</a>`;
+      }
+    }
+    
+    return `<div style="display:flex;align-items:center;flex-wrap:wrap;gap:2px;padding:0;font-size:.9rem">${crumbs}</div>`;
+  },
+
+  // sidebar tree for folder browser
+  folderTree(nodes, activePath = '') {
+    function renderNode(node, depth = 0) {
+      const isActive = activePath === node.path;
+      const isParent = activePath.startsWith(node.path + '/');
+      const isOpen = isActive || isParent;
+      const hasChildren = node.children && node.children.length > 0;
+      const indent = depth * 16;
+      
+      const arrow = hasChildren 
+        ? `<span style="display:inline-block;width:14px;font-size:10px;transition:transform .2s;transform:rotate(${isOpen ? '90' : '0'}deg);cursor:pointer" onclick="event.stopPropagation();const childDiv = this.parentElement.nextElementSibling; if(childDiv && childDiv.classList.contains('tree-children')) { childDiv.classList.toggle('collapsed'); childDiv.style.display = childDiv.style.display === 'none' ? 'block' : 'none'; } this.style.transform=this.style.transform.includes('90')?'rotate(0deg)':'rotate(90deg)'">▶</span>`
+        : `<span style="display:inline-block;width:14px"></span>`;
+      
+      let html = `<div class="tree-node" style="padding:4px 8px 4px ${8 + indent}px;cursor:pointer;border-radius:4px;font-size:.8rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;${isActive ? 'background:var(--accent-cyan);background:rgba(0,212,255,0.15);color:var(--accent-cyan);font-weight:600' : 'color:var(--text-secondary)'}" onclick="App.browseTo('${node.path}')" title="${node.name}" ondragover="event.preventDefault(); this.classList.add('drag-over')" ondragleave="this.classList.remove('drag-over')" ondrop="App.handleDrop(event, '${node.path}')">
+        ${arrow} 📁 ${node.name}
+      </div>`;
+      
+      if (hasChildren) {
+        const childrenHtml = node.children.map(c => renderNode(c, depth + 1)).join('');
+        html += `<div class="tree-children ${isOpen ? '' : 'collapsed'}" style="${isOpen ? '' : 'display:none'}">${childrenHtml}</div>`;
+      }
+      return html;
+    }
+    
+    // root item
+    const isRootActive = activePath === '';
+    let html = `<div class="tree-node" style="padding:4px 8px;cursor:pointer;border-radius:4px;font-size:.8rem;font-weight:600;${isRootActive ? 'background:rgba(0,212,255,0.15);color:var(--accent-cyan)' : 'color:var(--text-secondary)'}" onclick="App.browseTo('')" ondragover="event.preventDefault(); this.classList.add('drag-over')" ondragleave="this.classList.remove('drag-over')" ondrop="App.handleDrop(event, '')">
+      🏠 Library Root
+    </div>`;
+    
+    html += nodes.map(n => renderNode(n, 0)).join('');
+    
+    return `<div class="folder-tree-sidebar" style="width:25%;min-width:260px;max-width:500px;resize:horizontal;max-height:calc(100vh - 200px);overflow-y:auto;overflow-x:hidden;background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:8px 4px">
+      ${html}
+    </div>`;
+  },
+
+  folderCard(folder) {
+    const isSelected = App.selectedBrowsePaths?.includes(folder.path);
+    return `<div class="model-card ${isSelected ? 'selected' : ''}" data-path="${folder.path}" onclick="App.browseTo('${folder.path}')" style="cursor:pointer" draggable="true" ondragstart="App.handleDragStart(event, '${folder.path}')" ondragover="event.preventDefault(); this.classList.add('drag-over')" ondragleave="this.classList.remove('drag-over')" ondrop="App.handleDrop(event, '${folder.path}')">
+      <div class="model-card-checkbox" onclick="event.stopPropagation(); App.toggleBrowseSelection('${folder.path}')"></div>
+      <div class="model-card-thumb">
+        <div class="model-card-placeholder" style="background:linear-gradient(135deg, hsl(220,50%,22%), hsl(240,40%,16%));display:flex;align-items:center;justify-content:center;font-size:3rem">📁</div>
+      </div>
+      <div class="model-card-body">
+        <div class="model-card-name">${folder.name}</div>
+        <div class="model-card-meta"><span class="badge badge-stl">${folder.itemCount} items</span></div>
+      </div>
+    </div>`;
+  },
+
+  browseFileCard(file) {
+    const isPreviewable = file.type === 'stl' || file.type === '3mf';
+    let thumb;
+    if (file.thumbnailUrl) {
+      thumb = `<img src="${file.thumbnailUrl}" alt="${file.name}">`;
+    } else if (isPreviewable) {
+      thumb = `<div class="model-card-placeholder stl-thumb-target" data-stl-url="${file.url}?t=${Date.now()}" style="background:${this.gradient(file.name)}">📦</div>`;
+    } else if (file.type === 'image') {
+      thumb = `<img src="${file.url}" alt="${file.name}">`;
+    } else {
+      thumb = `<div class="model-card-placeholder" style="background:${this.gradient(file.name)}">📦</div>`;
+    }
+    
+    const folderLabel = file.folderPath ? `<div style="font-size:0.65rem;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px" title="${file.folderPath}">📁 ${file.folderPath}</div>` : '';
+    const itemPath = `${file.folderPath ? file.folderPath+'/' : ''}${file.name}`;
+    const isSelected = App.selectedBrowsePaths?.includes(itemPath);
+
+    return `<div class="model-card ${isSelected ? 'selected' : ''}" data-path="${itemPath}" draggable="true" ondragstart="App.handleDragStart(event, '${itemPath}')">
+      <div class="model-card-checkbox" onclick="event.stopPropagation(); App.toggleBrowseSelection('${itemPath}')"></div>
+      <div class="model-card-thumb">${thumb}<div class="model-card-badges"><span class="badge badge-${file.type}">${file.type}</span></div></div>
+      <div class="model-card-body">
+        <div class="model-card-name">${file.name}</div>
+        ${folderLabel}
+        <div class="model-card-meta" style="font-size:.75rem;color:var(--text-muted)">${this.formatSize(file.size)}</div>
+      </div>
     </div>`;
   },
 
@@ -106,6 +204,20 @@ const UI = {
       </div>`;
   },
 
+  bulkBrowseActionBar(count, isAllSelected) {
+    return `
+      <div class="bulk-action-bar ${count > 0 ? 'active' : ''}">
+        <div class="bulk-count">${count} items selected</div>
+        <div class="bulk-actions">
+          <button class="btn btn-secondary btn-sm" onclick="App.toggleBrowseSelectAll()">${isAllSelected ? '✕ Deselect All' : '✓ Select All'}</button>
+          <button class="btn btn-secondary btn-sm" onclick="App.openBulkBrowseMove()">📁 Move</button>
+          <button class="btn btn-secondary btn-sm" onclick="App.openBulkBrowseTag()">🏷️ Tag</button>
+          <button class="btn btn-danger btn-sm" onclick="App.openBulkBrowseDelete()">🗑 Delete</button>
+          <button class="btn btn-ghost btn-sm" onclick="App.clearBrowseSelection()">✕ Clear</button>
+        </div>
+      </div>`;
+  },
+
   bulkDeleteForm(count) {
     return `
       <form id="bulk-delete-form" onsubmit="App.handleBulkDelete(event)">
@@ -157,6 +269,60 @@ const UI = {
         <div class="form-actions">
           <button type="button" class="btn btn-secondary" onclick="App.closeModal()">Cancel</button>
           <button type="submit" class="btn btn-primary">Add to Collection</button>
+        </div>
+      </form>`;
+  },
+
+  bulkBrowseMoveForm() {
+    return `
+      <form onsubmit="App.handleBulkBrowseMoveSubmit(event)">
+        <div class="form-group">
+          <label class="form-label">Destination Path</label>
+          <input type="text" class="form-input" name="target_path" placeholder="e.g. /3dprints/toys" required>
+        </div>
+        <div class="form-actions">
+          <button type="button" class="btn btn-secondary" onclick="App.closeModal()">Cancel</button>
+          <button type="submit" class="btn btn-primary">Move Items</button>
+        </div>
+      </form>`;
+  },
+
+  bulkBrowseDeleteForm(count) {
+    return `
+      <form onsubmit="App.handleBulkBrowseDeleteSubmit(event)">
+        <div style="margin-bottom: 20px; color: var(--text-secondary)">
+          Are you sure you want to delete <strong>${count} items</strong>?<br>
+          This action cannot be undone.
+        </div>
+        <div class="form-actions" style="margin-top: 24px">
+          <button type="button" class="btn btn-secondary" onclick="App.closeModal()">Cancel</button>
+          <button type="submit" class="btn btn-danger">Delete ${count} Items</button>
+        </div>
+      </form>`;
+  },
+
+  bulkBrowseTagForm(tags = []) {
+    const tagCheckboxes = tags.map(t =>
+      `<label class="tag-pill-checkbox">
+        <input type="checkbox" name="tags" value="${t.name}">
+        <span class="tag-pill">${t.name}</span>
+      </label>`
+    ).join('');
+
+    return `
+      <form onsubmit="App.handleBulkBrowseTagSubmit(event)">
+        <div class="form-group">
+          <label class="form-label">Tags</label>
+          <div id="bulk-browse-tags-container" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px">
+            ${tagCheckboxes}
+          </div>
+          <div class="add-inline" style="max-width:250px;margin-top:4px">
+            <input type="text" id="new-bulk-tag-input" class="form-input" placeholder="Add new tag (comma separated)...">
+          </div>
+        </div>
+        <div class="form-actions">
+          <button type="button" class="btn btn-secondary" onclick="App.closeModal()">Cancel</button>
+          <button type="submit" class="btn btn-primary">Tag Items</button>
         </div>
       </form>`;
   },
@@ -796,6 +962,14 @@ const UI = {
   systemSettingsForm(config = {}) {
     return `
       <form onsubmit="App.handleSaveSystemSettings(event)" class="form-grid">
+        <div class="form-group">
+          <label>Library View Mode</label>
+          <select name="library_view_mode" class="form-input">
+            <option value="grid" ${(config.library_view_mode || 'grid') === 'grid' ? 'selected' : ''}>All Models (flat grid)</option>
+            <option value="folder" ${config.library_view_mode === 'folder' ? 'selected' : ''}>Folder View (browse disk)</option>
+          </select>
+          <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;">Choose how the Models page displays your library.</p>
+        </div>
         <div class="form-group">
           <label>Auto-Scan Interval (Hours)</label>
           <input type="number" name="auto_scan_interval" value="${config.auto_scan_interval !== undefined ? config.auto_scan_interval : 24}" min="0" max="168" class="form-input">

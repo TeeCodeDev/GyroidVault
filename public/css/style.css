@@ -399,8 +399,21 @@ select option{background:var(--bg-secondary);color:var(--text-primary)}
 .rotating { display: inline-block; animation: rotate 2s linear infinite; }
 /* ─── Dropdown ─────────────────────────────────────────────────────────── */
 .dropdown{position:relative;display:inline-block}
-.dropdown-content{display:none;position:absolute;background:var(--bg-secondary);min-width:160px;box-shadow:var(--shadow-lg);border-radius:var(--radius-md);z-index:100;border:1px solid var(--border);right:0;top:100%;margin-top:4px}
+.dropdown-content{display:none;position:absolute;background:var(--bg-secondary);min-width:160px;box-shadow:var(--shadow-lg);border-radius:var(--radius-md);z-index:100;border:1px solid var(--border);right:0;top:100%;}
 .dropdown:hover .dropdown-content{display:block;z-index:200}
 .dropdown-content a{color:var(--text-secondary);padding:10px 16px;text-decoration:none;display:block;font-size:.875rem;transition:all var(--transition)}
 .dropdown-content a:hover{background:rgba(0,212,255,0.08);color:var(--accent-cyan)}
 .dropdown-header{padding:8px 16px;font-size:.65rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid var(--border);background:rgba(255,255,255,0.02)}
+
+/* Drag and Drop feedback */
+.tree-node.drag-over {
+  background: rgba(0,212,255,0.2) !important;
+  border: 1px dashed var(--accent-cyan) !important;
+}
+
+.model-card.drag-over {
+  border: 2px dashed var(--accent-cyan) !important;
+  background: rgba(0,212,255,0.05) !important;
+  transform: scale(1.02);
+  transition: all 0.2s ease;
+}

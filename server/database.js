@@ -13,15 +13,53 @@ if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 let db = null;
 
 // Save database to disk periodically and on changes
-function saveDb() {
+let saveTimeout = null;
+let isSaving = false;
+
+function saveDb(sync = false) {
   if (!db) return;
-  try {
-    const data = db.export();
-    fs.writeFileSync(DB_PATH, Buffer.from(data));
-  } catch (err) {
-    console.error('CRITICAL: Database wegschrijven naar schijf mislukt:', err);
+  
+  if (sync) {
+    try {
+      const data = db.export();
+      fs.writeFileSync(DB_PATH, Buffer.from(data));
+      console.log('✓ Database synchroon weggeschreven (shutdown).');
+    } catch (err) {
+      console.error('CRITICAL: Database wegschrijven mislukt tijdens shutdown:', err);
+    }
+    return;
   }
+
+  // Debounce regular saves
+  if (saveTimeout) clearTimeout(saveTimeout);
+  saveTimeout = setTimeout(() => {
+    if (isSaving) {
+      saveDb(); // Retry later if already saving
+      return;
+    }
+    isSaving = true;
+    try {
+      const data = db.export();
+      fs.writeFile(DB_PATH, Buffer.from(data), (err) => {
+        isSaving = false;
+        if (err) console.error('CRITICAL: Database asynchroon wegschrijven mislukt:', err);
+      });
+    } catch (err) {
+      isSaving = false;
+      console.error('CRITICAL: Database export mislukt:', err);
+    }
+  }, 1000); // 1-second debounce
 }
+
+// Graceful shutdown hooks to prevent corruption
+process.on('SIGINT', () => {
+  saveDb(true);
+  process.exit(0);
+});
+process.on('SIGTERM', () => {
+  saveDb(true);
+  process.exit(0);
+});
 
 async function initDatabase() {
   const SQL = await initSqlJs();

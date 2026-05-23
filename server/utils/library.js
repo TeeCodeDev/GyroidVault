@@ -1,4 +1,5 @@
 const fs = require('fs');
+const fsPromises = fs.promises;
 const path = require('path');
 const db = require('../database');
 const { parseGcodeMetadata } = require('./gcode');
@@ -18,14 +19,25 @@ function getFileType(filename) {
 }
 
 async function scanLibrary(libraryPath) {
-  if (!fs.existsSync(libraryPath)) {
+  try {
+    await fsPromises.access(libraryPath);
+  } catch {
     throw new Error(`Library path not found: ${libraryPath}`);
   }
 
   const results = { modelsAdded: 0, filesAdded: 0, skipped: 0 };
 
-  function walk(currentPath) {
-    const items = fs.readdirSync(currentPath, { withFileTypes: true });
+  async function walk(currentPath) {
+    // Yield to the event loop so the server stays responsive during massive scans
+    await new Promise(setImmediate);
+
+    let items;
+    try {
+      items = await fsPromises.readdir(currentPath, { withFileTypes: true });
+    } catch (e) {
+      console.warn(`[Scanner] Could not read directory: ${currentPath}`);
+      return;
+    }
     
     // Check if this directory contains any supported 3D files
     const has3DFiles = items.some(item => {
@@ -44,6 +56,7 @@ async function scanLibrary(libraryPath) {
         const r = db.run('INSERT INTO models (name, library_path) VALUES (?, ?)', [modelName, modelPath]);
         model = { id: r.lastId, thumbnail: null };
         results.modelsAdded++;
+        console.log(`[Scanner] Nieuw model toegevoegd: ${modelName}`);
       }
 
       // Add files from this directory
@@ -51,10 +64,14 @@ async function scanLibrary(libraryPath) {
         if (item.isDirectory()) continue;
         const filename = item.name;
         const filePath = path.join(modelPath, filename);
-        const stat = fs.statSync(filePath);
         const ext = path.extname(filename).toLowerCase();
 
         if (SUPPORTED_EXTENSIONS.includes(ext) || IMAGE_EXTENSIONS.includes(ext)) {
+          let stat;
+          try {
+            stat = await fsPromises.stat(filePath);
+          } catch(e) { continue; }
+
           const ft = getFileType(filename);
           const existingFile = db.get('SELECT id FROM files WHERE library_path = ?', [filePath]);
           
@@ -82,6 +99,7 @@ async function scanLibrary(libraryPath) {
             db.run('INSERT INTO files (model_id, filename, original_name, file_type, file_size, metadata, library_path) VALUES (?, ?, ?, ?, ?, ?, ?)',
               [model.id, filename, filename, ft, stat.size, metadata, filePath]);
             results.filesAdded++;
+            console.log(`[Scanner] Bestand verwerkt: ${filename}`);
           } else {
             results.skipped++;
           }
@@ -89,15 +107,17 @@ async function scanLibrary(libraryPath) {
       }
     }
 
-    // Always continue walking subdirectories
+    // Always continue walking subdirectories asynchronously
     for (const item of items) {
       if (item.isDirectory()) {
-        walk(path.join(currentPath, item.name));
+        await walk(path.join(currentPath, item.name));
       }
     }
   }
 
-  walk(libraryPath);
+  console.log(`[Scanner] Start library scan: ${libraryPath}`);
+  await walk(libraryPath);
+  console.log(`[Scanner] Scan voltooid. Modellen: ${results.modelsAdded}, Bestanden: ${results.filesAdded}, Overgeslagen: ${results.skipped}`);
   return results;
 }
 

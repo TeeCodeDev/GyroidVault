@@ -53,6 +53,22 @@ const API = {
   getSMTPSettings() { return this.request('/api/settings/smtp'); },
   saveSMTPSettings(data) { return this.request('/api/settings/smtp', { method: 'POST', body: JSON.stringify(data) }); },
   testSMTP(data) { return this.request('/api/settings/smtp/test', { method: 'POST', body: JSON.stringify(data) }); },
+  getViewMode() { return this.request('/api/settings/view-mode'); },
+
+  // Library browser
+  browseLibrary(browsePath = '') {
+    const qs = browsePath ? `?path=${encodeURIComponent(browsePath)}` : '';
+    return this.request(`/api/browse${qs}`);
+  },
+  searchLibrary(q) {
+    return this.request(`/api/browse/search?q=${encodeURIComponent(q)}`);
+  },
+  getFolderTree() { return this.request('/api/browse/tree'); },
+  moveItem(source, target) { return this.request('/api/browse/move', { method: 'POST', body: JSON.stringify({ source, target }) }); },
+  createFolder(parentPath, folderName) { return this.request('/api/browse/mkdir', { method: 'POST', body: JSON.stringify({ parentPath, folderName }) }); },
+  bulkMoveItems(paths, target) { return this.request('/api/browse/bulk-move', { method: 'POST', body: JSON.stringify({ paths, target }) }); },
+  bulkDeleteItems(paths) { return this.request('/api/browse/bulk-delete', { method: 'POST', body: JSON.stringify({ paths }) }); },
+  bulkTagItems(paths, tags) { return this.request('/api/browse/bulk-tag', { method: 'POST', body: JSON.stringify({ paths, tags }) }); },
 
   // Models
   getModels(params = {}) {
@@ -80,9 +96,12 @@ const API = {
   },
 
   // Files
-  async uploadFiles(modelId, files) {
+  async uploadFiles(modelId, files, options = {}) {
     const form = new FormData();
     for (const f of files) form.append('files', f);
+    if (options.parent_folder) form.append('parent_folder', options.parent_folder);
+    if (options.create_subfolder !== undefined) form.append('create_subfolder', options.create_subfolder);
+    
     const token = localStorage.getItem('pv_token');
     const headers = {};
     if (token) headers['Authorization'] = `Bearer ${token}`;
