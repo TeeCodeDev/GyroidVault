@@ -428,10 +428,9 @@ const UI = {
               <button class="btn btn-ghost btn-xs" title="Open in Slicer" style="color:var(--accent-purple);font-weight:600;font-size:0.7rem;border:1px solid var(--accent-purple);padding:3px 10px;border-radius:4px;line-height:1;white-space:nowrap">OPEN IN SLICER</button>
               <div class="dropdown-content">
                 <div class="dropdown-header">Open in Slicer</div>
-                <a href="bambustudio://open?file=${encodeURI(window.location.origin + (f.url || '/api/files/' + f.id + '/download'))}">Bambu Studio</a>
-                <a href="prusaslicer://${encodeURI(window.location.origin + (f.url || '/api/files/' + f.id + '/download'))}">PrusaSlicer</a>
                 <a href="orcaslicer://open?file=${encodeURI(window.location.origin + (f.url || '/api/files/' + f.id + '/download'))}">OrcaSlicer</a>
                 <a href="elegooslicer://open?file=${encodeURI(window.location.origin + (f.url || '/api/files/' + f.id + '/download'))}">Elegoo Slicer</a>
+                <a href="crealityprint://open?file=${encodeURI(window.location.origin + (f.url || '/api/files/' + f.id + '/download'))}">Creality Print</a>
               </div>
             </div>
           ` : ''}
