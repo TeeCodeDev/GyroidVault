@@ -1011,10 +1011,10 @@ const App = {
       const model = await API.getSharedModel(slug);
       this.el.innerHTML = UI.publicModelDetail(model);
       
-      const stlFile = model.files.find(f => f.file_type === 'stl');
+      const stlFile = model.files.find(f => f.file_type === 'stl') || model.files.find(f => f.file_type === '3mf');
       if (stlFile && typeof Viewer !== 'undefined') {
         setTimeout(() => {
-          Viewer.create('public-viewer', stlFile.url);
+          Viewer.create('public-viewer', stlFile.url, stlFile.file_type);
         }, 100);
       }
     } catch (e) {
