@@ -254,13 +254,17 @@ const App = {
       // render header with breadcrumbs, New Folder button, and search
       const headerEl = document.getElementById('browse-header');
       if (headerEl) {
+        const fileCount = data.files.filter(f => f.type !== 'image').length;
         headerEl.innerHTML = `
           <div style="flex:1;display:flex;align-items:center;gap:12px">
             ${UI.breadcrumbs(data.currentPath)}
             ${this.currentUser ? `<button class="btn btn-secondary btn-sm" onclick="App.handleCreateFolder('${data.currentPath}')">+ New Folder</button>` : ''}
           </div>
-          <div style="width:250px">
-            <input type="text" id="browse-search" placeholder="Filter this folder..." class="form-input" onkeyup="App.handleBrowseSearch(event)" style="padding:6px 12px; font-size:.9rem;">
+          <div style="display:flex;align-items:center;gap:12px">
+            <span style="font-size:0.85rem;color:var(--text-muted);white-space:nowrap" id="browse-counter">Showing ${data.folders.length} Folders / ${fileCount} Files</span>
+            <div style="width:250px">
+              <input type="text" id="browse-search" placeholder="Filter this folder..." class="form-input" onkeyup="App.handleBrowseSearch(event)" style="padding:6px 12px; font-size:.9rem;">
+            </div>
           </div>
         `;
       }
@@ -1086,6 +1090,49 @@ const App = {
     } finally {
       btn.disabled = false;
       btn.innerHTML = originalText;
+    }
+  },
+
+  previewFileModal(url, name) {
+    if (typeof Viewer === 'undefined') return;
+    const modalHtml = `
+      <div class="modal fade show" tabindex="-1" role="dialog" style="display:block;background:rgba(0,0,0,0.85);backdrop-filter:blur(4px)" onclick="App.closePreviewFileModal(event)">
+        <div class="modal-dialog modal-xl" role="document" style="margin:4vh auto;height:92vh;max-width:96vw" onclick="event.stopPropagation()">
+          <div class="modal-content" style="height:100%;background:var(--bg-card);border:1px solid var(--border-color);border-radius:12px;overflow:hidden">
+            <div class="modal-header" style="padding:12px 20px;border-bottom:1px solid var(--border-color);display:flex;justify-content:space-between;align-items:center">
+              <h5 class="modal-title" style="margin:0;color:var(--text-primary)">${name}</h5>
+              <button type="button" class="btn btn-ghost btn-sm" onclick="App.closePreviewFileModal(event)" style="font-size:1.2rem;padding:0 8px">✕</button>
+            </div>
+            <div class="modal-body" style="padding:0;height:calc(100% - 55px);position:relative">
+              <div id="full-preview-viewer" style="width:100%;height:100%">
+                <div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-muted)">Loading 3D Viewer...</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+    const container = document.createElement('div');
+    container.id = 'preview-modal-container';
+    container.innerHTML = modalHtml;
+    document.body.appendChild(container);
+    
+    this.previewKeyHandler = (e) => { if (e.key === 'Escape') this.closePreviewFileModal(); };
+    document.addEventListener('keydown', this.previewKeyHandler);
+    
+    setTimeout(() => {
+      Viewer.create('full-preview-viewer', url, name.toLowerCase().endsWith('.3mf') ? '3mf' : 'stl');
+    }, 100);
+  },
+
+  closePreviewFileModal(e) {
+    if (e && e.stopPropagation) e.stopPropagation();
+    if (typeof Viewer !== 'undefined') Viewer.cleanup();
+    const el = document.getElementById('preview-modal-container');
+    if (el) el.remove();
+    if (this.previewKeyHandler) {
+      document.removeEventListener('keydown', this.previewKeyHandler);
+      this.previewKeyHandler = null;
     }
   },
 

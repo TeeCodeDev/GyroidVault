@@ -136,8 +136,10 @@ const UI = {
     const folderLabel = file.folderPath ? `<div style="font-size:0.65rem;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px" title="${file.folderPath}">📁 ${file.folderPath}</div>` : '';
     const itemPath = `${file.folderPath ? file.folderPath+'/' : ''}${file.name}`;
     const isSelected = App.selectedBrowsePaths?.includes(itemPath);
+    
+    const clickHandler = isPreviewable ? `onclick="App.previewFileModal('${file.url}', '${file.name}')" style="cursor:pointer"` : '';
 
-    return `<div class="model-card ${isSelected ? 'selected' : ''}" data-path="${itemPath}" draggable="true" ondragstart="App.handleDragStart(event, '${itemPath}')">
+    return `<div class="model-card ${isSelected ? 'selected' : ''}" data-path="${itemPath}" draggable="true" ondragstart="App.handleDragStart(event, '${itemPath}')" ${clickHandler}>
       <div class="model-card-checkbox" onclick="event.stopPropagation(); App.toggleBrowseSelection('${itemPath}')"></div>
       <div class="model-card-thumb">${thumb}<div class="model-card-badges"><span class="badge badge-${file.type}">${file.type}</span></div></div>
       <div class="model-card-body">
@@ -426,10 +428,10 @@ const UI = {
               <button class="btn btn-ghost btn-xs" title="Open in Slicer" style="color:var(--accent-purple);font-weight:600;font-size:0.7rem;border:1px solid var(--accent-purple);padding:3px 10px;border-radius:4px;line-height:1;white-space:nowrap">OPEN IN SLICER</button>
               <div class="dropdown-content">
                 <div class="dropdown-header">Open in Slicer</div>
-                <a href="bambustudio://open?file=${window.location.origin}${f.url}" target="_blank">Bambu Studio</a>
-                <a href="prusaslicer://${window.location.origin}${f.url}" target="_blank">PrusaSlicer</a>
-                <a href="orcaslicer://open?file=${window.location.origin}${f.url}" target="_blank">OrcaSlicer</a>
-                <a href="elegooslicer://open?file=${window.location.origin}${f.url}" target="_blank">Elegoo Slicer</a>
+                <a href="bambustudio://open?file=${encodeURIComponent(window.location.origin + (f.url || '/api/files/' + f.id + '/download'))}" target="_blank">Bambu Studio</a>
+                <a href="prusaslicer://${window.location.origin}${f.url || '/api/files/' + f.id + '/download'}" target="_blank">PrusaSlicer</a>
+                <a href="orcaslicer://open?file=${encodeURIComponent(window.location.origin + (f.url || '/api/files/' + f.id + '/download'))}" target="_blank">OrcaSlicer</a>
+                <a href="elegooslicer://open?file=${encodeURIComponent(window.location.origin + (f.url || '/api/files/' + f.id + '/download'))}" target="_blank">Elegoo Slicer</a>
               </div>
             </div>
           ` : ''}

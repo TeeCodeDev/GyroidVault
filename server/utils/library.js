@@ -77,27 +77,33 @@ async function scanLibrary(libraryPath) {
           
           if (!existingFile) {
             let metadata = null;
+            let fileThumbnail = null;
+            
             if (ft === 'gcode') {
               const meta = parseGcodeMetadata(filePath);
               if (meta) metadata = JSON.stringify(meta);
               
-              if (!model.thumbnail) {
-                const { extractGcodeThumbnail } = require('./gcode');
-                const thumb = extractGcodeThumbnail(filePath, path.join(__dirname, '..', '..', 'uploads'));
-                if (thumb) {
+              const { extractGcodeThumbnail } = require('./gcode');
+              const thumb = extractGcodeThumbnail(filePath, path.join(__dirname, '..', '..', 'uploads'));
+              if (thumb) {
+                fileThumbnail = thumb;
+                if (!model.thumbnail) {
                   db.run('UPDATE models SET thumbnail = ? WHERE id = ?', [thumb, model.id]);
                   model.thumbnail = thumb;
                 }
               }
             }
 
-            if (ft === 'image' && !model.thumbnail) {
-              db.run('UPDATE models SET thumbnail = ? WHERE id = ?', [filename, model.id]);
-              model.thumbnail = filename;
+            if (ft === 'image') {
+              fileThumbnail = filename;
+              if (!model.thumbnail) {
+                db.run('UPDATE models SET thumbnail = ? WHERE id = ?', [filename, model.id]);
+                model.thumbnail = filename;
+              }
             }
 
-            db.run('INSERT INTO files (model_id, filename, original_name, file_type, file_size, metadata, library_path) VALUES (?, ?, ?, ?, ?, ?, ?)',
-              [model.id, filename, filename, ft, stat.size, metadata, filePath]);
+            db.run('INSERT INTO files (model_id, filename, original_name, file_type, file_size, metadata, library_path, thumbnail) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+              [model.id, filename, filename, ft, stat.size, metadata, filePath, fileThumbnail]);
             results.filesAdded++;
             console.log(`[Scanner] Processed file: ${filename}`);
           } else {

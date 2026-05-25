@@ -1078,7 +1078,7 @@ app.get('/api/browse', (req, res) => {
     const supportedExts = ['.stl', '.gcode', '.3mf', '.step', '.obj'];
     const imageExts = ['.png', '.jpg', '.jpeg'];
     
-    const dbThumbs = all('SELECT f.library_path, m.thumbnail FROM files f JOIN models m ON f.model_id = m.id WHERE m.thumbnail IS NOT NULL AND f.library_path IS NOT NULL');
+    const dbThumbs = all('SELECT f.library_path, COALESCE(f.thumbnail, m.thumbnail) as thumbnail FROM files f JOIN models m ON f.model_id = m.id WHERE (f.thumbnail IS NOT NULL OR m.thumbnail IS NOT NULL) AND f.library_path IS NOT NULL');
     const thumbMap = new Map();
     for (const row of dbThumbs) thumbMap.set(row.library_path, row.thumbnail);
 
@@ -1117,11 +1117,9 @@ app.get('/api/browse', (req, res) => {
           else if (imageExts.includes(ext)) fileType = 'image';
           
           let thumbnailUrl = null;
-          if (fileType === 'stl' || fileType === '3mf') {
-             const thumb = thumbMap.get(filePath);
-             if (thumb) {
-               thumbnailUrl = thumb.startsWith('http') ? thumb : `/uploads/${thumb}`;
-             }
+          const thumb = thumbMap.get(filePath);
+          if (thumb) {
+            thumbnailUrl = thumb.startsWith('http') ? thumb : `/uploads/${thumb}`;
           }
 
           files.push({
@@ -1195,7 +1193,7 @@ app.get('/api/browse/search', (req, res) => {
     const q = (req.query.q || '').toLowerCase();
     if (!q) return res.json({ folders: [], files: [] });
     
-    const dbThumbs = all('SELECT f.library_path, m.thumbnail FROM files f JOIN models m ON f.model_id = m.id WHERE m.thumbnail IS NOT NULL AND f.library_path IS NOT NULL');
+    const dbThumbs = all('SELECT library_path, thumbnail FROM files WHERE thumbnail IS NOT NULL');
     const thumbMap = new Map();
     for (const row of dbThumbs) thumbMap.set(row.library_path, row.thumbnail);
 
@@ -1237,11 +1235,9 @@ app.get('/api/browse/search', (req, res) => {
               const encodedUrl = '/library-files/' + childRel.split('/').map(s => encodeURIComponent(s)).join('/');
               
               let thumbnailUrl = null;
-              if (fileType === 'stl' || fileType === '3mf') {
-                 const thumb = thumbMap.get(childFull);
-                 if (thumb) {
-                   thumbnailUrl = thumb.startsWith('http') ? thumb : `/uploads/${thumb}`;
-                 }
+              const thumb = thumbMap.get(childFull);
+              if (thumb) {
+                thumbnailUrl = thumb.startsWith('http') ? thumb : `/uploads/${thumb}`;
               }
 
               files.push({ name: item.name, size: stat.size, type: fileType, url: encodedUrl, thumbnailUrl, folderPath: relPath });

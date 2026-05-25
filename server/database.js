@@ -202,6 +202,7 @@ async function initDatabase() {
       metadata TEXT,
       library_path TEXT UNIQUE, -- Path to the original file
       user_id INTEGER,
+      thumbnail TEXT,
       uploaded_at DATETIME DEFAULT (datetime('now')),
       FOREIGN KEY (model_id) REFERENCES models(id) ON DELETE CASCADE,
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
@@ -241,6 +242,9 @@ async function initDatabase() {
     const fCols = all("PRAGMA table_info(files)");
     if (!fCols.some(c => c.name === 'user_id')) {
       db.run('ALTER TABLE files ADD COLUMN user_id INTEGER');
+    }
+    if (!fCols.some(c => c.name === 'thumbnail')) {
+      db.run('ALTER TABLE files ADD COLUMN thumbnail TEXT');
     }
     const pCols = all("PRAGMA table_info(print_history)");
     if (!pCols.some(c => c.name === 'user_id')) {
