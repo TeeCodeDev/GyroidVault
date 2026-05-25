@@ -431,6 +431,7 @@ const UI = {
                 <a href="orcaslicer://open?file=${encodeURI(window.location.origin + (f.url || '/api/files/' + f.id + '/download'))}">OrcaSlicer</a>
                 <a href="elegooslicer://open?file=${encodeURI(window.location.origin + (f.url || '/api/files/' + f.id + '/download'))}">Elegoo Slicer</a>
                 <a href="crealityprint://open?file=${encodeURI(window.location.origin + (f.url || '/api/files/' + f.id + '/download'))}">Creality Print</a>
+                <a href="cura://open?file=${encodeURI(window.location.origin + (f.url || '/api/files/' + f.id + '/download'))}">Ultimaker Cura</a>
               </div>
             </div>
           ` : ''}
