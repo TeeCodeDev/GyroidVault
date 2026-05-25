@@ -1096,17 +1096,15 @@ const App = {
   previewFileModal(url, name) {
     if (typeof Viewer === 'undefined') return;
     const modalHtml = `
-      <div class="modal fade show" tabindex="-1" role="dialog" style="display:block;background:rgba(0,0,0,0.85);backdrop-filter:blur(4px)" onclick="App.closePreviewFileModal(event)">
-        <div class="modal-dialog modal-xl" role="document" style="margin:4vh auto;height:92vh;max-width:96vw" onclick="event.stopPropagation()">
-          <div class="modal-content" style="height:100%;background:var(--bg-card);border:1px solid var(--border-color);border-radius:12px;overflow:hidden">
-            <div class="modal-header" style="padding:12px 20px;border-bottom:1px solid var(--border-color);display:flex;justify-content:space-between;align-items:center">
-              <h5 class="modal-title" style="margin:0;color:var(--text-primary)">${name}</h5>
-              <button type="button" class="btn btn-ghost btn-sm" onclick="App.closePreviewFileModal(event)" style="font-size:1.2rem;padding:0 8px">✕</button>
-            </div>
-            <div class="modal-body" style="padding:0;height:calc(100% - 55px);position:relative">
-              <div id="full-preview-viewer" style="width:100%;height:100%">
-                <div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-muted)">Loading 3D Viewer...</div>
-              </div>
+      <div class="modal-overlay active" style="z-index:9999;background:rgba(0,0,0,0.85)" onclick="App.closePreviewFileModal(event)">
+        <div class="modal" style="width:96vw;max-width:1400px;height:92vh;max-height:92vh;display:flex;flex-direction:column;overflow:hidden" onclick="event.stopPropagation()">
+          <div class="modal-header" style="padding:16px 24px">
+            <h5 class="modal-title" style="margin:0">${name}</h5>
+            <button type="button" class="modal-close" onclick="App.closePreviewFileModal(event)">✕</button>
+          </div>
+          <div class="modal-body" style="flex:1;padding:0;overflow:hidden;position:relative">
+            <div id="full-preview-viewer" style="width:100%;height:100%">
+              <div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-muted)">Loading 3D Viewer...</div>
             </div>
           </div>
         </div>
