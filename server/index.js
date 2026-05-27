@@ -534,6 +534,13 @@ app.post('/api/models/:id/files', authenticate, upload.array('files', 20), (req,
             model.thumbnail = thumb;
           }
         }
+      } else if (ft === '3mf' && !model.thumbnail) {
+        const { extract3mfThumbnail } = require('./utils/3mf');
+        const thumb = extract3mfThumbnail(file.path, UPLOADS_DIR);
+        if (thumb) {
+          run('UPDATE models SET thumbnail=? WHERE id=?', [thumb, id]);
+          model.thumbnail = thumb;
+        }
       }
       if (ft === 'image' && !model.thumbnail) run('UPDATE models SET thumbnail=? WHERE id=?', [file.filename, id]);
       

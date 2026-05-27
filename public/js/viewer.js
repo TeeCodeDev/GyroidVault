@@ -80,6 +80,21 @@ const Viewer = {
           const box = new THREE.Box3().setFromObject(object);
           const size = new THREE.Vector3();
           box.getSize(size);
+          
+          // Bambu Studio 3MF format doesn't contain standard 3D geometries, resulting in an empty bounding box
+          if (box.isEmpty() || (size.x === 0 && size.y === 0 && size.z === 0)) {
+            const fallbackUrl = container.dataset.fallbackThumbnail;
+            if (fallbackUrl) {
+              container.innerHTML = `<img src="${fallbackUrl}" style="width:100%;height:100%;object-fit:contain;padding:20px;box-sizing:border-box;">`;
+            } else {
+              container.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-muted)">Preview not supported for this 3MF file format</div>';
+            }
+            if (container.nextElementSibling) {
+              container.nextElementSibling.style.visibility = 'hidden';
+            }
+            return;
+          }
+
           const center = new THREE.Vector3();
           box.getCenter(center);
           
@@ -155,6 +170,9 @@ const Viewer = {
           <span style="font-size:1.5rem">⚠️</span>
           <span>Could not load 3D preview</span>
         </div>`;
+        if (container.nextElementSibling) {
+          container.nextElementSibling.style.visibility = 'hidden';
+        }
       }
     );
 

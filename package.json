@@ -25,6 +25,7 @@
   "homepage": "https://github.com/TeeCodeDev/GyroidVault#readme",
   "license": "AGPL-3.0",
   "dependencies": {
+    "adm-zip": "^0.5.17",
     "bcryptjs": "^3.0.3",
     "express": "^4.21.0",
     "jsonwebtoken": "^9.0.3",
