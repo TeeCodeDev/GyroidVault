@@ -1134,15 +1134,18 @@ const App = {
     }
   },
 
-  previewStl(modelId, url) {
+  previewStl(modelId, url, fileType = null) {
     if (typeof Viewer === 'undefined') return;
     Viewer.cleanup();
     const container = document.getElementById(`stl-viewer-${modelId}`);
     if (container) {
+      if (container.nextElementSibling) {
+        container.nextElementSibling.style.visibility = 'visible';
+      }
       container.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-muted)">Loading...</div>';
       container.dataset.stlUrl = url;
       setTimeout(() => {
-        Viewer.create(`stl-viewer-${modelId}`, url);
+        Viewer.create(`stl-viewer-${modelId}`, url, fileType);
       }, 50);
     }
   },

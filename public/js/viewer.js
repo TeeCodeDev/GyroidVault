@@ -5,7 +5,7 @@ const Viewer = {
   cleanup() {
     for (const v of this.activeViewers) {
       if (v.animId) cancelAnimationFrame(v.animId);
-      if (v.renderer) { v.renderer.dispose(); v.renderer.forceContextLoss(); }
+      if (v.renderer) { v.renderer.dispose(); }
       if (v.controls) v.controls.dispose();
       if (v.resizeObserver) v.resizeObserver.disconnect();
     }
