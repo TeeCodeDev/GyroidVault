@@ -247,6 +247,10 @@ async function initDatabase() {
       db.run('ALTER TABLE files ADD COLUMN thumbnail TEXT');
     }
     const pCols = all("PRAGMA table_info(print_history)");
+    const prjCols = all("PRAGMA table_info(projects)");
+    if (!prjCols.some(c => c.name === 'visibility')) {
+      db.run("ALTER TABLE projects ADD COLUMN visibility TEXT DEFAULT 'public'");
+    }
     if (!pCols.some(c => c.name === 'user_id')) {
       db.run('ALTER TABLE print_history ADD COLUMN user_id INTEGER');
     }

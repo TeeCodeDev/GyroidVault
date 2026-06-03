@@ -4,7 +4,7 @@ const path = require('path');
 const db = require('../database');
 const { parseGcodeMetadata } = require('./gcode');
 
-const SUPPORTED_EXTENSIONS = ['.stl', '.gcode', '.3mf', '.step', '.obj'];
+const SUPPORTED_EXTENSIONS = ['.stl', '.gcode', '.3mf', '.step', '.obj', '.pdf', '.txt', '.md'];
 const IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg'];
 
 function getFileType(filename) {
@@ -14,6 +14,7 @@ function getFileType(filename) {
   if (ext === '.3mf') return '3mf';
   if (ext === '.step') return 'step';
   if (ext === '.obj') return 'obj';
+  if (ext === '.pdf' || ext === '.txt' || ext === '.md') return 'document';
   if (IMAGE_EXTENSIONS.includes(ext)) return 'image';
   return 'other';
 }

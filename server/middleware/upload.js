@@ -17,7 +17,7 @@ const storage = multer.diskStorage({
 });
 
 const fileFilter = (req, file, cb) => {
-  const allowedExtensions = ['.stl', '.gcode', '.3mf', '.obj', '.step', '.stp', '.png', '.jpg', '.jpeg', '.gif', '.webp'];
+  const allowedExtensions = ['.stl', '.gcode', '.3mf', '.obj', '.step', '.stp', '.png', '.jpg', '.jpeg', '.gif', '.webp', '.pdf', '.txt', '.md'];
   const ext = path.extname(file.originalname).toLowerCase();
   
   // Check for double extensions or dangerous intermediate extensions
@@ -40,6 +40,7 @@ const getFileType = (filename) => {
     '.stl': 'stl', '.gcode': 'gcode', '.3mf': '3mf', '.obj': 'obj',
     '.step': 'step', '.stp': 'step',
     '.png': 'image', '.jpg': 'image', '.jpeg': 'image', '.gif': 'image', '.webp': 'image',
+    '.pdf': 'document', '.txt': 'document', '.md': 'document'
   };
   return typeMap[ext] || 'other';
 };

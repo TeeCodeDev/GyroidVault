@@ -387,7 +387,7 @@ const UI = {
       </div>`;
     }
 
-    const filesHtml = (model.files || []).map(f => {
+    const filesHtml = (model.files || []).filter(f => f.file_type !== 'document').map(f => {
       let metaHtml = '';
       if (f.metadata) {
         try {
@@ -436,7 +436,22 @@ const UI = {
           ` : ''}
           ${(f.file_type === 'stl' || f.file_type === '3mf') ? `<button class="btn btn-ghost" style="padding:6px;color:var(--accent-cyan)" onclick="event.stopPropagation();App.previewStl(${model.id},'${f.url || '/uploads/'+f.filename}', '${f.file_type}')" title="Preview"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg></button>` : ''}
           <a href="/api/files/${f.id}/download" class="btn btn-ghost" style="padding:6px" title="Download"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg></a>
-          ${isAdmin ? `<button class="btn btn-ghost" style="padding:6px;color:var(--error)" onclick="event.stopPropagation();App.confirmDeleteFile(${f.id},'${(f.original_name || f.filename).replace(/'/g, "\\'")}',${model.id})" title="Delete"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg></button>` : ''}
+          ${isAdmin ? `<button class="btn btn-ghost" style="padding:6px;color:var(--error)" onclick="event.stopPropagation();App.confirmDeleteFile(${f.id},'${(f.original_name || f.filename).replace(/'/g, "\\'")}',${model.id})" title="Delete"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg></button>` : ''}
+        </div>
+      </div>`;
+    }).join('');
+
+    const docsHtml = (model.files || []).filter(f => f.file_type === 'document').map(f => {
+      return `
+      <div class="file-item">
+        <div class="file-type-icon" style="background:rgba(255,165,0,0.2);color:#ffa500;width:36px;height:36px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:0.7rem">DOC</div>
+        <div class="file-info">
+          <div class="file-name">${f.original_name}</div>
+          <div class="file-meta">${this.formatSize(f.file_size)} · ${this.formatDate(f.uploaded_at)} · 👤 ${f.uploader_name || 'System'}</div>
+        </div>
+        <div class="file-actions" style="display:flex;gap:4px;align-items:center">
+          <a href="/api/files/${f.id}/download" target="_blank" class="btn btn-ghost" style="padding:6px;color:var(--accent-cyan)" title="View Document"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg></a>
+          ${isAdmin ? `<button class="btn btn-ghost" style="padding:6px;color:var(--error)" onclick="event.stopPropagation();App.confirmDeleteFile(${f.id},'${(f.original_name || f.filename).replace(/'/g, "\\'")}',${model.id})" title="Delete"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg></button>` : ''}
         </div>
       </div>`;
     }).join('');
@@ -527,12 +542,25 @@ const UI = {
           </div>
 
           <div class="glass-panel" style="margin-top:16px">
-            <div class="panel-header">
-              <div class="panel-title">📁 Files (${model.files?.length || 0})</div>
-              ${isAdmin ? `<button class="btn btn-primary btn-xs" onclick="App.showUploadFiles(${model.id})">+ Upload</button>` : ''}
+            <div class="panel-header" style="border-bottom:1px solid var(--border-color);padding:0">
+              <div style="display:flex;width:100%;align-items:center;">
+                <div style="display:flex;gap:20px;padding:16px 16px 0 16px;flex:1">
+                  <div onclick="App.switchFilesTab(event, 'files')" style="padding-bottom:12px;cursor:pointer;border-bottom:2px solid var(--accent-cyan);color:var(--text);font-weight:600">📁 Files (${model.files?.filter(f => f.file_type !== 'document').length || 0})</div>
+                  ${docsHtml ? `<div onclick="App.switchFilesTab(event, 'docs')" style="padding-bottom:12px;cursor:pointer;border-bottom:2px solid transparent;color:var(--text-muted);font-weight:600">📄 Documentation (${model.files?.filter(f => f.file_type === 'document').length || 0})</div>` : ''}
+                </div>
+                <div style="padding:12px 16px">
+                  ${isAdmin ? `<button class="btn btn-primary btn-xs" onclick="App.showUploadFiles(${model.id})">+ Upload</button>` : ''}
+                </div>
+              </div>
             </div>
             <div class="panel-body no-pad" style="overflow:visible">
-              ${filesHtml || '<div class="empty-state" style="padding:30px"><div class="empty-state-text">No files yet</div><div class="empty-state-sub">Upload STL, Gcode, or 3MF files</div></div>'}
+              <div id="tab-content-files">
+                ${filesHtml || '<div class="empty-state" style="padding:30px"><div class="empty-state-text">No files yet</div><div class="empty-state-sub">Upload STL, Gcode, or 3MF files</div></div>'}
+              </div>
+              ${docsHtml ? `
+              <div id="tab-content-docs" style="display:none">
+                ${docsHtml}
+              </div>` : ''}
             </div>
           </div>
 
@@ -616,8 +644,8 @@ const UI = {
             ondragleave="this.classList.remove('dragover')"
             ondrop="event.preventDefault();this.classList.remove('dragover');App.handleCreateFileDrop(event)">
             <div class="upload-zone-text"><strong>Click to browse</strong> or drag & drop files</div>
-            <div style="color:var(--text-muted);font-size:.7rem;margin-top:4px">STL · Gcode · 3MF · OBJ · STEP · Images</div>
-            <input type="file" id="create-file-input" multiple accept=".stl,.gcode,.3mf,.obj,.step,.stp,.png,.jpg,.jpeg,.gif,.webp" onchange="App.handleCreateFileSelect(event)">
+            <div style="color:var(--text-muted);font-size:.7rem;margin-top:4px">STL · Gcode · 3MF · OBJ · STEP · Images · Documents</div>
+            <input type="file" id="create-file-input" multiple accept=".stl,.gcode,.3mf,.obj,.step,.stp,.png,.jpg,.jpeg,.gif,.webp,.pdf,.txt,.md" onchange="App.handleCreateFileSelect(event)">
           </div>
           <div id="create-file-list" class="upload-file-list" style="display:none"></div>
         </div>` : ''}
@@ -637,8 +665,8 @@ const UI = {
         ondrop="event.preventDefault();this.classList.remove('dragover');App.handleFileDrop(event,${modelId})">
         <div class="upload-zone-icon">📁</div>
         <div class="upload-zone-text"><strong>Click to browse</strong> or drag & drop files</div>
-        <div style="color:var(--text-muted);font-size:.75rem;margin-top:6px">STL · Gcode · 3MF · OBJ · STEP · Images</div>
-        <input type="file" id="file-input" multiple accept=".stl,.gcode,.3mf,.obj,.step,.stp,.png,.jpg,.jpeg,.gif,.webp" onchange="App.handleFileSelect(event,${modelId})">
+        <div style="color:var(--text-muted);font-size:.75rem;margin-top:6px">STL · Gcode · 3MF · OBJ · STEP · Images · Documents</div>
+        <input type="file" id="file-input" multiple accept=".stl,.gcode,.3mf,.obj,.step,.stp,.png,.jpg,.jpeg,.gif,.webp,.pdf,.txt,.md" onchange="App.handleFileSelect(event,${modelId})">
       </div>
       <div id="upload-progress" style="margin-top:16px"></div>`;
   },
@@ -883,7 +911,7 @@ const UI = {
       </div>`).join('');
   },
 
-  loginForm() {
+  loginForm(allowRegistration = false) {
     return `
       <form onsubmit="App.handleLogin(event)" class="form-grid">
         <div class="form-group">
@@ -895,8 +923,8 @@ const UI = {
           <input type="password" name="password" required placeholder="Enter password" class="form-input">
         </div>
         <div style="display:flex;justify-content:space-between;align-items:center;margin-top:20px">
-          <div>
-            <a href="#" onclick="event.preventDefault();App.showRegister()" style="font-size:.85rem;color:var(--accent-cyan);display:block;margin-bottom:4px">No account? Register</a>
+          <div style="display:flex; flex-direction:column; gap:4px">
+            ${allowRegistration ? `<a href="#" onclick="event.preventDefault();App.showRegister()" style="font-size:.85rem;color:var(--accent-cyan)">No account? Register</a>` : ''}
             <a href="#" onclick="event.preventDefault();App.showForgotPassword()" style="font-size:.75rem;color:var(--text-muted)">Forgot password?</a>
           </div>
           <button type="submit" class="btn btn-primary">Login</button>
@@ -963,6 +991,7 @@ const UI = {
   systemSettingsForm(config = {}) {
     return `
       <form onsubmit="App.handleSaveSystemSettings(event)" class="form-grid">
+        <h3 style="grid-column: 1 / -1; margin-bottom: 10px; border-bottom: 1px solid var(--border-color); padding-bottom: 5px;">General Settings</h3>
         <div class="form-group">
           <label>Library View Mode</label>
           <select name="library_view_mode" class="form-input">
@@ -976,7 +1005,24 @@ const UI = {
           <input type="number" name="auto_scan_interval" value="${config.auto_scan_interval !== undefined ? config.auto_scan_interval : 24}" min="0" max="168" class="form-input">
           <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;">Set to 0 to disable background scanning. Default is 24.</p>
         </div>
-        <div style="margin-top:20px">
+        
+        <h3 style="grid-column: 1 / -1; margin-top: 15px; margin-bottom: 10px; border-bottom: 1px solid var(--border-color); padding-bottom: 5px;">Security & Access</h3>
+        <div class="form-group">
+          <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+            <input type="checkbox" name="open_registration" value="true" ${config.open_registration === 'true' ? 'checked' : ''}>
+            Enable Open Registration
+          </label>
+          <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;">If enabled, anyone can register without an invite token.</p>
+        </div>
+        <div class="form-group">
+          <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+            <input type="checkbox" name="require_login_to_view" value="true" ${config.require_login_to_view === 'true' ? 'checked' : ''}>
+            Private Instance Mode
+          </label>
+          <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;">If enabled, guests will be forced to log in before viewing any content.</p>
+        </div>
+
+        <div style="grid-column: 1 / -1; margin-top:20px">
           <button type="submit" class="btn btn-primary">Save System Settings</button>
         </div>
       </form>`;
@@ -1064,7 +1110,7 @@ const UI = {
           ${p.thumbnail ? `<img src="/uploads/${p.thumbnail}">` : '<div style="display:flex;align-items:center;justify-content:center;height:100%;font-size:3rem;opacity:.1">📁</div>'}
         </div>
         <div class="model-card-body">
-          <div class="model-card-title">${p.name}</div>
+          <div class="model-card-title">${p.visibility === 'private' ? '🔒 ' : ''}${p.name}</div>
           <div class="model-card-meta">${p.model_count} models</div>
         </div>
       </div>`;
@@ -1078,7 +1124,7 @@ const UI = {
           <div class="breadcrumbs" style="margin-bottom:8px">
             <a href="#/collections"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg> Back to Collections</a>
           </div>
-          <h1 class="page-title">${project.name}</h1>
+          <h1 class="page-title">${project.visibility === 'private' ? '🔒 ' : ''}${project.name}</h1>
           <p class="page-subtitle">${project.description || 'No description'}</p>
         </div>
         <div style="display:flex;gap:8px">
@@ -1100,6 +1146,13 @@ const UI = {
         <div class="form-group">
           <label>Description</label>
           <textarea name="description" class="form-textarea" placeholder="What is this collection about?">${project?.description || ''}</textarea>
+        </div>
+        <div class="form-group">
+          <label>Visibility</label>
+          <select name="visibility" class="form-input">
+            <option value="public" ${project?.visibility === 'public' ? 'selected' : ''}>Public (Visible to everyone)</option>
+            <option value="private" ${project?.visibility === 'private' ? 'selected' : ''}>Private (Only you can see this)</option>
+          </select>
         </div>
         <div style="margin-top:20px;display:flex;justify-content:flex-end;gap:8px">
           <button type="button" class="btn btn-secondary" onclick="App.closeModal()">Cancel</button>

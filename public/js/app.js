@@ -17,6 +17,35 @@ const App = {
       try { this.currentUser = JSON.parse(savedUser); } catch(e) { localStorage.removeItem('pv_user'); }
     }
     
+    if (this.currentUser) {
+      try {
+        const user = await API.getMe();
+        if (user && user.csrfToken) {
+          localStorage.setItem('pv_csrf_token', user.csrfToken);
+          this.currentUser = user;
+          localStorage.setItem('pv_user', JSON.stringify(user));
+        } else {
+          localStorage.removeItem('pv_user');
+          localStorage.removeItem('pv_csrf_token');
+          this.currentUser = null;
+        }
+      } catch (e) {
+        localStorage.removeItem('pv_user');
+        localStorage.removeItem('pv_csrf_token');
+        this.currentUser = null;
+      }
+    }
+    
+    try {
+      this.publicConfig = await API.getPublicConfig();
+    } catch(e) { this.publicConfig = {}; }
+    
+    if (this.publicConfig.require_login_to_view && !this.currentUser) {
+      document.getElementById('app').innerHTML = '<div style="height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;background:var(--bg-color)"><h1 style="margin-bottom:20px">GyroidVault</h1><button class="btn btn-primary btn-lg" onclick="App.showLogin()">Login to Access GyroidVault</button></div>';
+      this.showLogin();
+      return;
+    }
+    
     window.addEventListener('hashchange', () => this.route());
     await this.loadCache();
     await this.loadViewMode();
@@ -685,7 +714,10 @@ const App = {
   },
 
   // ── Auth ──
-  showLogin() { this.openModal('Login', UI.loginForm()); },
+  showLogin() { 
+    const allowReg = this.publicConfig && this.publicConfig.open_registration;
+    this.openModal('Login', UI.loginForm(allowReg)); 
+  },
   showRegister(token = '') { this.openModal('Register', UI.registerForm(token)); },
   showForgotPassword() { this.openModal('Reset Password', UI.forgotPasswordForm()); },
   showResetPassword(token) { if (token) this.openModal('Choose New Password', UI.resetPasswordForm(token)); },
@@ -695,11 +727,12 @@ const App = {
     const fd = new FormData(e.target);
     try {
       const res = await API.login(fd.get('username'), fd.get('password'));
-      if (!res || !res.token) {
+      if (!res || !res.csrfToken) {
         this.toast('Invalid username or password', 'error');
         return;
       }
-      localStorage.setItem('pv_token', res.token);
+      if (res.error) throw new Error(res.error);
+      localStorage.setItem('pv_csrf_token', res.csrfToken);
       localStorage.setItem('pv_user', JSON.stringify(res.user));
       this.currentUser = res.user;
       this.toast('Welcome back, ' + res.user.username);
@@ -789,6 +822,8 @@ const App = {
     e.preventDefault();
     const fd = new FormData(e.target);
     const data = Object.fromEntries(fd.entries());
+    data.open_registration = fd.has('open_registration') ? 'true' : 'false';
+    data.require_login_to_view = fd.has('require_login_to_view') ? 'true' : 'false';
     try {
       await API.saveSystemSettings(data);
       await this.loadViewMode(); // refresh the cached view mode
@@ -832,8 +867,9 @@ const App = {
     }
   },
   
-  handleLogout() {
-    localStorage.removeItem('pv_token');
+  async handleLogout() {
+    try { await API.logout(); } catch(e) {}
+    localStorage.removeItem('pv_csrf_token');
     localStorage.removeItem('pv_user');
     this.currentUser = null;
     this.toast('Logged out');
@@ -1071,10 +1107,11 @@ const App = {
     btn.innerHTML = '<span class="btn-icon rotating">🔄</span> Scanning...';
 
     try {
-      const token = localStorage.getItem('pv_token');
+      const csrfToken = localStorage.getItem('pv_csrf_token');
       const res = await fetch('/api/library/scan', { 
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}` }
+        credentials: 'same-origin',
+        headers: { 'X-CSRF-Token': csrfToken }
       });
       const data = await res.json();
       if (res.ok) {
@@ -1279,6 +1316,21 @@ const App = {
   handleCreateFileDrop(e) {
     const files = Array.from(e.dataTransfer.files);
     this.addPendingFiles(files);
+  },
+
+  switchFilesTab(e, tab) {
+    const container = e.target.closest('.glass-panel');
+    const tabs = container.querySelectorAll('.panel-header div[onclick]');
+    tabs.forEach(t => {
+      t.style.borderBottomColor = 'transparent';
+      t.style.color = 'var(--text-muted)';
+    });
+    e.target.style.borderBottomColor = 'var(--accent-cyan)';
+    e.target.style.color = 'var(--text)';
+    
+    container.querySelector('#tab-content-files').style.display = tab === 'files' ? 'block' : 'none';
+    const docsContent = container.querySelector('#tab-content-docs');
+    if(docsContent) docsContent.style.display = tab === 'docs' ? 'block' : 'none';
   },
 
   addPendingFiles(files) {

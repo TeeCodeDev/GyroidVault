@@ -6,6 +6,11 @@ const { upload, getFileType, setUploadsDir } = require('./middleware/upload');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { authenticate, SECRET } = require('./middleware/auth');
+const helmet = require('helmet');
+const cors = require('cors');
+const cookieParser = require('cookie-parser');
+const rateLimit = require('express-rate-limit');
+const crypto = require('crypto');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -69,7 +74,38 @@ setInterval(syncLibraryWithDisk, 300000);
 // Initial sync after boot
 setTimeout(syncLibraryWithDisk, 10000);
 
+function getSettingBool(key, defaultValue = false) {
+  const row = get('SELECT value FROM system_settings WHERE key=?', [key]);
+  if (!row) return defaultValue;
+  return row.value === 'true' || row.value === '1';
+}
+
+app.use(helmet({ contentSecurityPolicy: false }));
+app.use(cors());
+app.use(cookieParser());
 app.use(express.json());
+
+app.use('/api', (req, res, next) => {
+  if (req.path.startsWith('/auth/') || req.path === '/system/public-config') {
+    return next();
+  }
+  if (getSettingBool('require_login_to_view')) {
+    const token = req.cookies.pv_token;
+    if (!token) return res.status(401).json({ error: 'Private instance - login required' });
+    try {
+      jwt.verify(token, SECRET);
+    } catch(e) {
+      return res.status(401).json({ error: 'Private instance - invalid token' });
+    }
+  }
+  next();
+});
+
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  message: { error: 'Too many login attempts from this IP, please try again after 15 minutes' }
+});
 
 // ─── AUTH ───────────────────────────────────────────────────────────────────
 
@@ -86,11 +122,13 @@ app.post('/api/auth/register', async (req, res) => {
 
     // If there are existing users, require a valid invite token
     if (userCount > 0) {
-      if (!invite_token) return res.status(403).json({ error: 'Registration requires an invite token' });
-      const invite = get("SELECT * FROM user_invites WHERE token=? AND expires_at > datetime('now')", [invite_token]);
-      if (!invite) return res.status(400).json({ error: 'Invalid or expired invite token' });
-      if (invite.email.toLowerCase() !== email.toLowerCase()) {
-        return res.status(400).json({ error: 'Email does not match the invitation' });
+      if (!getSettingBool('open_registration')) {
+        if (!invite_token) return res.status(403).json({ error: 'Registration requires an invite token' });
+        const invite = get("SELECT * FROM user_invites WHERE token=? AND expires_at > datetime('now')", [invite_token]);
+        if (!invite) return res.status(400).json({ error: 'Invalid or expired invite token' });
+        if (invite.email.toLowerCase() !== email.toLowerCase()) {
+          return res.status(400).json({ error: 'Email does not match the invitation' });
+        }
       }
     } else {
       role = 'admin';
@@ -133,21 +171,43 @@ app.post('/api/auth/invite', authenticate, async (req, res) => {
   }
 });
 
-app.post('/api/auth/login', async (req, res) => {
+app.post('/api/auth/login', loginLimiter, async (req, res) => {
   try {
     const { username, password } = req.body;
     const user = get('SELECT * FROM users WHERE username = ?', [username]);
     if (!user || !(await bcrypt.compare(password, user.password_hash))) {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
-    // Securing JWT payload: remove username and email
-    const token = jwt.sign({ id: user.id, role: user.role }, SECRET, { expiresIn: '30d' });
-    res.json({ token, user: { id: user.id, username: user.username, role: user.role, email: user.email } });
+    
+    const csrfToken = crypto.randomBytes(32).toString('hex');
+    const token = jwt.sign({ id: user.id, role: user.role, csrfToken }, SECRET, { expiresIn: '30d' });
+    
+    res.cookie('pv_token', token, { 
+      httpOnly: true, 
+      secure: process.env.NODE_ENV === 'production', 
+      sameSite: 'strict', 
+      maxAge: 30 * 24 * 60 * 60 * 1000 
+    });
+    
+    res.json({ csrfToken, user: { id: user.id, username: user.username, role: user.role, email: user.email } });
   } catch (e) { console.error(e); res.status(500).json({ error: 'Login failed' }); }
+});
+
+app.post('/api/auth/logout', (req, res) => {
+  res.clearCookie('pv_token');
+  res.json({ message: 'Logged out' });
+});
+
+app.get('/api/system/public-config', (req, res) => {
+  res.json({
+    open_registration: getSettingBool('open_registration'),
+    require_login_to_view: getSettingBool('require_login_to_view')
+  });
 });
 
 app.get('/api/auth/me', authenticate, (req, res) => {
   const user = get('SELECT id, username, email, role FROM users WHERE id=?', [req.user.id]);
+  if (user) user.csrfToken = req.user.csrfToken;
   res.json(user);
 });
 
@@ -632,7 +692,13 @@ app.delete('/api/files/:id', authenticate, (req, res) => {
 
 app.get('/api/projects', authenticate, (req, res) => {
   try {
-    const projects = all('SELECT p.*, COUNT(pm.model_id) as model_count FROM projects p LEFT JOIN project_models pm ON p.id=pm.project_id GROUP BY p.id ORDER BY p.created_at DESC');
+    let query = 'SELECT p.*, COUNT(pm.model_id) as model_count FROM projects p LEFT JOIN project_models pm ON p.id=pm.project_id ';
+    if (req.user.role !== 'admin') {
+      query += 'WHERE p.visibility="public" OR p.user_id=? ';
+    }
+    query += 'GROUP BY p.id ORDER BY p.created_at DESC';
+    
+    const projects = req.user.role === 'admin' ? all(query) : all(query, [req.user.id]);
     res.json(projects);
   } catch (e) { console.error(e); res.status(500).json({ error: 'Failed to fetch projects' }); }
 });
@@ -641,6 +707,9 @@ app.get('/api/projects/:id', authenticate, (req, res) => {
   try {
     const project = get('SELECT * FROM projects WHERE id=?', [Number(req.params.id)]);
     if (!project) return res.status(404).json({ error: 'Project not found' });
+    if (project.visibility === 'private' && req.user.role !== 'admin' && project.user_id !== req.user.id) {
+      return res.status(403).json({ error: 'Forbidden: Private project' });
+    }
     project.models = all(`
       SELECT m.*, c.name as category_name, c.color as category_color 
       FROM models m 
@@ -653,10 +722,11 @@ app.get('/api/projects/:id', authenticate, (req, res) => {
 
 app.post('/api/projects', authenticate, (req, res) => {
   try {
-    const { name, description } = req.body;
+    const { name, description, visibility } = req.body;
     if (!name) return res.status(400).json({ error: 'Name is required' });
-    const r = run('INSERT INTO projects (name, description, user_id) VALUES (?, ?, ?)', [name, description||'', req.user.id]);
-    res.status(201).json({ id: r.lastId, name, description });
+    const vis = visibility === 'private' ? 'private' : 'public';
+    const r = run('INSERT INTO projects (name, description, user_id, visibility) VALUES (?, ?, ?, ?)', [name, description||'', req.user.id, vis]);
+    res.status(201).json({ id: r.lastId, name, description, visibility: vis });
   } catch (e) { console.error(e); res.status(500).json({ error: 'Failed to create project' }); }
 });
 

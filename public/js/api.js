@@ -1,15 +1,16 @@
 /* ─── API Client ──────────────────────────────────────────────────────── */
 const API = {
   async request(url, options = {}) {
-    const token = localStorage.getItem('pv_token');
+    const csrfToken = localStorage.getItem('pv_csrf_token');
     // Don't even try profile calls if no token is present
-    if (url.startsWith('/api/auth/') && !['login', 'register', 'forgot-password', 'reset-password'].some(p => url.includes(p)) && !token) {
+    if (url.startsWith('/api/auth/') && !['login', 'register', 'forgot-password', 'reset-password', 'logout'].some(p => url.includes(p)) && !csrfToken) {
       return null;
     }
     const headers = { 'Content-Type': 'application/json', ...options.headers };
-    if (token) headers['Authorization'] = `Bearer ${token}`;
+    if (csrfToken) headers['X-CSRF-Token'] = csrfToken;
 
     const res = await fetch(url, {
+      credentials: 'same-origin',
       headers,
       ...options,
     });
@@ -30,6 +31,9 @@ const API = {
   // Auth
   login(username, password) {
     return this.request('/api/auth/login', { method: 'POST', body: JSON.stringify({ username, password }) });
+  },
+  logout() {
+    return this.request('/api/auth/logout', { method: 'POST' });
   },
   register(username, email, password, token = null) {
     return this.request('/api/auth/register', { method: 'POST', body: JSON.stringify({ username, email, password, invite_token: token }) });
@@ -102,20 +106,20 @@ const API = {
     if (options.parent_folder) form.append('parent_folder', options.parent_folder);
     if (options.create_subfolder !== undefined) form.append('create_subfolder', options.create_subfolder);
     
-    const token = localStorage.getItem('pv_token');
+    const csrfToken = localStorage.getItem('pv_csrf_token');
     const headers = {};
-    if (token) headers['Authorization'] = `Bearer ${token}`;
-    const res = await fetch(`/api/models/${modelId}/files`, { method: 'POST', body: form, headers });
+    if (csrfToken) headers['X-CSRF-Token'] = csrfToken;
+    const res = await fetch(`/api/models/${modelId}/files`, { method: 'POST', body: form, headers, credentials: 'same-origin' });
     if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || 'Upload failed'); }
     return res.json();
   },
   async uploadThumbnail(modelId, file) {
     const form = new FormData();
     form.append('thumbnail', file);
-    const token = localStorage.getItem('pv_token');
+    const csrfToken = localStorage.getItem('pv_csrf_token');
     const headers = {};
-    if (token) headers['Authorization'] = `Bearer ${token}`;
-    const res = await fetch(`/api/models/${modelId}/thumbnail`, { method: 'POST', body: form, headers });
+    if (csrfToken) headers['X-CSRF-Token'] = csrfToken;
+    const res = await fetch(`/api/models/${modelId}/thumbnail`, { method: 'POST', body: form, headers, credentials: 'same-origin' });
     if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || 'Upload failed'); }
     return res.json();
   },
@@ -161,4 +165,5 @@ const API = {
   getUpdateStatus() { return this.request('/api/system/updates'); },
   getSystemLogs() { return this.request('/api/system/logs'); },
   clearSystemLogs() { return this.request('/api/system/logs', { method: 'DELETE' }); },
+  getPublicConfig() { return this.request('/api/system/public-config'); }
 };
