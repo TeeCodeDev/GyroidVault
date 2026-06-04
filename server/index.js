@@ -199,8 +199,9 @@ app.post('/api/auth/logout', (req, res) => {
 });
 
 app.get('/api/system/public-config', (req, res) => {
+  const userCount = get('SELECT COUNT(*) as count FROM users').count;
   res.json({
-    open_registration: getSettingBool('open_registration'),
+    open_registration: getSettingBool('open_registration') || userCount === 0,
     require_login_to_view: getSettingBool('require_login_to_view')
   });
 });
