@@ -184,7 +184,7 @@ app.post('/api/auth/login', loginLimiter, async (req, res) => {
     
     res.cookie('pv_token', token, { 
       httpOnly: true, 
-      secure: process.env.NODE_ENV === 'production', 
+      secure: req.secure || req.headers['x-forwarded-proto'] === 'https', 
       sameSite: 'strict', 
       maxAge: 30 * 24 * 60 * 60 * 1000 
     });
