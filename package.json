@@ -1,6 +1,6 @@
 {
   "name": "gyroid-vault",
-  "version": "1.3.3",
+  "version": "1.3.2",
   "description": "GyroidVault — Self-hosted 3D model management for 3D printing",
   "main": "server/index.js",
   "scripts": {
