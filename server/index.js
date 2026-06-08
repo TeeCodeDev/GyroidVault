@@ -657,7 +657,7 @@ app.post('/api/models/:id/thumbnail', authenticate, upload.single('thumbnail'), 
   } catch (e) { console.error(e); res.status(500).json({ error: 'Failed to upload thumbnail' }); }
 });
 
-app.get('/api/files/:id/download', (req, res) => {
+app.get('/api/files/:id/download/:filename?', (req, res) => {
   try {
     const file = get('SELECT * FROM files WHERE id=?', [Number(req.params.id)]);
     if (!file) return res.status(404).json({ error: 'File not found' });
