@@ -5,6 +5,7 @@ const App = {
   cache: { categories: [], tags: [], materials: [], users: [] },
   pendingFiles: [],
   selectedModelIds: [],
+  lastSelectedModelId: null,
   selectedBrowsePaths: [],
   versionInfo: null,
   libraryViewMode: 'grid',
@@ -471,9 +472,16 @@ const App = {
 
   toggleModelSelection(e, id) {
     if (e) e.stopPropagation();
+    if (e?.shiftKey && this.lastSelectedModelId !== null) {
+      this.selectModelRange(this.lastSelectedModelId, id);
+      this.lastSelectedModelId = id;
+      return;
+    }
+
     const idx = this.selectedModelIds.indexOf(id);
     if (idx > -1) this.selectedModelIds.splice(idx, 1);
     else this.selectedModelIds.push(id);
+    this.lastSelectedModelId = id;
     
     // Update UI without full re-render
     const card = document.querySelector(`.model-card[data-model-id="${id}"]`);
@@ -482,6 +490,11 @@ const App = {
   },
 
   handleModelCardClick(e, id) {
+    if (e?.shiftKey || e?.ctrlKey || e?.metaKey) {
+      this.toggleModelSelection(e, id);
+      return;
+    }
+
     if (this.selectedModelIds.length > 0) {
       this.toggleModelSelection(e, id);
     } else {
@@ -489,8 +502,25 @@ const App = {
     }
   },
 
+  selectModelRange(startId, endId) {
+    const cards = Array.from(document.querySelectorAll('.model-card[data-model-id]'));
+    const startIndex = cards.findIndex(c => Number(c.dataset.modelId) === startId);
+    const endIndex = cards.findIndex(c => Number(c.dataset.modelId) === endId);
+    if (startIndex === -1 || endIndex === -1) {
+      this.toggleModelSelection(null, endId);
+      return;
+    }
+
+    const [from, to] = startIndex < endIndex ? [startIndex, endIndex] : [endIndex, startIndex];
+    const ids = cards.slice(from, to + 1).map(c => Number(c.dataset.modelId));
+    this.selectedModelIds = Array.from(new Set([...this.selectedModelIds, ...ids]));
+    cards.forEach(c => c.classList.toggle('selected', this.selectedModelIds.includes(Number(c.dataset.modelId))));
+    this.renderBulkBar();
+  },
+
   clearSelection() {
     this.selectedModelIds = [];
+    this.lastSelectedModelId = null;
     document.querySelectorAll('.model-card.selected').forEach(c => c.classList.remove('selected'));
     this.renderBulkBar();
   },
@@ -498,6 +528,7 @@ const App = {
   selectAll() {
     const cards = document.querySelectorAll('.model-card');
     this.selectedModelIds = Array.from(cards).map(c => Number(c.dataset.modelId));
+    this.lastSelectedModelId = this.selectedModelIds.at(-1) || null;
     cards.forEach(c => c.classList.add('selected'));
     this.renderBulkBar();
   },
