@@ -1177,8 +1177,11 @@ app.get('/api/browse', (req, res) => {
         const folderFullPath = path.join(fullPath, item.name) + path.sep;
         for (const [libPath, thumb] of thumbMap.entries()) {
           if (libPath.startsWith(folderFullPath)) {
-            folderThumbs.push(thumb.startsWith('http') ? thumb : `/uploads/${thumb}`);
-            if (folderThumbs.length >= 4) break;
+            const url = thumb.startsWith('http') ? thumb : `/uploads/${thumb}`;
+            if (!folderThumbs.includes(url)) {
+              folderThumbs.push(url);
+              if (folderThumbs.length >= 4) break;
+            }
           }
         }
         
@@ -1308,8 +1311,11 @@ app.get('/api/browse/search', (req, res) => {
             const folderFullPath = childFull + path.sep;
             for (const [libPath, thumb] of thumbMap.entries()) {
               if (libPath.startsWith(folderFullPath)) {
-                folderThumbs.push(thumb.startsWith('http') ? thumb : `/uploads/${thumb}`);
-                if (folderThumbs.length >= 4) break;
+                const url = thumb.startsWith('http') ? thumb : `/uploads/${thumb}`;
+                if (!folderThumbs.includes(url)) {
+                  folderThumbs.push(url);
+                  if (folderThumbs.length >= 4) break;
+                }
               }
             }
             folders.push({ name: item.name, path: childRel, itemCount, thumbnails: folderThumbs });

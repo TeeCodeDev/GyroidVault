@@ -114,8 +114,8 @@ const UI = {
         ${folder.thumbnails && folder.thumbnails.length > 0 
           ? (folder.thumbnails.length === 1
             ? `<img src="${folder.thumbnails[0]}" style="width:100%;height:100%;object-fit:cover" loading="lazy">`
-            : `<div style="display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;width:100%;height:100%;gap:1px;background:var(--bg-card)">
-                ${folder.thumbnails.map(t => `<img src="${t}" style="width:100%;height:100%;object-fit:cover" loading="lazy">`).join('')}
+            : `<div style="display:grid;grid-template-columns:1fr 1fr;grid-template-rows:${folder.thumbnails.length > 2 ? '1fr 1fr' : '1fr'};width:100%;height:100%;gap:1px;background:var(--bg-card)">
+                ${folder.thumbnails.map((t, i) => `<img src="${t}" style="width:100%;height:100%;object-fit:cover;${folder.thumbnails.length === 3 && i === 2 ? 'grid-column:span 2' : ''}" loading="lazy">`).join('')}
               </div>`)
           : `<div class="model-card-placeholder" style="background:linear-gradient(135deg, hsl(220,50%,22%), hsl(240,40%,16%));display:flex;align-items:center;justify-content:center;font-size:3rem">📁</div>`
         }
