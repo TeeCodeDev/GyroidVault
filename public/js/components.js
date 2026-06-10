@@ -111,7 +111,14 @@ const UI = {
     return `<div class="model-card ${isSelected ? 'selected' : ''}" data-path="${folder.path}" onclick="App.browseTo('${folder.path}')" style="cursor:pointer" draggable="true" ondragstart="App.handleDragStart(event, '${folder.path}')" ondragover="event.preventDefault(); this.classList.add('drag-over')" ondragleave="this.classList.remove('drag-over')" ondrop="App.handleDrop(event, '${folder.path}')">
       <div class="model-card-checkbox" onclick="event.stopPropagation(); App.toggleBrowseSelection('${folder.path}')"></div>
       <div class="model-card-thumb">
-        <div class="model-card-placeholder" style="background:linear-gradient(135deg, hsl(220,50%,22%), hsl(240,40%,16%));display:flex;align-items:center;justify-content:center;font-size:3rem">📁</div>
+        ${folder.thumbnails && folder.thumbnails.length > 0 
+          ? (folder.thumbnails.length === 1
+            ? `<img src="${folder.thumbnails[0]}" style="width:100%;height:100%;object-fit:cover" loading="lazy">`
+            : `<div style="display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;width:100%;height:100%;gap:1px;background:var(--bg-card)">
+                ${folder.thumbnails.map(t => `<img src="${t}" style="width:100%;height:100%;object-fit:cover" loading="lazy">`).join('')}
+              </div>`)
+          : `<div class="model-card-placeholder" style="background:linear-gradient(135deg, hsl(220,50%,22%), hsl(240,40%,16%));display:flex;align-items:center;justify-content:center;font-size:3rem">📁</div>`
+        }
       </div>
       <div class="model-card-body">
         <div class="model-card-name">${folder.name}</div>
@@ -423,17 +430,39 @@ const UI = {
           ${metaHtml}
         </div>
         <div class="file-actions" style="display:flex;gap:4px;align-items:center">
-          ${(f.file_type === 'stl' || f.file_type === '3mf') ? `
-            <div class="dropdown">
-              <button class="btn btn-ghost btn-xs" title="Open in Slicer" style="color:var(--accent-purple);font-weight:600;font-size:0.7rem;border:1px solid var(--accent-purple);padding:3px 10px;border-radius:4px;line-height:1;white-space:nowrap">OPEN IN SLICER</button>
-              <div class="dropdown-content">
-                <div class="dropdown-header">Open in Slicer</div>
-                <a href="orcaslicer://open?file=${encodeURI(window.location.origin + '/api/files/' + f.id + '/download/model.' + f.file_type)}">OrcaSlicer</a>
-                <a href="elegooslicer://open?file=${encodeURI(window.location.origin + '/api/files/' + f.id + '/download/model.' + f.file_type)}">Elegoo Slicer</a>
-                <a href="cura://open?file=${encodeURI(window.location.origin + '/api/files/' + f.id + '/download/model.' + f.file_type)}">Ultimaker Cura</a>
-              </div>
-            </div>
-          ` : ''}
+          ${(f.file_type === 'stl' || f.file_type === '3mf') ? (() => {
+            const slicerLinks = {
+              'orcaslicer': { name: 'OrcaSlicer', url: `orcaslicer://open?file=${encodeURI(window.location.origin + '/api/files/' + f.id + '/download/model.' + f.file_type)}` },
+              'elegooslicer': { name: 'Elegoo Slicer', url: `elegooslicer://open?file=${encodeURI(window.location.origin + '/api/files/' + f.id + '/download/model.' + f.file_type)}` },
+              'cura': { name: 'Ultimaker Cura', url: `cura://open?file=${encodeURI(window.location.origin + '/api/files/' + f.id + '/download/model.' + f.file_type)}` }
+            };
+            const pref = App.currentUser?.preferred_slicer;
+            
+            if (pref && slicerLinks[pref]) {
+              return `
+                <div style="display:flex;align-items:stretch">
+                  <a href="${slicerLinks[pref].url}" class="btn btn-ghost btn-xs" title="Open in ${slicerLinks[pref].name}" style="color:var(--accent-purple);font-weight:600;font-size:0.7rem;border:1px solid var(--accent-purple);border-right:none;padding:3px 10px;border-radius:4px 0 0 4px;line-height:1;white-space:nowrap;display:flex;align-items:center">OPEN IN ${slicerLinks[pref].name.toUpperCase()}</a>
+                  <div class="dropdown">
+                    <button class="btn btn-ghost btn-xs" style="color:var(--accent-purple);border:1px solid var(--accent-purple);padding:3px 4px;border-radius:0 4px 4px 0;height:100%;display:flex;align-items:center"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg></button>
+                    <div class="dropdown-content">
+                      <div class="dropdown-header">Other Slicers</div>
+                      ${Object.entries(slicerLinks).filter(([k]) => k !== pref).map(([_, s]) => `<a href="${s.url}">${s.name}</a>`).join('')}
+                    </div>
+                  </div>
+                </div>
+              `;
+            } else {
+              return `
+                <div class="dropdown">
+                  <button class="btn btn-ghost btn-xs" title="Open in Slicer" style="color:var(--accent-purple);font-weight:600;font-size:0.7rem;border:1px solid var(--accent-purple);padding:3px 10px;border-radius:4px;line-height:1;white-space:nowrap">OPEN IN SLICER</button>
+                  <div class="dropdown-content">
+                    <div class="dropdown-header">Open in Slicer</div>
+                    ${Object.values(slicerLinks).map(s => `<a href="${s.url}">${s.name}</a>`).join('')}
+                  </div>
+                </div>
+              `;
+            }
+          })() : ''}
           ${(f.file_type === 'stl' || f.file_type === '3mf') ? `<button class="btn btn-ghost" style="padding:6px;color:var(--accent-cyan)" onclick="event.stopPropagation();App.previewStl(${model.id},'${f.url || '/uploads/'+f.filename}', '${f.file_type}')" title="Preview"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg></button>` : ''}
           <a href="/api/files/${f.id}/download" class="btn btn-ghost" style="padding:6px" title="Download"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg></a>
           ${isAdmin ? `<button class="btn btn-ghost" style="padding:6px;color:var(--error)" onclick="event.stopPropagation();App.confirmDeleteFile(${f.id},'${(f.original_name || f.filename).replace(/'/g, "\\'")}',${model.id})" title="Delete"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg></button>` : ''}
@@ -1083,6 +1112,16 @@ const UI = {
           <div class="form-group">
             <label>New Password (leave blank to keep current)</label>
             <input type="password" name="password" placeholder="••••••••" class="form-input">
+            <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;">Must be at least 8 characters and contain both letters and numbers.</p>
+          </div>
+          <div class="form-group">
+            <label>Preferred Slicer</label>
+            <select name="preferred_slicer" class="form-input">
+              <option value="" ${!user.preferred_slicer ? 'selected' : ''}>None (Ask every time)</option>
+              <option value="orcaslicer" ${user.preferred_slicer === 'orcaslicer' ? 'selected' : ''}>OrcaSlicer</option>
+              <option value="elegooslicer" ${user.preferred_slicer === 'elegooslicer' ? 'selected' : ''}>Elegoo Slicer</option>
+              <option value="cura" ${user.preferred_slicer === 'cura' ? 'selected' : ''}>Ultimaker Cura</option>
+            </select>
           </div>
           <div style="margin-top:20px">
             <button type="submit" class="btn btn-primary">Update Profile</button>

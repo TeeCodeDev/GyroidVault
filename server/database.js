@@ -83,6 +83,7 @@ async function initDatabase() {
       email TEXT UNIQUE,
       password_hash TEXT NOT NULL,
       role TEXT DEFAULT 'user',
+      preferred_slicer TEXT,
       password_reset_token TEXT,
       password_reset_expires DATETIME,
       created_at DATETIME DEFAULT (datetime('now'))
@@ -258,6 +259,7 @@ async function initDatabase() {
     if (!uCols.some(c => c.name === 'email')) db.run('ALTER TABLE users ADD COLUMN email TEXT');
     if (!uCols.some(c => c.name === 'password_reset_token')) db.run('ALTER TABLE users ADD COLUMN password_reset_token TEXT');
     if (!uCols.some(c => c.name === 'password_reset_expires')) db.run('ALTER TABLE users ADD COLUMN password_reset_expires DATETIME');
+    if (!uCols.some(c => c.name === 'preferred_slicer')) db.run('ALTER TABLE users ADD COLUMN preferred_slicer TEXT');
     
     if (!mCols.some(c => c.name === 'parent_id')) db.run('ALTER TABLE models ADD COLUMN parent_id INTEGER');
     if (!mCols.some(c => c.name === 'source_url')) db.run('ALTER TABLE models ADD COLUMN source_url TEXT');

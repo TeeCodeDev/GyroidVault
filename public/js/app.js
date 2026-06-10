@@ -797,6 +797,7 @@ const App = {
     const fd = new FormData(e.target);
     const data = { username: fd.get('username'), email: fd.get('email') };
     if (fd.get('password')) data.password = fd.get('password');
+    if (fd.has('preferred_slicer')) data.preferred_slicer = fd.get('preferred_slicer');
     try {
       await API.updateProfile(data);
       this.toast('Profile updated successfully');

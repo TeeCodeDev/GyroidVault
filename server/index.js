@@ -207,17 +207,18 @@ app.get('/api/system/public-config', (req, res) => {
 });
 
 app.get('/api/auth/me', authenticate, (req, res) => {
-  const user = get('SELECT id, username, email, role FROM users WHERE id=?', [req.user.id]);
+  const user = get('SELECT id, username, email, role, preferred_slicer FROM users WHERE id=?', [req.user.id]);
   if (user) user.csrfToken = req.user.csrfToken;
   res.json(user);
 });
 
 app.put('/api/auth/profile', authenticate, async (req, res) => {
   try {
-    const { username, email, password } = req.body;
+    const { username, email, password, preferred_slicer } = req.body;
     const updates = [], params = [];
     if (username) { updates.push('username=?'); params.push(username); }
     if (email) { updates.push('email=?'); params.push(email); }
+    if (preferred_slicer !== undefined) { updates.push('preferred_slicer=?'); params.push(preferred_slicer); }
     if (password) { 
       if (password.length < 8 || !/[a-zA-Z]/.test(password) || !/[0-9]/.test(password)) {
         return res.status(400).json({ error: 'Password must be at least 8 characters long and contain both letters and numbers' });
@@ -1172,11 +1173,20 @@ app.get('/api/browse', (req, res) => {
         try {
           itemCount = fs.readdirSync(path.join(fullPath, item.name)).filter(f => !f.startsWith('.')).length;
         } catch(e) { /* permission error, just show 0 */ }
+        let folderThumbs = [];
+        const folderFullPath = path.join(fullPath, item.name) + path.sep;
+        for (const [libPath, thumb] of thumbMap.entries()) {
+          if (libPath.startsWith(folderFullPath)) {
+            folderThumbs.push(thumb.startsWith('http') ? thumb : `/uploads/${thumb}`);
+            if (folderThumbs.length >= 4) break;
+          }
+        }
         
         folders.push({
           name: item.name,
           path: reqPath ? `${reqPath}/${item.name}` : item.name,
-          itemCount
+          itemCount,
+          thumbnails: folderThumbs
         });
       } else {
         const ext = path.extname(item.name).toLowerCase();
@@ -1294,7 +1304,15 @@ app.get('/api/browse/search', (req, res) => {
           if (item.name.toLowerCase().includes(q)) {
             let itemCount = 0;
             try { itemCount = fs.readdirSync(childFull).filter(f => !f.startsWith('.')).length; } catch(e){}
-            folders.push({ name: item.name, path: childRel, itemCount });
+            let folderThumbs = [];
+            const folderFullPath = childFull + path.sep;
+            for (const [libPath, thumb] of thumbMap.entries()) {
+              if (libPath.startsWith(folderFullPath)) {
+                folderThumbs.push(thumb.startsWith('http') ? thumb : `/uploads/${thumb}`);
+                if (folderThumbs.length >= 4) break;
+              }
+            }
+            folders.push({ name: item.name, path: childRel, itemCount, thumbnails: folderThumbs });
           }
           walk(childFull, childRel);
         } else {
