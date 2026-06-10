@@ -873,7 +873,7 @@ app.get('/api/system/updates', async (req, res) => {
       const latestVersion = release.tag_name.replace('v', '');
       const data = {
         latestVersion,
-        hasUpdate: latestVersion !== currentVersion,
+        hasUpdate: latestVersion.localeCompare(currentVersion, undefined, { numeric: true }) > 0,
         changelog: release.body,
         published_at: release.published_at,
         url: release.html_url
