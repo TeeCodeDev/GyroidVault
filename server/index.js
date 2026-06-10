@@ -1157,7 +1157,7 @@ app.get('/api/browse', (req, res) => {
     const supportedExts = ['.stl', '.gcode', '.3mf', '.step', '.obj'];
     const imageExts = ['.png', '.jpg', '.jpeg'];
     
-    const dbThumbs = all('SELECT f.library_path, COALESCE(f.thumbnail, m.thumbnail) as thumbnail FROM files f JOIN models m ON f.model_id = m.id WHERE (f.thumbnail IS NOT NULL OR m.thumbnail IS NOT NULL) AND f.library_path IS NOT NULL');
+    const dbThumbs = all('SELECT library_path, thumbnail FROM files WHERE thumbnail IS NOT NULL AND library_path IS NOT NULL');
     const thumbMap = new Map();
     for (const row of dbThumbs) thumbMap.set(row.library_path, row.thumbnail);
 
@@ -1174,9 +1174,17 @@ app.get('/api/browse', (req, res) => {
           itemCount = fs.readdirSync(path.join(fullPath, item.name)).filter(f => !f.startsWith('.')).length;
         } catch(e) { /* permission error, just show 0 */ }
         let folderThumbs = [];
-        const folderFullPath = path.join(fullPath, item.name) + path.sep;
+        const folderFullPath = path.join(fullPath, item.name);
+        
+        const folderModel = get('SELECT thumbnail FROM models WHERE library_path = ? AND thumbnail IS NOT NULL', [folderFullPath]);
+        if (folderModel) {
+          const url = folderModel.thumbnail.startsWith('http') ? folderModel.thumbnail : `/uploads/${folderModel.thumbnail}`;
+          folderThumbs.push(url);
+        }
+        
+        const folderPrefix = folderFullPath + path.sep;
         for (const [libPath, thumb] of thumbMap.entries()) {
-          if (libPath.startsWith(folderFullPath)) {
+          if (libPath.startsWith(folderPrefix)) {
             const url = thumb.startsWith('http') ? thumb : `/uploads/${thumb}`;
             if (!folderThumbs.includes(url)) {
               folderThumbs.push(url);
@@ -1308,9 +1316,17 @@ app.get('/api/browse/search', (req, res) => {
             let itemCount = 0;
             try { itemCount = fs.readdirSync(childFull).filter(f => !f.startsWith('.')).length; } catch(e){}
             let folderThumbs = [];
-            const folderFullPath = childFull + path.sep;
+            const folderFullPath = childFull;
+            
+            const folderModel = get('SELECT thumbnail FROM models WHERE library_path = ? AND thumbnail IS NOT NULL', [folderFullPath]);
+            if (folderModel) {
+              const url = folderModel.thumbnail.startsWith('http') ? folderModel.thumbnail : `/uploads/${folderModel.thumbnail}`;
+              folderThumbs.push(url);
+            }
+            
+            const folderPrefix = folderFullPath + path.sep;
             for (const [libPath, thumb] of thumbMap.entries()) {
-              if (libPath.startsWith(folderFullPath)) {
+              if (libPath.startsWith(folderPrefix)) {
                 const url = thumb.startsWith('http') ? thumb : `/uploads/${thumb}`;
                 if (!folderThumbs.includes(url)) {
                   folderThumbs.push(url);
