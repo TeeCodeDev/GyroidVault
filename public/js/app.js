@@ -826,6 +826,36 @@ const App = {
     }
   },
 
+  async changeUserRole(userId, selectElem) {
+    try {
+      const newRole = selectElem.value;
+      await API.updateUserRole(userId, newRole);
+      this.toast('User role updated successfully', 'success');
+      // trigger refresh of settings tab
+      const usersBtn = document.querySelector('.tab-btn[data-tab="users"]');
+      if (usersBtn) usersBtn.click();
+    } catch (err) {
+      this.toast(err.message, 'error');
+      // Revert select on error
+      const usersBtn = document.querySelector('.tab-btn[data-tab="users"]');
+      if (usersBtn) usersBtn.click();
+    }
+  },
+
+  async deleteUser(userId) {
+    if (!confirm('Are you sure you want to delete this user? This action cannot be undone.')) return;
+    try {
+      await API.deleteUser(userId);
+      this.toast('User deleted successfully', 'success');
+      // trigger refresh of settings tab
+      const usersBtn = document.querySelector('.tab-btn[data-tab="users"]');
+      if (usersBtn) usersBtn.click();
+    } catch (err) {
+      this.toast(err.message, 'error');
+    }
+  },
+
+
   async handleForgotPassword(e) {
     e.preventDefault();
     const fd = new FormData(e.target);
@@ -1330,8 +1360,24 @@ const App = {
               <div class="panel-header"><div class="panel-title">User Management</div></div>
               <div class="panel-body">
                 <table style="width:100%;border-collapse:collapse;font-size:.9rem">
-                  <thead><tr style="text-align:left;color:var(--text-muted);border-bottom:1px solid var(--border)"><th style="padding:12px">ID</th><th style="padding:12px">Username</th><th style="padding:12px">Email</th><th style="padding:12px">Role</th></tr></thead>
-                  <tbody>${users.map(u => `<tr style="border-bottom:1px solid var(--border);color:var(--text-secondary)"><td style="padding:12px">${u.id}</td><td style="padding:12px;font-weight:600">${u.username}</td><td style="padding:12px">${u.email || '-'}</td><td style="padding:12px"><span class="badge badge-${u.role === 'admin' ? 'purple' : 'cyan'}">${u.role}</span></td></tr>`).join('')}</tbody>
+                  <thead><tr style="text-align:left;color:var(--text-muted);border-bottom:1px solid var(--border)"><th style="padding:12px">ID</th><th style="padding:12px">Username</th><th style="padding:12px">Email</th><th style="padding:12px">Role</th><th style="padding:12px">Actions</th></tr></thead>
+                  <tbody>${users.map(u => `
+                    <tr style="border-bottom:1px solid var(--border);color:var(--text-secondary)">
+                      <td style="padding:12px">${u.id}</td>
+                      <td style="padding:12px;font-weight:600">${u.username}</td>
+                      <td style="padding:12px">${u.email || '-'}</td>
+                      <td style="padding:12px">
+                        <select class="form-input" style="padding:4px 8px;font-size:.85rem;width:auto;display:inline-block" onchange="App.changeUserRole(${u.id}, this)" ${u.id === 1 ? 'disabled' : ''}>
+                          <option value="admin" ${u.role === 'admin' ? 'selected' : ''}>Admin</option>
+                          <option value="uploader" ${u.role === 'uploader' ? 'selected' : ''}>Uploader</option>
+                          <option value="viewer" ${u.role === 'viewer' ? 'selected' : ''}>Viewer</option>
+                        </select>
+                        ${u.id === 1 ? '<div style="font-size:0.7rem;color:var(--text-muted);margin-top:4px">Master Admin</div>' : ''}
+                      </td>
+                      <td style="padding:12px">
+                        ${u.id !== 1 ? `<button class="btn btn-danger btn-sm" onclick="App.deleteUser(${u.id})">🗑 Delete</button>` : ''}
+                      </td>
+                    </tr>`).join('')}</tbody>
                 </table>
               </div>
             </div>`;

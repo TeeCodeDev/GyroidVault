@@ -1453,6 +1453,39 @@ app.get('/api/users', authenticate, (req, res) => {
   } catch (e) { console.error(e); res.status(500).json({ error: 'Failed to fetch users' }); }
 });
 
+app.put('/api/users/:id/role', authenticate, (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
+  const userId = parseInt(req.params.id, 10);
+  const { role } = req.body;
+  
+  if (userId === 1) return res.status(400).json({ error: 'Cannot change the role of the master admin (User ID 1)' });
+  if (!['admin', 'uploader', 'viewer'].includes(role)) return res.status(400).json({ error: 'Invalid role' });
+  
+  try {
+    run('UPDATE users SET role = ? WHERE id = ?', [role, userId]);
+    res.json({ success: true });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'Failed to update user role' });
+  }
+});
+
+app.delete('/api/users/:id', authenticate, (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
+  const userId = parseInt(req.params.id, 10);
+  
+  if (userId === 1) return res.status(400).json({ error: 'Cannot delete the master admin (User ID 1)' });
+  if (userId === req.user.id) return res.status(400).json({ error: 'Cannot delete yourself' });
+  
+  try {
+    run('DELETE FROM users WHERE id = ?', [userId]);
+    res.json({ success: true });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'Failed to delete user' });
+  }
+});
+
 app.get('/api/stats', (req, res) => {
   try {
     const totalModels = get('SELECT COUNT(*) as c FROM models').c;

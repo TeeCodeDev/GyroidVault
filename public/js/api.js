@@ -49,6 +49,8 @@ const API = {
     return this.request('/api/auth/reset-password', { method: 'POST', body: JSON.stringify({ token, password }) });
   },
   getUsers() { return this.request('/api/users'); },
+  updateUserRole(userId, role) { return this.request(`/api/users/${userId}/role`, { method: 'PUT', body: JSON.stringify({ role }) }); },
+  deleteUser(userId) { return this.request(`/api/users/${userId}`, { method: 'DELETE' }); },
   inviteUser(email) { return this.request('/api/auth/invite', { method: 'POST', body: JSON.stringify({ email }) }); },
 
   // Settings

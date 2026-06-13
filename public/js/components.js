@@ -205,7 +205,7 @@ const UI = {
       <div class="bulk-action-bar ${count > 0 ? 'active' : ''}">
         <div class="bulk-count">${count} items selected</div>
         <div class="bulk-actions">
-          <button class="btn btn-secondary btn-sm" onclick="App.openBulkTag()">??? Tag</button>
+          <button class="btn btn-secondary btn-sm" onclick="App.openBulkTag()">🏷️ Tag</button>
           <button class="btn btn-secondary btn-sm" onclick="App.openBulkAddToCollection()">➕ Collection</button>
           <button class="btn btn-danger btn-sm" onclick="App.openBulkDelete()">🗑 Delete</button>
           <button class="btn btn-ghost btn-sm" onclick="App.clearSelection()">✕ Clear</button>
