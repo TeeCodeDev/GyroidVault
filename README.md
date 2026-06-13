@@ -24,12 +24,13 @@
 - **Dark/Light Mode**: Toggle between dark and light themes depending on your preference.
 - **Batch Actions**: Use `Ctrl+Click` (or `Shift+Click`) to select multiple models in the grid to bulk tag, delete, or add to collections at once.
 - **Folder Watching**: Automatically scan your local directories to import models, or upload them manually.
+- **Folder View Collages**: Browse your local directories directly. Folders automatically generate dynamic 2x2 image collages based on the 3D files inside them.
 - **Built-in 3D Viewer**: Preview STL and 3MF files directly in your browser.
 - **Collections**: Group related files together for multi-part projects.
 - **Model Versioning**: Track design iterations (v1, v2, final) under a single model entry.
 - **Print Log**: Keep a history of your prints, filament types used, and success rates.
 - **Public Share Links**: Generate secure, expiring links to share specific models with others.
-- **Slicer Integration**: Open files directly in Bambu Studio, PrusaSlicer, OrcaSlicer, or Elegoo Slicer.
+- **1-Click Slicer Integration**: Set your "Preferred Slicer" in your profile to instantly send files to Bambu Studio, PrusaSlicer, OrcaSlicer, or Elegoo Slicer.
 - **Multi-User & Roles (RBAC)**: Assign roles (Admin, Uploader, Viewer) to restrict access. Viewers get a clean, read-only interface with hidden action buttons.
 
 ## Quick Start (Docker Compose)
@@ -89,6 +90,7 @@ To enable password resets and user invitations, you need to configure SMTP:
 
 - **Local SQLite Database**: Your data stays on your own hardware. No external cloud database or telemetry is forced.
 - **Admin Control**: The first registered user automatically becomes the Admin. Invited users need token codes.
+- **Advanced API Security**: Uses secure `HttpOnly` cookies for authentication, double-submit CSRF protection, and strict rate-limiting on login endpoints to prevent brute-force attacks.
 - **File Management**: Uploaded files are kept locally in the database/uploads structure.
 
 ## Troubleshooting & Support
