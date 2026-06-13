@@ -1197,9 +1197,10 @@ app.get('/api/browse', (req, res) => {
           folderThumbs.push(getThumbUrl(folderModel.thumbnail, folderFullPath));
         }
         
-        const folderPrefix = folderFullPath + path.sep;
+        const folderPrefix = (folderFullPath + '/').replace(/\\/g, '/');
         for (const [libPath, thumb] of thumbMap.entries()) {
-          if (libPath.startsWith(folderPrefix)) {
+          const normalizedLibPath = libPath.replace(/\\/g, '/');
+          if (normalizedLibPath.startsWith(folderPrefix)) {
             const url = getThumbUrl(thumb, path.dirname(libPath));
             if (!folderThumbs.includes(url)) {
               folderThumbs.push(url);
