@@ -17,10 +17,28 @@ function authenticate(req, res, next) {
     }
     
     req.user = decoded;
+
+    // Viewers cannot modify state
+    if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(req.method) && req.user.role === 'viewer') {
+      if (!req.path.startsWith('/api/auth/profile') && !req.path.startsWith('/api/auth/logout')) {
+        return res.status(403).json({ error: 'Viewer accounts cannot modify data' });
+      }
+    }
+
     next();
   } catch (e) {
     res.status(401).json({ error: 'Invalid token' });
   }
 }
 
-module.exports = { authenticate, SECRET };
+function requireAdmin(req, res, next) {
+  if (req.user && req.user.role === 'admin') next();
+  else res.status(403).json({ error: 'Admin privileges required' });
+}
+
+function requireUploader(req, res, next) {
+  if (req.user && (req.user.role === 'admin' || req.user.role === 'uploader' || req.user.role === 'user')) next();
+  else res.status(403).json({ error: 'Uploader privileges required' });
+}
+
+module.exports = { authenticate, requireAdmin, requireUploader, SECRET };

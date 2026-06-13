@@ -201,11 +201,11 @@ const App = {
 
   // ─── Dashboard ────────────────────────────────────────────────────────
   async renderDashboard() {
-    this.el.innerHTML = `<div class="page-header"><div><h1 class="page-title">Dashboard</h1><p class="page-subtitle">Your 3D printing overview</p></div>${this.currentUser ? '<button class="btn btn-primary" onclick="App.showCreateModel()">+ New Model</button>' : ''}</div><div class="stats-grid"><div class="stat-card"><div class="skeleton" style="width:60%;height:32px;margin-top:40px"></div></div><div class="stat-card"><div class="skeleton" style="width:60%;height:32px;margin-top:40px"></div></div><div class="stat-card"><div class="skeleton" style="width:60%;height:32px;margin-top:40px"></div></div><div class="stat-card"><div class="skeleton" style="width:60%;height:32px;margin-top:40px"></div></div></div>`;
+    this.el.innerHTML = `<div class="page-header"><div><h1 class="page-title">Dashboard</h1><p class="page-subtitle">Your 3D printing overview</p></div>${(this.currentUser && this.currentUser.role !== 'viewer') ? '<button class="btn btn-primary" onclick="App.showCreateModel()">+ New Model</button>' : ''}</div><div class="stats-grid"><div class="stat-card"><div class="skeleton" style="width:60%;height:32px;margin-top:40px"></div></div><div class="stat-card"><div class="skeleton" style="width:60%;height:32px;margin-top:40px"></div></div><div class="stat-card"><div class="skeleton" style="width:60%;height:32px;margin-top:40px"></div></div><div class="stat-card"><div class="skeleton" style="width:60%;height:32px;margin-top:40px"></div></div></div>`;
     try {
       const stats = await API.getStats();
       this.el.innerHTML = `
-        <div class="page-header"><div><h1 class="page-title">Dashboard</h1><p class="page-subtitle">Your 3D printing overview</p></div>${this.currentUser ? '<button class="btn btn-primary" onclick="App.showCreateModel()">+ New Model</button>' : ''}</div>
+        <div class="page-header"><div><h1 class="page-title">Dashboard</h1><p class="page-subtitle">Your 3D printing overview</p></div>${(this.currentUser && this.currentUser.role !== 'viewer') ? '<button class="btn btn-primary" onclick="App.showCreateModel()">+ New Model</button>' : ''}</div>
         ${UI.statsCards(stats)}
         <div class="dashboard-panels">
           <div class="glass-panel"><div class="panel-header"><div class="panel-title">🕐 Recent Models</div></div><div class="panel-body">${UI.recentModels(stats.recentModels)}</div></div>
@@ -228,7 +228,7 @@ const App = {
     this.el.innerHTML = `
       <div class="page-header">
         <div><h1 class="page-title">Models</h1><p class="page-subtitle">Manage your 3D model library</p></div>
-        ${this.currentUser ? '<button class="btn btn-primary" onclick="App.showCreateModel()">+ New Model</button>' : ''}
+        ${(this.currentUser && this.currentUser.role !== 'viewer') ? '<button class="btn btn-primary" onclick="App.showCreateModel()">+ New Model</button>' : ''}
       </div>
       ${toolbar}
       <div id="models-grid"><div class="model-grid">${'<div class="model-card"><div class="model-card-thumb"><div class="skeleton" style="width:100%;height:100%"></div></div><div class="model-card-body"><div class="skeleton" style="width:70%;height:18px;margin-bottom:8px"></div><div class="skeleton" style="width:40%;height:14px"></div></div></div>'.repeat(6)}</div></div>`;
@@ -261,7 +261,7 @@ const App = {
     this.el.innerHTML = `
       <div class="page-header">
         <div><h1 class="page-title">Browse Library</h1><p class="page-subtitle">Explore your files on disk</p></div>
-        ${this.currentUser ? '<button class="btn btn-primary" onclick="App.showCreateModel()">+ New Model</button>' : ''}
+        ${(this.currentUser && this.currentUser.role !== 'viewer') ? '<button class="btn btn-primary" onclick="App.showCreateModel()">+ New Model</button>' : ''}
       </div>
       ${toolbar}
       <div id="browse-header" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; min-height:36px;"></div>
@@ -540,6 +540,32 @@ const App = {
     try {
       await API.bulkDeleteModels(this.selectedModelIds, fd.get('delete_disk') === 'on');
       this.toast(`Deleted ${this.selectedModelIds.length} models`);
+      this.clearSelection();
+      this.closeModal();
+      this.route();
+    } catch(e) { this.toast(e.message, 'error'); }
+  },
+  openBulkTag() { this.openModal('Bulk Tag', UI.bulkTagForm(this.cache.tags)); },
+  async handleBulkTagSubmit(e) {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const selectedTags = fd.getAll('tags');
+    const inlineTagInput = document.getElementById('new-bulk-tag-input');
+    
+    let tagsToApply = [...selectedTags];
+    if (inlineTagInput && inlineTagInput.value.trim()) {
+      const inlineTags = inlineTagInput.value.split(',').map(t => t.trim()).filter(Boolean);
+      tagsToApply = tagsToApply.concat(inlineTags);
+    }
+    
+    if (tagsToApply.length === 0) {
+      this.toast('Please select or enter at least one tag', 'error');
+      return;
+    }
+    
+    try {
+      await API.bulkUpdateModels(this.selectedModelIds, { tags: tagsToApply });
+      this.toast(`Tagged ${this.selectedModelIds.length} models`);
       this.clearSelection();
       this.closeModal();
       this.route();

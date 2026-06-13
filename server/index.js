@@ -276,6 +276,24 @@ function getFileUrl(file) {
   return `/uploads/${file.filename}`;
 }
 
+function getThumbUrl(thumbnail, folderPath = null) {
+  if (!thumbnail) return null;
+  if (thumbnail.startsWith('http')) return thumbnail;
+  
+  if (fs.existsSync(path.join(UPLOADS_DIR, thumbnail))) {
+    return `/uploads/${thumbnail}`;
+  }
+  
+  if (folderPath) {
+    const thumbPath = path.join(folderPath, thumbnail);
+    if (fs.existsSync(thumbPath)) {
+      return getFileUrl({ filename: thumbnail, library_path: thumbPath });
+    }
+  }
+  
+  return `/uploads/${thumbnail}`;
+}
+
 app.use(express.json());
 app.use(express.static(path.join(__dirname, '..', 'public')));
 app.use('/uploads', express.static(UPLOADS_DIR));
@@ -341,15 +359,7 @@ app.get('/api/models', (req, res) => {
         stl_url = getFileUrl({ filename: m.mf_file, library_path: m.mf_library_path });
       }
       
-      let thumb_url = m.thumbnail;
-      if (m.thumbnail) {
-        const thumbPath = m.library_path ? path.join(m.library_path, m.thumbnail) : null;
-        if (thumbPath && fs.existsSync(thumbPath)) {
-          thumb_url = getFileUrl({ filename: m.thumbnail, library_path: thumbPath });
-        } else {
-          thumb_url = `/uploads/${m.thumbnail}`;
-        }
-      }
+      let thumb_url = getThumbUrl(m.thumbnail, m.library_path);
 
       return {
         ...m,
@@ -378,12 +388,7 @@ app.get('/api/models/:id', (req, res) => {
     if (!model) return res.status(404).json({ error: 'Model not found' });
 
     if (model.thumbnail) {
-      const thumbPath = model.library_path ? path.join(model.library_path, model.thumbnail) : null;
-      if (thumbPath && fs.existsSync(thumbPath)) {
-        model.thumbnail_url = getFileUrl({ filename: model.thumbnail, library_path: thumbPath });
-      } else {
-        model.thumbnail_url = `/uploads/${model.thumbnail}`;
-      }
+      model.thumbnail_url = getThumbUrl(model.thumbnail, model.library_path);
     }
 
     model.files = all('SELECT f.*, u.username as uploader_name FROM files f LEFT JOIN users u ON f.user_id=u.id WHERE f.model_id=? ORDER BY uploaded_at DESC', [model.id]).map(f => ({
@@ -470,6 +475,7 @@ app.put('/api/models/:id', authenticate, (req, res) => {
     const id = Number(req.params.id);
     const model = get('SELECT * FROM models WHERE id=?', [id]);
     if (!model) return res.status(404).json({ error: 'Model not found' });
+    if (req.user.role !== 'admin' && model.user_id !== req.user.id) return res.status(403).json({ error: 'Forbidden' });
     const { name, description, print_tips, source_url, category_id, tags } = req.body;
     run("UPDATE models SET name=?,description=?,print_tips=?,source_url=?,category_id=?,updated_at=datetime('now') WHERE id=?",
       [name||model.name, description!==undefined?description:model.description, print_tips!==undefined?print_tips:model.print_tips, source_url!==undefined?source_url:model.source_url, category_id!==undefined?category_id:model.category_id, id]);
@@ -526,6 +532,8 @@ function deleteModelInternal(id, deleteDisk = false) {
 app.delete('/api/models/:id', authenticate, (req, res) => {
   try {
     const id = Number(req.params.id);
+    const model = get('SELECT user_id FROM models WHERE id=?', [id]);
+    if (model && req.user.role !== 'admin' && model.user_id !== req.user.id) return res.status(403).json({ error: 'Forbidden' });
     const deleteDisk = req.query.deleteDisk === 'true';
     const success = deleteModelInternal(id, deleteDisk);
     if (!success) return res.status(404).json({ error: 'Model not found' });
@@ -550,6 +558,11 @@ app.post('/api/models/bulk-update', authenticate, (req, res) => {
     if (!Array.isArray(ids)) return res.status(400).json({ error: 'IDs array required' });
     
     for (const id of ids) {
+      if (req.user.role !== 'admin') {
+        const model = get('SELECT user_id FROM models WHERE id=?', [id]);
+        if (model && model.user_id !== req.user.id) continue;
+      }
+      
       if (category_id !== undefined) {
         run("UPDATE models SET category_id=?, updated_at=datetime('now') WHERE id=?", [category_id || null, id]);
       }
@@ -578,6 +591,7 @@ app.post('/api/models/:id/files', authenticate, upload.array('files', 20), (req,
     const id = Number(req.params.id);
     const model = get('SELECT * FROM models WHERE id=?', [id]);
     if (!model) return res.status(404).json({ error: 'Model not found' });
+    if (req.user.role !== 'admin' && model.user_id !== req.user.id) return res.status(403).json({ error: 'Forbidden' });
     if (!req.files?.length) return res.status(400).json({ error: 'No files uploaded' });
     const { parseGcodeMetadata } = require('./utils/gcode');
     const uploaded = [];
@@ -651,6 +665,7 @@ app.post('/api/models/:id/thumbnail', authenticate, upload.single('thumbnail'), 
     const id = Number(req.params.id);
     const model = get('SELECT * FROM models WHERE id=?', [id]);
     if (!model) return res.status(404).json({ error: 'Model not found' });
+    if (req.user.role !== 'admin' && model.user_id !== req.user.id) return res.status(403).json({ error: 'Forbidden' });
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
     if (model.thumbnail) { const p = path.join(UPLOADS_DIR, model.thumbnail); if (fs.existsSync(p)) fs.unlinkSync(p); }
     run("UPDATE models SET thumbnail=?,updated_at=datetime('now') WHERE id=?", [req.file.filename, id]);
@@ -670,8 +685,9 @@ app.get('/api/files/:id/download/:filename?', (req, res) => {
 
 app.delete('/api/files/:id', authenticate, (req, res) => {
   try {
-    const file = get('SELECT * FROM files WHERE id=?', [Number(req.params.id)]);
+    const file = get('SELECT f.*, m.user_id as model_owner FROM files f JOIN models m ON f.model_id = m.id WHERE f.id=?', [Number(req.params.id)]);
     if (!file) return res.status(404).json({ error: 'File not found' });
+    if (req.user.role !== 'admin' && file.model_owner !== req.user.id) return res.status(403).json({ error: 'Forbidden' });
     
     const deleteDisk = req.query.deleteDisk === 'true';
     
@@ -1178,14 +1194,13 @@ app.get('/api/browse', (req, res) => {
         
         const folderModel = get('SELECT thumbnail FROM models WHERE library_path = ? AND thumbnail IS NOT NULL', [folderFullPath]);
         if (folderModel) {
-          const url = folderModel.thumbnail.startsWith('http') ? folderModel.thumbnail : `/uploads/${folderModel.thumbnail}`;
-          folderThumbs.push(url);
+          folderThumbs.push(getThumbUrl(folderModel.thumbnail, folderFullPath));
         }
         
         const folderPrefix = folderFullPath + path.sep;
         for (const [libPath, thumb] of thumbMap.entries()) {
           if (libPath.startsWith(folderPrefix)) {
-            const url = thumb.startsWith('http') ? thumb : `/uploads/${thumb}`;
+            const url = getThumbUrl(thumb, path.dirname(libPath));
             if (!folderThumbs.includes(url)) {
               folderThumbs.push(url);
               if (folderThumbs.length >= 4) break;
@@ -1218,7 +1233,7 @@ app.get('/api/browse', (req, res) => {
           let thumbnailUrl = null;
           const thumb = thumbMap.get(filePath);
           if (thumb) {
-            thumbnailUrl = thumb.startsWith('http') ? thumb : `/uploads/${thumb}`;
+            thumbnailUrl = getThumbUrl(thumb, path.dirname(filePath));
           }
 
           files.push({
@@ -1320,14 +1335,13 @@ app.get('/api/browse/search', (req, res) => {
             
             const folderModel = get('SELECT thumbnail FROM models WHERE library_path = ? AND thumbnail IS NOT NULL', [folderFullPath]);
             if (folderModel) {
-              const url = folderModel.thumbnail.startsWith('http') ? folderModel.thumbnail : `/uploads/${folderModel.thumbnail}`;
-              folderThumbs.push(url);
+              folderThumbs.push(getThumbUrl(folderModel.thumbnail, folderFullPath));
             }
             
             const folderPrefix = folderFullPath + path.sep;
             for (const [libPath, thumb] of thumbMap.entries()) {
               if (libPath.startsWith(folderPrefix)) {
-                const url = thumb.startsWith('http') ? thumb : `/uploads/${thumb}`;
+                const url = getThumbUrl(thumb, path.dirname(libPath));
                 if (!folderThumbs.includes(url)) {
                   folderThumbs.push(url);
                   if (folderThumbs.length >= 4) break;
@@ -1355,7 +1369,7 @@ app.get('/api/browse/search', (req, res) => {
               let thumbnailUrl = null;
               const thumb = thumbMap.get(childFull);
               if (thumb) {
-                thumbnailUrl = thumb.startsWith('http') ? thumb : `/uploads/${thumb}`;
+                thumbnailUrl = getThumbUrl(thumb, path.dirname(childFull));
               }
 
               files.push({ name: item.name, size: stat.size, type: fileType, url: encodedUrl, thumbnailUrl, folderPath: relPath });

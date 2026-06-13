@@ -178,8 +178,8 @@ const UI = {
     const cat = m.category_name
       ? `<span class="badge badge-category" style="background:${m.category_color}20;color:${m.category_color};border:1px solid ${m.category_color}33">${m.category_name}</span>`
       : '';
-    const isAdmin = App.currentUser?.role === 'admin';
-    const plusBtn = isAdmin ? `<button class="btn btn-ghost btn-xs" onclick="event.stopPropagation();App.addToProject(${m.id})" title="Add to project" style="margin-top:-4px;margin-right:-8px;padding:4px">➕</button>` : '';
+    const canEdit = App.currentUser?.role === 'admin' || (App.currentUser?.role !== 'viewer' && m.user_id === App.currentUser?.id);
+    const plusBtn = canEdit ? `<button class="btn btn-ghost btn-xs" onclick="event.stopPropagation();App.addToProject(${m.id})" title="Add to project" style="margin-top:-4px;margin-right:-8px;padding:4px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg></button>` : '';
 
     const isSelected = App.selectedModelIds?.includes(m.id);
 
@@ -205,7 +205,7 @@ const UI = {
       <div class="bulk-action-bar ${count > 0 ? 'active' : ''}">
         <div class="bulk-count">${count} items selected</div>
         <div class="bulk-actions">
-          <button class="btn btn-secondary btn-sm" onclick="App.openBulkMove()">📁 Move</button>
+          <button class="btn btn-secondary btn-sm" onclick="App.openBulkTag()">??? Tag</button>
           <button class="btn btn-secondary btn-sm" onclick="App.openBulkAddToCollection()">➕ Collection</button>
           <button class="btn btn-danger btn-sm" onclick="App.openBulkDelete()">🗑 Delete</button>
           <button class="btn btn-ghost btn-sm" onclick="App.clearSelection()">✕ Clear</button>
@@ -336,8 +336,34 @@ const UI = {
       </form>`;
   },
 
+  bulkTagForm(tags = []) {
+    const tagCheckboxes = tags.map(t =>
+      `<label class="tag-pill-checkbox">
+        <input type="checkbox" name="tags" value="${t.name}">
+        <span class="tag-pill">${t.name}</span>
+      </label>`
+    ).join('');
+
+    return `
+      <form onsubmit="App.handleBulkTagSubmit(event)">
+        <div class="form-group">
+          <label class="form-label">Tags</label>
+          <div id="bulk-tags-container" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px">
+            ${tagCheckboxes}
+          </div>
+          <div class="add-inline" style="max-width:250px;margin-top:4px">
+            <input type="text" id="new-bulk-tag-input" class="form-input" placeholder="Add new tag (comma separated)...">
+          </div>
+        </div>
+        <div class="form-actions">
+          <button type="button" class="btn btn-secondary" onclick="App.closeModal()">Cancel</button>
+          <button type="submit" class="btn btn-primary">Tag Models</button>
+        </div>
+      </form>`;
+  },
+
   modelDetail(model) {
-    const isAdmin = App.currentUser?.role === 'admin';
+    const canEdit = App.currentUser?.role === 'admin' || (App.currentUser?.role !== 'viewer' && model.user_id === App.currentUser?.id);
     const cat = model.category_name
       ? `<span class="badge badge-category" style="background:${model.category_color}20;color:${model.category_color};border:1px solid ${model.category_color}33">${model.category_name}</span>`
       : '';
@@ -465,7 +491,7 @@ const UI = {
           })() : ''}
           ${(f.file_type === 'stl' || f.file_type === '3mf') ? `<button class="btn btn-ghost" style="padding:6px;color:var(--accent-cyan)" onclick="event.stopPropagation();App.previewStl(${model.id},'${f.url || '/uploads/'+f.filename}', '${f.file_type}')" title="Preview"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg></button>` : ''}
           <a href="/api/files/${f.id}/download" class="btn btn-ghost" style="padding:6px" title="Download"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg></a>
-          ${isAdmin ? `<button class="btn btn-ghost" style="padding:6px;color:var(--error)" onclick="event.stopPropagation();App.confirmDeleteFile(${f.id},'${(f.original_name || f.filename).replace(/'/g, "\\'")}',${model.id})" title="Delete"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg></button>` : ''}
+          ${canEdit ? `<button class="btn btn-ghost" style="padding:6px;color:var(--error)" onclick="event.stopPropagation();App.confirmDeleteFile(${f.id},'${(f.original_name || f.filename).replace(/'/g, "\\'")}',${model.id})" title="Delete"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg></button>` : ''}
         </div>
       </div>`;
     }).join('');
@@ -480,7 +506,7 @@ const UI = {
         </div>
         <div class="file-actions" style="display:flex;gap:4px;align-items:center">
           <a href="/api/files/${f.id}/download" target="_blank" class="btn btn-ghost" style="padding:6px;color:var(--accent-cyan)" title="View Document"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg></a>
-          ${isAdmin ? `<button class="btn btn-ghost" style="padding:6px;color:var(--error)" onclick="event.stopPropagation();App.confirmDeleteFile(${f.id},'${(f.original_name || f.filename).replace(/'/g, "\\'")}',${model.id})" title="Delete"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg></button>` : ''}
+          ${canEdit ? `<button class="btn btn-ghost" style="padding:6px;color:var(--error)" onclick="event.stopPropagation();App.confirmDeleteFile(${f.id},'${(f.original_name || f.filename).replace(/'/g, "\\'")}',${model.id})" title="Delete"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg></button>` : ''}
         </div>
       </div>`;
     }).join('');
@@ -493,7 +519,7 @@ const UI = {
           <div class="print-date">${this.formatDate(p.printed_at)}</div>
           ${p.notes ? `<div class="print-notes">${p.notes}</div>` : ''}
         </div>
-        <button class="btn btn-ghost" style="padding:6px;color:var(--error)" onclick="App.deletePrint(${p.id},${model.id})" title="Delete"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg></button>
+        ${canEdit ? `<button class="btn btn-ghost" style="padding:6px;color:var(--error)" onclick="App.deletePrint(${p.id},${model.id})" title="Delete"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg></button>` : ''}
       </div>
     `).join('');
 
@@ -514,7 +540,7 @@ const UI = {
           <div class="detail-meta">${cat} ${printed}</div>
         </div>
         <div class="detail-actions" style="display:flex;gap:8px;flex-wrap:wrap">
-          ${isAdmin ? `
+          ${canEdit ? `
           <button class="btn btn-secondary btn-sm" onclick="App.showShareModal(${model.id})" title="Share Model">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
             Share
@@ -578,7 +604,7 @@ const UI = {
                   ${docsHtml ? `<div onclick="App.switchFilesTab(event, 'docs')" style="padding-bottom:12px;cursor:pointer;border-bottom:2px solid transparent;color:var(--text-muted);font-weight:600">📄 Documentation (${model.files?.filter(f => f.file_type === 'document').length || 0})</div>` : ''}
                 </div>
                 <div style="padding:12px 16px">
-                  ${isAdmin ? `<button class="btn btn-primary btn-xs" onclick="App.showUploadFiles(${model.id})">+ Upload</button>` : ''}
+                  ${canEdit ? `<button class="btn btn-primary btn-xs" onclick="App.showUploadFiles(${model.id})">+ Upload</button>` : ''}
                 </div>
               </div>
             </div>
@@ -873,11 +899,12 @@ const UI = {
       const preset = item.is_preset ? '<span style="font-size:.7rem;color:var(--text-muted);margin-left:4px">(preset)</span>' : '';
       const count = item.model_count != null ? `<span style="font-size:.75rem;color:var(--text-muted)">${item.model_count || item.usage_count || 0}</span>` : '';
       const canDelete = type === 'materials' ? !item.is_preset : true;
+      const isAdmin = App.currentUser?.role === 'admin';
       return `<div class="settings-item">
         <span class="settings-item-name">${color} ${item.name}${preset}</span>
         <div class="settings-item-actions">
           ${count}
-          ${canDelete ? `<button class="btn btn-ghost btn-xs" style="color:var(--error);padding:4px" onclick="App.deleteSettingsItem('${type}',${item.id},'${item.name.replace(/'/g, "\\'")}')"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg></button>` : ''}
+          ${canDelete && isAdmin ? `<button class="btn btn-ghost btn-xs" style="color:var(--error);padding:4px" onclick="App.deleteSettingsItem('${type}',${item.id},'${item.name.replace(/'/g, "\\'")}')"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg></button>` : ''}
         </div>
       </div>`;
     }).join('');
@@ -897,11 +924,12 @@ const UI = {
       <div class="panel-header"><div class="panel-title">${iconMap[type] || ''} ${title}</div></div>
       <div class="panel-body">
         ${listHtml || '<div style="color:var(--text-muted);font-size:.875rem;padding:8px 0">None yet</div>'}
+        ${App.currentUser?.role === 'admin' ? `
         <div class="add-inline">
           <input class="form-input" id="add-${type}-input" placeholder="Add new ${type.slice(0,-1)}...">
           ${colorInput}
           <button class="btn btn-primary btn-sm" onclick="App.addSettingsItem('${type}')">Add</button>
-        </div>
+        </div>` : ''}
       </div>
     </div>`;
   },
@@ -1135,7 +1163,7 @@ const UI = {
     return `
       <div class="page-header">
         <div><h1 class="page-title">Collections</h1><p class="page-subtitle">Group models into collections</p></div>
-        <button class="btn btn-primary" onclick="App.showCreateProject()">+ New Collection</button>
+        ${App.currentUser?.role !== 'viewer' ? '<button class="btn btn-primary" onclick="App.showCreateProject()">+ New Collection</button>' : ''}
       </div>
       <div class="model-grid">
         ${list || '<div class="empty-state" style="grid-column: 1/-1">No collections yet</div>'}
