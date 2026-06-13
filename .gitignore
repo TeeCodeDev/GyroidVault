@@ -22,3 +22,8 @@ yarn-error.log*
 # OS Files
 .DS_Store
 Thumbs.db
+
+# AI and Temp Files
+.ai-changelog.md
+.ai-instructions.md
+scratch/
