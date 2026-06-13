@@ -22,7 +22,7 @@
 ## Features
 
 - **Dark/Light Mode**: Toggle between dark and light themes depending on your preference.
-- **Batch Actions**: Select multiple models to move, delete, or add to collections at once.
+- **Batch Actions**: Use `Ctrl+Click` (or `Shift+Click`) to select multiple models in the grid to bulk tag, delete, or add to collections at once.
 - **Folder Watching**: Automatically scan your local directories to import models, or upload them manually.
 - **Built-in 3D Viewer**: Preview STL and 3MF files directly in your browser.
 - **Collections**: Group related files together for multi-part projects.
@@ -30,7 +30,7 @@
 - **Print Log**: Keep a history of your prints, filament types used, and success rates.
 - **Public Share Links**: Generate secure, expiring links to share specific models with others.
 - **Slicer Integration**: Open files directly in Bambu Studio, PrusaSlicer, OrcaSlicer, or Elegoo Slicer.
-- **Multi-User & Roles**: Set up user accounts and admin controls to restrict access.
+- **Multi-User & Roles (RBAC)**: Assign roles (Admin, Uploader, Viewer) to restrict access. Viewers get a clean, read-only interface with hidden action buttons.
 
 ## Quick Start (Docker Compose)
 
@@ -97,6 +97,7 @@ To enable password resets and user invitations, you need to configure SMTP:
 - **Viewer not loading**: Make sure your browser supports WebGL and that you are not using an ad-blocker that blocks Three.js components.
 - **File scanning issues**: Verify that your `LIBRARY_PATH` or the volume mapping in Docker is correct and that the app has read permissions for that directory.
 - **Slicer links not opening**: Make sure the slicer (Bambu Studio, etc.) is installed and has registered its URL scheme on your OS.
+- 💡 **Mac / Apple Silicon Users**: If GyroidVault doesn't respond on `http://localhost:3457/` after starting the container, try navigating to `http://127.0.0.1:3457/` instead. This is a common Docker networking quirk on Mac OSX!
 
 ### Support
 - **Unraid Users**: Please use the dedicated support thread on the Unraid Forums.
