@@ -5,7 +5,7 @@ const db = require('../database');
 const { parseGcodeMetadata } = require('./gcode');
 const AdmZip = require('adm-zip');
 
-const SUPPORTED_EXTENSIONS = ['.stl', '.gcode', '.bgcode', '.3mf', '.step', '.stp', '.f3d', '.obj', '.pdf', '.txt', '.md', '.zip'];
+const SUPPORTED_EXTENSIONS = ['.stl', '.gcode', '.bgcode', '.3mf', '.step', '.stp', '.f3d', '.scad', '.obj', '.pdf', '.txt', '.md', '.zip'];
 const IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.webp', '.gif'];
 
 function getFileType(filename) {
@@ -15,6 +15,7 @@ function getFileType(filename) {
   if (ext === '.3mf') return '3mf';
   if (ext === '.step' || ext === '.stp') return 'step';
   if (ext === '.f3d') return 'f3d';
+  if (ext === '.scad') return 'scad';
   if (ext === '.obj') return 'obj';
   if (ext === '.zip') return 'zip';
   if (ext === '.pdf' || ext === '.txt' || ext === '.md') return 'document';

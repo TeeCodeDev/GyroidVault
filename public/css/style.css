@@ -1155,9 +1155,11 @@ select option{background:var(--bg-card);color:var(--text-primary)}
 /* Badges & File icons */
 .badge-bgcode { background: rgba(245,158,11,0.15); color: #f59e0b; border: 1px solid rgba(245,158,11,0.3); }
 .badge-f3d { background: rgba(14,165,233,0.15); color: #0ea5e9; border: 1px solid rgba(14,165,233,0.3); }
+.badge-scad { background: rgba(168,85,247,0.15); color: #c084fc; border: 1px solid rgba(168,85,247,0.3); }
 .badge-preview { background: rgba(0,212,255,0.2); color: var(--accent-cyan); border: 1px solid var(--accent-cyan); font-weight: 700; font-size: 0.65rem; padding: 2px 6px; border-radius: 4px; }
 .file-icon.bgcode { background: rgba(245,158,11,0.15); color: #f59e0b; }
 .file-icon.f3d { background: rgba(14,165,233,0.15); color: #0ea5e9; }
+.file-icon.scad { background: rgba(168,85,247,0.15); color: #c084fc; }
 
 /* ─── Collections Enhanced Visuals ──────────────────────────────────────── */
 .collection-card {

@@ -1367,11 +1367,40 @@ app.get('/api/projects/:id', authenticate, (req, res) => {
       return res.status(403).json({ error: 'Forbidden: Private project' });
     }
     project.models = all(`
-      SELECT m.*, c.name as category_name, c.color as category_color 
+      SELECT m.*, c.name as category_name, c.color as category_color,
+      (SELECT COUNT(*) FROM files WHERE model_id=m.id) as file_count,
+      (SELECT COUNT(*) FROM print_history WHERE model_id=m.id) as print_count,
+      (SELECT GROUP_CONCAT(DISTINCT file_type) FROM files WHERE model_id=m.id) as file_types,
+      COALESCE(
+        (SELECT filename FROM files WHERE id=m.preview_file_id AND file_type IN ('stl','3mf')),
+        (SELECT filename FROM files WHERE model_id=m.id AND file_type='stl' ORDER BY uploaded_at DESC LIMIT 1)
+      ) as stl_file,
+      COALESCE(
+        (SELECT library_path FROM files WHERE id=m.preview_file_id AND file_type IN ('stl','3mf')),
+        (SELECT library_path FROM files WHERE model_id=m.id AND file_type='stl' ORDER BY uploaded_at DESC LIMIT 1)
+      ) as stl_library_path,
+      (SELECT filename FROM files WHERE model_id=m.id AND file_type='3mf' ORDER BY uploaded_at DESC LIMIT 1) as mf_file,
+      (SELECT library_path FROM files WHERE model_id=m.id AND file_type='3mf' ORDER BY uploaded_at DESC LIMIT 1) as mf_library_path
       FROM models m 
       JOIN project_models pm ON m.id=pm.model_id 
       LEFT JOIN categories c ON m.category_id=c.id 
       WHERE pm.project_id=?`, [project.id]);
+
+    project.models = project.models.map(m => {
+      let stl_url = null;
+      if (m.stl_file) {
+        stl_url = getFileUrl({ filename: m.stl_file, library_path: m.stl_library_path });
+      } else if (m.mf_file) {
+        stl_url = getFileUrl({ filename: m.mf_file, library_path: m.mf_library_path });
+      }
+      return {
+        ...m,
+        thumbnail_url: m.thumbnail ? `/uploads/${m.thumbnail}` : null,
+        stl_url,
+        has_printed: (m.print_count || 0) > 0,
+        file_types: m.file_types ? m.file_types.split(',') : []
+      };
+    });
 
     // Compute collection file stats
     const modelIds = project.models.map(m => m.id);
