@@ -5,7 +5,7 @@
   <script>
     // Load theme immediately to prevent flash
     const t = localStorage.getItem('gv_theme') || 'glass';
-    const a = localStorage.getItem('gv_accent') || 'cyan';
+    const a = localStorage.getItem('gv_accent') || 'blue';
     document.documentElement.setAttribute('data-theme', t);
     document.documentElement.setAttribute('data-accent', a);
   </script>
@@ -57,7 +57,7 @@
   <meta name="description" content="GyroidVault — Self-hosted 3D model management for 3D printing">
   <title>GyroidVault</title>
   <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/css/style.css">
+  <link rel="stylesheet" href="/css/style.css?v=40">
   
   <!-- Core 3D Engine (Local) -->
   <script src="/js/vendor/three.min.js"></script>
@@ -73,91 +73,152 @@
   
   <!-- Loaders (Local) -->
   <script src="/js/vendor/STLLoader.js"></script>
-  <script src="/js/vendor/3MFLoader.js"></script>
+  <script src="/js/vendor/3MFLoader.js?v=36"></script>
   <script src="/js/vendor/OrbitControls.js"></script>
   
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🗄️</text></svg>">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon.png?v=24">
+  <link rel="icon" type="image/x-icon" href="/favicon.ico?v=24">
+  <link rel="apple-touch-icon" href="/icon.png?v=24">
 </head>
 <body>
-  <!-- Navigation -->
-  <nav class="navbar" id="navbar">
-    <div class="nav-brand">
-      <div class="nav-logo">
-        <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
-          <rect x="2" y="2" width="24" height="24" rx="6" fill="url(#logoGrad)" fill-opacity="0.15" stroke="url(#logoGrad)" stroke-width="1.5"/>
-          <path d="M8 10h12M8 14h12M8 18h8" stroke="url(#logoGrad)" stroke-width="1.5" stroke-linecap="round"/>
-          <defs>
-            <linearGradient id="logoGrad" x1="2" y1="2" x2="26" y2="26">
-              <stop stop-color="#00d4ff"/>
-              <stop offset="1" stop-color="#8b5cf6"/>
-            </linearGradient>
-          </defs>
-        </svg>
-      </div>
-      <span class="nav-title">GyroidVault</span>
-    </div>
+  <div class="app-layout" id="app-layout">
+    <!-- Backdrop for mobile sidebar drawer -->
+    <div class="sidebar-backdrop" id="sidebar-backdrop" onclick="App.toggleMobileSidebar(false)"></div>
 
-    <div class="nav-links">
-      <a href="#/" class="nav-link active" data-page="dashboard" id="nav-dashboard">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
-        <span>Dashboard</span>
-      </a>
-      <a href="#/models" class="nav-link" data-page="models" id="nav-models">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
-        <span>Models</span>
-      </a>
-      <a href="#/collections" class="nav-link" data-page="collections" id="nav-collections">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
-        <span>Collections</span>
-      </a>
-      <a href="#/settings" class="nav-link" data-page="settings" id="nav-settings">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
-        <span>Settings</span>
-      </a>
-    </div>
-
-    <div id="nav-printers-widget" style="display:flex; gap:12px; margin-right: 16px; margin-left: auto;">
-      <!-- Real-time printer status widgets will be injected here -->
-    </div>
-
-    <div class="nav-user" id="nav-user-section" style="display: flex; align-items: center; gap: 10px;">
-      <button class="btn btn-ghost" onclick="App.toggleTheme()" id="theme-toggle" style="padding: 8px;" title="Toggle Light/Dark Mode">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
-      </button>
-      <div id="nav-login-wrapper">
-        <button class="btn btn-ghost" onclick="App.showLogin()" style="display:flex;align-items:center;gap:8px">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
-          <span>Login</span>
+    <!-- Left Sidebar -->
+    <aside class="sidebar" id="app-sidebar">
+      <div class="sidebar-header">
+        <a href="#/dashboard" class="sidebar-brand">
+          <div class="nav-logo" style="background:transparent;border:none;padding:0;width:44px;height:44px">
+            <img src="/img/logo-icon.png?v=28" alt="GyroidVault" width="44" height="44" style="object-fit:contain;border-radius:8px;display:block;filter:drop-shadow(0 2px 8px rgba(37,99,235,0.35))">
+          </div>
+          <span class="nav-title" style="font-size:1.1rem;font-weight:800;letter-spacing:-0.02em">GyroidVault</span>
+        </a>
+        <button class="sidebar-collapse-btn" id="sidebar-collapse-btn" onclick="App.toggleSidebarCollapse()" title="Toggle sidebar (Ctrl+B)">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="9" y1="3" x2="9" y2="21"/></svg>
         </button>
       </div>
-    </div>
-  </nav>
 
-  <!-- Main Content -->
-  <main class="main-content" id="app">
-    <!-- Dynamic content rendered here by JS -->
-  </main>
+      <div class="sidebar-content">
+        <div class="sidebar-nav-group">
+          <div class="sidebar-section-title">LIBRARY</div>
+          <a href="#/dashboard" class="sidebar-nav-item active" id="nav-dashboard" title="Dashboard">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+            <span>Dashboard</span>
+          </a>
+          <a href="#/models" class="sidebar-nav-item" id="nav-models" title="Models">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+            <span>All Models</span>
+          </a>
+          <a href="#/collections" class="sidebar-nav-item" id="nav-collections" title="Collections">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+            <span>Collections</span>
+          </a>
+        </div>
 
-  <footer class="app-footer">
-    <div class="footer-content">
-      <div class="footer-left">
-        GyroidVault <span id="app-version">v1.0.0</span>
-      </div>
-      <div class="footer-right">
-        <a href="https://github.com/TeeCodeDev/GyroidVault" target="_blank" class="footer-link">
-          <svg height="16" viewBox="0 0 16 16" width="16" style="vertical-align:middle;margin-right:4px"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"></path></svg>
-          GitHub
-        </a>
-        <a href="https://ko-fi.com/D1D51ZGUNL" target="_blank" class="footer-link">
-          <svg height="16" viewBox="0 0 24 24" width="16" style="vertical-align:middle;margin-right:4px"><path fill="currentColor" d="M23.881 8.948c-.773-4.085-4.859-4.593-4.859-4.593H.724c-.304 0-.55.245-.55.55v14.23c0 .305.246.55.55.55h16.471c.305 0 .55-.245.55-.55 0-2.81 2.503-2.658 2.503-6.19 0-1.63-.231-3.081-.231-3.081s4.536.852 3.864-1.416zm-7.653 4.295c-.328.328-.775.464-1.121.353-.346-.111-.57-.424-.57-.751 0-.327.224-.64.57-.751.346-.111.793.025 1.121.353.328.328.328.86 0 1.188z"></path></svg>
-          Support
-        </a>
-        <div id="update-badge" class="update-badge" style="display:none" onclick="App.showUpdateInfo()">
-          <span class="pulse"></span> New version available!
+        <div class="sidebar-nav-group" id="sidebar-categories-group">
+          <div class="sidebar-section-title">CATEGORIES</div>
+          <div id="sidebar-categories-list" class="sidebar-sub-list"></div>
+        </div>
+
+        <div class="sidebar-nav-group" id="sidebar-collections-group">
+          <div class="sidebar-section-header" style="display:flex;align-items:center;justify-content:space-between;padding:0 10px;margin-bottom:6px">
+            <span class="sidebar-section-title" style="padding:0;margin:0">COLLECTIONS</span>
+            <button class="btn-icon btn-xs" onclick="App.showCreateProject()" title="New Collection" style="color:var(--text-muted);padding:2px">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            </button>
+          </div>
+          <div id="sidebar-collections-list" class="sidebar-sub-list"></div>
         </div>
       </div>
+
+      <div class="sidebar-footer">
+        <!-- 3D Printers Live Monitoring -->
+        <div id="nav-printers-widget" class="sidebar-printers-section"></div>
+
+        <!-- User Profile & Quick Actions -->
+        <div class="sidebar-user-card" id="nav-user-section">
+          <div class="sidebar-user-profile" onclick="App.handleUserProfileClick()" id="sidebar-profile-trigger">
+            <div class="sidebar-avatar" id="sidebar-user-avatar" style="display:flex;align-items:center;justify-content:center;color:var(--text-secondary)">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+            </div>
+            <div class="sidebar-user-meta">
+              <div class="sidebar-username" id="sidebar-username">User</div>
+              <div class="sidebar-user-role" id="sidebar-user-role">Member</div>
+            </div>
+          </div>
+          <div class="sidebar-actions">
+            <button class="btn-icon" id="theme-toggle" onclick="App.toggleTheme()" title="Toggle Theme">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+            </button>
+            <a href="#/settings" class="btn-icon" id="nav-settings" title="Settings">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+            </a>
+            <div id="nav-login-wrapper">
+              <button class="btn-icon" onclick="App.showLogin()" title="Login">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main Content Area -->
+    <div class="app-main-wrapper">
+      <!-- Minimalist Clean Top Header -->
+      <header class="app-topbar">
+        <button class="mobile-menu-btn" onclick="App.toggleMobileSidebar()">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+        </button>
+
+        <div class="topbar-search-wrapper" onclick="document.getElementById('topbar-search-input')?.focus()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input type="text" id="topbar-search-input" placeholder="Search models, tags, collections..." oninput="App.handleTopSearch(this.value)">
+          <kbd class="search-shortcut">Ctrl K</kbd>
+        </div>
+
+        <div class="topbar-actions">
+          <div id="update-badge" class="update-badge" style="display:none" onclick="App.showUpdateInfo()">
+            <span class="pulse"></span> Update
+          </div>
+          <button class="btn btn-primary btn-sm" onclick="App.showCreateModel()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            <span>New Model</span>
+          </button>
+        </div>
+      </header>
+
+      <!-- Main Content -->
+      <main class="main-content" id="app"></main>
+
+      <footer class="app-footer">
+        <div class="footer-content">
+          <div class="footer-left">
+            GyroidVault <span id="app-version">v2.0.0</span>
+          </div>
+          <div class="footer-right">
+            <button onclick="App.openWhatsNew()" class="footer-link" style="background:none;border:none;cursor:pointer;font-family:inherit;font-size:inherit;padding:0">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+              <span>What's New</span>
+            </button>
+            <a href="https://gyroidvault.com" target="_blank" rel="noopener noreferrer" class="footer-link">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+              <span>gyroidvault.com</span>
+            </a>
+            <a href="https://github.com/TeeCodeDev/GyroidVault" target="_blank" rel="noopener noreferrer" class="footer-link">
+              <svg height="14" viewBox="0 0 16 16" width="14" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"></path></svg>
+              <span>GitHub</span>
+            </a>
+            <a href="https://ko-fi.com/D1D51ZGUNL" target="_blank" rel="noopener noreferrer" class="footer-link">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/></svg>
+              <span>Support</span>
+            </a>
+          </div>
+        </div>
+      </footer>
     </div>
-  </footer>
+  </div>
 
   <!-- Modal Container -->
   <div class="modal-overlay" id="modal-overlay">
@@ -174,9 +235,9 @@
   <div class="toast-container" id="toast-container"></div>
 
   <!-- Scripts -->
-  <script src="/js/api.js?v=4"></script>
-  <script src="/js/components.js?v=6"></script>
-  <script src="/js/app.js?v=5"></script>
-  <script src="/js/viewer.js?v=9"></script>
+  <script src="/js/api.js?v=41"></script>
+  <script src="/js/components.js?v=41"></script>
+  <script src="/js/app.js?v=41"></script>
+  <script src="/js/viewer.js?v=41"></script>
 </body>
 </html>

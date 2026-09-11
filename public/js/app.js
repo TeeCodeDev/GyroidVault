@@ -40,6 +40,18 @@ const App = {
     try {
       this.publicConfig = await API.getPublicConfig();
     } catch(e) { this.publicConfig = {}; }
+
+    // Auto-resume scan monitoring if background scan is active
+    if (this.currentUser && this.currentUser.role === 'admin') {
+      fetch('/api/library/scan/status', { credentials: 'same-origin' })
+        .then(r => r.ok ? r.json() : null)
+        .then(status => {
+          if (status && status.isScanning) {
+            this.monitorScanProgress();
+          }
+        })
+        .catch(() => {});
+    }
     
     if (this.publicConfig.require_login_to_view && !this.currentUser) {
       document.getElementById('app').innerHTML = '<div style="height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;background:var(--bg-color)"><h1 style="margin-bottom:20px">GyroidVault</h1><button class="btn btn-primary btn-lg" onclick="App.showLogin()">Login to Access GyroidVault</button></div>';
@@ -48,13 +60,191 @@ const App = {
     }
     
     window.addEventListener('hashchange', () => this.route());
+    
+    // Setup keyboard shortcuts (Ctrl+K for search, Ctrl+B for sidebar toggle)
+    window.addEventListener('keydown', (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        const input = document.getElementById('topbar-search-input') || document.getElementById('search-input');
+        if (input) { input.focus(); input.select(); }
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'b') {
+        e.preventDefault();
+        this.toggleSidebarCollapse();
+      }
+    });
+
+    // Restore sidebar collapse state
+    const savedCollapsed = localStorage.getItem('gv_sidebar_collapsed') === 'true';
+    if (savedCollapsed) {
+      document.getElementById('app-sidebar')?.classList.add('collapsed');
+      document.body.classList.add('sidebar-collapsed');
+    }
+
     await this.loadCache();
     await this.loadViewMode();
+    this.renderSidebarCategories();
+    this.renderSidebarCollections();
     this.checkUpdates();
     this.updateUserNav();
     this.updateThemeIcon();
     this.initPrinters();
     this.route();
+    this.checkWhatsNew();
+  },
+
+  checkWhatsNew() {
+    const CURRENT_VERSION = '2.0.0';
+    const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    const seenVersion = localStorage.getItem('gv_last_seen_version');
+    
+    // During local testing on localhost, always show on page load so it can be tested repeatedly
+    // In production (Unraid/Docker/live), only show once until dismissed
+    if (isLocalhost || seenVersion !== CURRENT_VERSION) {
+      setTimeout(() => {
+        this.openWhatsNew();
+      }, 500);
+    }
+  },
+
+  async openWhatsNew() {
+    try {
+      const res = await API.getReleaseNotes().catch(() => ({ notes: [] }));
+      this.cachedReleaseNotes = res.notes || [];
+      this.openModal('Welcome to GyroidVault 2.0', UI.whatsNewModal('2.0.0', this.cachedReleaseNotes), 'modal-lg');
+    } catch (e) {
+      this.openModal('Welcome to GyroidVault 2.0', UI.whatsNewModal('2.0.0', []), 'modal-lg');
+    }
+  },
+
+  switchWhatsNewTab(tab) {
+    const highlightsContent = document.getElementById('whatsnew-content-highlights');
+    const changelogContent = document.getElementById('whatsnew-content-changelog');
+    const highlightsBtn = document.getElementById('whatsnew-tab-btn-highlights');
+    const changelogBtn = document.getElementById('whatsnew-tab-btn-changelog');
+
+    if (tab === 'highlights') {
+      if (highlightsContent) highlightsContent.style.display = 'block';
+      if (changelogContent) changelogContent.style.display = 'none';
+      if (highlightsBtn) highlightsBtn.classList.add('active');
+      if (changelogBtn) changelogBtn.classList.remove('active');
+    } else {
+      if (highlightsContent) highlightsContent.style.display = 'none';
+      if (changelogContent) changelogContent.style.display = 'block';
+      if (highlightsBtn) highlightsBtn.classList.remove('active');
+      if (changelogBtn) changelogBtn.classList.add('active');
+    }
+  },
+
+  selectWhatsNewVersion(ver) {
+    const note = (this.cachedReleaseNotes || []).find(n => n.version === ver);
+    const body = document.getElementById('whatsnew-changelog-body');
+    if (note && body) {
+      body.innerHTML = UI.renderMarkdown(note.content);
+    }
+    document.querySelectorAll('.changelog-version-pill').forEach(btn => {
+      btn.classList.remove('active');
+    });
+    const activeBtn = document.getElementById(`whatsnew-ver-${ver.replace(/\./g, '-')}`);
+    if (activeBtn) {
+      activeBtn.classList.add('active');
+    }
+  },
+
+  dismissWhatsNew() {
+    const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    if (!isLocalhost) {
+      localStorage.setItem('gv_last_seen_version', '2.0.0');
+    }
+    this.closeModal();
+  },
+
+  toggleSidebarCollapse() {
+    const sidebar = document.getElementById('app-sidebar');
+    if (!sidebar) return;
+    const isCollapsed = sidebar.classList.toggle('collapsed');
+    document.body.classList.toggle('sidebar-collapsed', isCollapsed);
+    localStorage.setItem('gv_sidebar_collapsed', isCollapsed);
+  },
+
+  toggleMobileSidebar(force = null) {
+    const sidebar = document.getElementById('app-sidebar');
+    const backdrop = document.getElementById('sidebar-backdrop');
+    if (!sidebar) return;
+    const isOpen = force !== null ? force : !sidebar.classList.contains('mobile-open');
+    sidebar.classList.toggle('mobile-open', isOpen);
+    if (backdrop) backdrop.classList.toggle('active', isOpen);
+  },
+
+  renderSidebarCategories() {
+    const list = document.getElementById('sidebar-categories-list');
+    const group = document.getElementById('sidebar-categories-group');
+    if (!list) return;
+    if (!this.cache.categories || this.cache.categories.length === 0) {
+      if (group) group.style.display = 'none';
+      return;
+    }
+    if (group) group.style.display = 'flex';
+    list.innerHTML = this.cache.categories.slice(0, 10).map(c => `
+      <a href="#/models?category=${c.id}" class="sidebar-sub-item" title="${c.name}">
+        <span class="dot" style="background:${c.color || 'var(--accent-cyan)'}"></span>
+        <span>${c.name}</span>
+      </a>
+    `).join('');
+  },
+
+  async renderSidebarCollections() {
+    const list = document.getElementById('sidebar-collections-list');
+    const group = document.getElementById('sidebar-collections-group');
+    if (!list) return;
+    if (!this.currentUser) {
+      if (group) group.style.display = 'none';
+      return;
+    }
+    try {
+      const projects = await API.getProjects();
+      if (!projects || projects.length === 0) {
+        list.innerHTML = `<span style="font-size:0.75rem;color:var(--text-muted);padding:4px 10px;font-style:italic">No collections yet</span>`;
+        if (group) group.style.display = 'flex';
+        return;
+      }
+      if (group) group.style.display = 'flex';
+      list.innerHTML = projects.slice(0, 8).map(p => `
+        <a href="#/projects/${p.id}" class="sidebar-sub-item" title="${p.name} (${p.model_count || 0} models)">
+          <span style="display:inline-flex;align-items:center;color:${p.visibility === 'private' ? 'var(--accent-purple)' : '#f59e0b'};opacity:0.95">
+            ${p.visibility === 'private'
+              ? '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>'
+              : '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>'
+            }
+          </span>
+          <span style="flex:1;overflow:hidden;text-overflow:ellipsis">${p.name}</span>
+          <span style="font-size:0.65rem;color:var(--text-muted)">${p.model_count || 0}</span>
+        </a>
+      `).join('');
+    } catch(e) {
+      if (group) group.style.display = 'none';
+    }
+  },
+
+  handleTopSearch(query) {
+    clearTimeout(this.topSearchTimeout);
+    this.topSearchTimeout = setTimeout(() => {
+      const q = (query || '').trim();
+      if (location.hash.startsWith('#/models')) {
+        const searchInput = document.getElementById('search-input');
+        if (searchInput) {
+          searchInput.value = q;
+          this.handleFilter();
+        } else {
+          this.navigate(q ? `/models?search=${encodeURIComponent(q)}` : '/models');
+        }
+      } else if (location.hash.startsWith('#/collections') || location.hash.startsWith('#/projects')) {
+        this.collectionsSearchQuery = q;
+        this.updateCollectionsGrid();
+      } else if (q) {
+        this.navigate(`/models?search=${encodeURIComponent(q)}`);
+      }
+    }, 200);
   },
 
   async initPrinters() {
@@ -72,12 +262,14 @@ const App = {
       this.printerStatus = this.printerStatus || {};
       
       container.innerHTML = printers.map(p => `
-        <div id="printer-widget-${p.id}" style="display:flex; flex-direction:column; justify-content:center; align-items:flex-end; font-size:0.7rem; color:var(--text-secondary); background:rgba(255,255,255,0.05); padding:2px 8px; border-radius:4px; border:1px solid transparent;">
-          <div style="font-weight:600; color:var(--text-primary); display:flex; align-items:center; gap:4px">
-            <span class="status-dot" style="width:6px;height:6px;border-radius:50%;background:var(--text-muted)"></span>
-            ${p.name}
+        <div id="printer-widget-${p.id}" class="sidebar-printer-card">
+          <div class="sidebar-printer-header">
+            <span style="display:flex;align-items:center;gap:6px;overflow:hidden;text-overflow:ellipsis">
+              <span class="status-dot" style="width:6px;height:6px;border-radius:50%;background:var(--text-muted);display:inline-block;flex-shrink:0"></span>
+              <span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p.name}</span>
+            </span>
           </div>
-          <div class="printer-temps" style="display:none; gap:6px; margin-top:2px">
+          <div class="sidebar-printer-temps" style="display:none">
             <span class="nozzle-temp">N: --°C</span>
             <span class="bed-temp">B: --°C</span>
           </div>
@@ -98,7 +290,8 @@ const App = {
             if(widget) {
               const dot = widget.querySelector('.status-dot');
               if (dot) dot.style.background = 'var(--accent-green)';
-              widget.querySelector('.printer-temps').style.display = 'flex';
+              const temps = widget.querySelector('.sidebar-printer-temps');
+              if (temps) temps.style.display = 'flex';
             }
             // Subscribe to temperature updates
             ws.send(JSON.stringify({
@@ -235,7 +428,9 @@ const App = {
     const [path, query] = hash.split('?');
     const params = new URLSearchParams(query || '');
 
-    const links = document.querySelectorAll('.nav-link');
+    this.toggleMobileSidebar(false);
+
+    const links = document.querySelectorAll('.sidebar-nav-item, .sidebar-sub-item');
     links.forEach(l => l.classList.remove('active'));
     
     // Clear selection when navigating
@@ -270,7 +465,7 @@ const App = {
         return;
       }
       document.getElementById('nav-settings')?.classList.add('active');
-      this.renderSettings();
+      this.renderSettings(params.get('tab') || 'categories');
     } else if (path === '/register') {
       this.showRegister(params.get('token') || params.get('invite'));
     } else if (path === '/reset-password') {
@@ -306,30 +501,75 @@ const App = {
   },
 
   // ── Modal ──
-  openModal(title, content) {
+  openModal(title, content, modalClass = '') {
+    const modal = document.getElementById('modal');
+    if (modal) {
+      modal.className = 'modal' + (modalClass ? ` ${modalClass}` : '');
+    }
     document.getElementById('modal-title').textContent = title;
     document.getElementById('modal-body').innerHTML = content;
     document.getElementById('modal-overlay').classList.add('active');
+
+    // Snapshot initial form state for dirty confirmation check on dismiss
+    setTimeout(() => {
+      const form = document.querySelector('#modal-body form');
+      if (form) {
+        this.initialModalFormSnapshot = new URLSearchParams(new FormData(form)).toString();
+      } else {
+        this.initialModalFormSnapshot = null;
+      }
+    }, 50);
   },
+
+  isModalFormDirty() {
+    const form = document.querySelector('#modal-body form');
+    if (!form) return false;
+    if (this.pendingFiles && this.pendingFiles.length > 0) return true;
+    if (this.initialModalFormSnapshot !== null) {
+      const currentSnapshot = new URLSearchParams(new FormData(form)).toString();
+      return currentSnapshot !== this.initialModalFormSnapshot;
+    }
+    return false;
+  },
+
+  dismissModal() {
+    if (this.isModalFormDirty()) {
+      if (!confirm('You have unsaved changes. Are you sure you want to close and discard them?')) {
+        return;
+      }
+    }
+    this.closeModal();
+  },
+
   closeModal() {
+    const title = document.getElementById('modal-title')?.textContent || '';
+    const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    if (!isLocalhost && (title.includes('GyroidVault 2.0') || title.includes('GyroidVault v2'))) {
+      localStorage.setItem('gv_last_seen_version', '2.0.0');
+    }
     document.getElementById('modal-overlay').classList.remove('active');
+    const modal = document.getElementById('modal');
+    if (modal) {
+      modal.className = 'modal';
+    }
+    this.initialModalFormSnapshot = null;
   },
 
   // ─── Dashboard ────────────────────────────────────────────────────────
   async renderDashboard() {
-    this.el.innerHTML = `<div class="page-header"><div><h1 class="page-title">Dashboard</h1><p class="page-subtitle">Your 3D printing overview</p></div>${(this.currentUser && this.currentUser.role !== 'viewer') ? '<button class="btn btn-primary" onclick="App.showCreateModel()">+ New Model</button>' : ''}</div><div class="stats-grid"><div class="stat-card"><div class="skeleton" style="width:60%;height:32px;margin-top:40px"></div></div><div class="stat-card"><div class="skeleton" style="width:60%;height:32px;margin-top:40px"></div></div><div class="stat-card"><div class="skeleton" style="width:60%;height:32px;margin-top:40px"></div></div><div class="stat-card"><div class="skeleton" style="width:60%;height:32px;margin-top:40px"></div></div></div>`;
+    this.el.innerHTML = `<div class="page-header"><div><h1 class="page-title">Dashboard</h1><p class="page-subtitle">Your 3D printing overview</p></div></div><div class="stats-grid"><div class="stat-card"><div class="skeleton" style="width:60%;height:32px;margin-top:40px"></div></div><div class="stat-card"><div class="skeleton" style="width:60%;height:32px;margin-top:40px"></div></div><div class="stat-card"><div class="skeleton" style="width:60%;height:32px;margin-top:40px"></div></div><div class="stat-card"><div class="skeleton" style="width:60%;height:32px;margin-top:40px"></div></div></div>`;
     try {
       const stats = await API.getStats();
       this.el.innerHTML = `
-        <div class="page-header"><div><h1 class="page-title">Dashboard</h1><p class="page-subtitle">Your 3D printing overview</p></div>${(this.currentUser && this.currentUser.role !== 'viewer') ? '<button class="btn btn-primary" onclick="App.showCreateModel()">+ New Model</button>' : ''}</div>
+        <div class="page-header"><div><h1 class="page-title">Dashboard</h1><p class="page-subtitle">Your 3D printing overview</p></div></div>
         ${UI.statsCards(stats)}
         <div class="dashboard-panels">
-          <div class="glass-panel"><div class="panel-header"><div class="panel-title">🕐 Recent Models</div></div><div class="panel-body">${UI.recentModels(stats.recentModels)}</div></div>
-          <div class="glass-panel"><div class="panel-header"><div class="panel-title">🖨 Recent Prints</div></div><div class="panel-body">${UI.recentPrints(stats.recentPrints)}</div></div>
-          <div class="glass-panel"><div class="panel-header"><div class="panel-title">🧵 Material Usage</div></div><div class="panel-body">${UI.materialChart(stats.materialUsage)}</div></div>
+          <div class="glass-panel"><div class="panel-header"><div class="panel-title"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:6px"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>Recent Models</div></div><div class="panel-body">${UI.recentModels(stats.recentModels)}</div></div>
+          <div class="glass-panel"><div class="panel-header"><div class="panel-title"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:6px"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>Recent Prints</div></div><div class="panel-body">${UI.recentPrints(stats.recentPrints)}</div></div>
+          <div class="glass-panel"><div class="panel-header"><div class="panel-title"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:6px"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/></svg>Material Usage</div></div><div class="panel-body">${UI.materialChart(stats.materialUsage)}</div></div>
         </div>`;
     } catch (e) {
-      this.el.innerHTML = '<div class="empty-state"><div class="empty-state-icon">⚠️</div><div class="empty-state-text">Failed to load dashboard</div></div>';
+      this.el.innerHTML = '<div class="empty-state"><div class="empty-state-icon"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="color:var(--accent-yellow)"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></div><div class="empty-state-text">Failed to load dashboard</div></div>';
     }
   },
 
@@ -340,11 +580,12 @@ const App = {
       return this.renderBrowse(params.path || '');
     }
 
-    const toolbar = UI.toolbar(this.cache.categories, this.cache.tags, this.cache.users);
+    const activeFormat = params.format || this.currentFormatFilter || 'all';
+    this.currentFormatFilter = activeFormat;
+    const toolbar = UI.toolbar(this.cache.categories, this.cache.tags, this.cache.users, activeFormat);
     this.el.innerHTML = `
       <div class="page-header">
         <div><h1 class="page-title">Models</h1><p class="page-subtitle">Manage your 3D model library</p></div>
-        ${(this.currentUser && this.currentUser.role !== 'viewer') ? '<button class="btn btn-primary" onclick="App.showCreateModel()">+ New Model</button>' : ''}
       </div>
       ${toolbar}
       <div id="models-grid"><div class="model-grid">${'<div class="model-card"><div class="model-card-thumb"><div class="skeleton" style="width:100%;height:100%"></div></div><div class="model-card-body"><div class="skeleton" style="width:70%;height:18px;margin-bottom:8px"></div><div class="skeleton" style="width:40%;height:14px"></div></div></div>'.repeat(6)}</div></div>`;
@@ -377,7 +618,6 @@ const App = {
     this.el.innerHTML = `
       <div class="page-header">
         <div><h1 class="page-title">Browse Library</h1><p class="page-subtitle">Explore your files on disk</p></div>
-        ${(this.currentUser && this.currentUser.role !== 'viewer') ? '<button class="btn btn-primary" onclick="App.showCreateModel()">+ New Model</button>' : ''}
       </div>
       ${toolbar}
       <div id="browse-header" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; min-height:36px;"></div>
@@ -431,7 +671,7 @@ const App = {
 
       if (!data.folders.length && !data.files.length) {
         container.innerHTML = `
-          <div class="empty-state"><div class="empty-state-icon">📂</div><div class="empty-state-text">This folder is empty</div><div class="empty-state-sub">No 3D files or subfolders found here</div></div>`;
+          <div class="empty-state"><div class="empty-state-icon"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></div><div class="empty-state-text">This folder is empty</div><div class="empty-state-sub">No 3D files or subfolders found here</div></div>`;
         return;
       }
 
@@ -450,7 +690,7 @@ const App = {
     } catch(e) {
       console.error(e);
       const container = document.getElementById('browse-content');
-      if (container) container.innerHTML = '<div class="empty-state"><div class="empty-state-icon">⚠️</div><div class="empty-state-text">Failed to load folder</div></div>';
+      if (container) container.innerHTML = '<div class="empty-state"><div class="empty-state-icon"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="color:var(--accent-yellow)"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></div><div class="empty-state-text">Failed to load folder</div></div>';
     }
   },
 
@@ -482,7 +722,7 @@ const App = {
         const filesHtml = data.files.filter(f => f.type !== 'image').map(f => UI.browseFileCard(f)).join('');
         
         if (!data.folders.length && !data.files.length) {
-          container.innerHTML = `<div class="empty-state"><div class="empty-state-icon">🔍</div><div class="empty-state-text">No matches found</div></div>`;
+          container.innerHTML = `<div class="empty-state"><div class="empty-state-icon"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></div><div class="empty-state-text">No matches found</div></div>`;
           return;
         }
         
@@ -490,7 +730,7 @@ const App = {
         this.renderBulkBrowseBar();
         if (typeof Viewer !== 'undefined' && Viewer.generateThumbnails) setTimeout(() => Viewer.generateThumbnails(), 50);
       } catch(err) {
-        container.innerHTML = '<div class="empty-state"><div class="empty-state-icon">⚠️</div><div class="empty-state-text">Search failed</div></div>';
+        container.innerHTML = '<div class="empty-state"><div class="empty-state-icon"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="color:var(--accent-yellow)"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></div><div class="empty-state-text">Search failed</div></div>';
       }
     }, 400);
   },
@@ -546,19 +786,43 @@ const App = {
     }
   },
 
+  setFormatFilter(format, btn) {
+    this.currentFormatFilter = format || 'all';
+    document.querySelectorAll('.format-pill').forEach(b => b.classList.remove('active'));
+    if (btn) btn.classList.add('active');
+    else {
+      const el = document.getElementById(`pill-format-${format}`);
+      if (el) el.classList.add('active');
+    }
+    this.handleFilter();
+  },
+
   async fetchAndRenderModels(params = {}) {
     try {
-      const response = await API.getModels(params);
+      if (params.format) this.currentFormatFilter = params.format;
+      const queryParams = { ...params };
+      if (this.currentFormatFilter && this.currentFormatFilter !== 'all') {
+        queryParams.format = this.currentFormatFilter;
+      }
+      
+      const response = await API.getModels(queryParams);
       
       // Handle the new paginated response format or fallback to array
       const models = Array.isArray(response) ? response : (response.models || []);
       const totalPages = response.totalPages || 1;
       const currentPage = response.currentPage || 1;
 
+      // Update dynamic library summary counter in toolbar
+      const statsCounter = document.getElementById('library-summary-stats');
+      if (statsCounter) {
+        const sizeStr = response.totalStorageBytes ? ` • ${UI.formatSize(response.totalStorageBytes)}` : '';
+        statsCounter.textContent = `${response.totalItems || 0} models${sizeStr}`;
+      }
+
       const grid = document.getElementById('models-grid');
       if (!grid) return;
       if (!models.length) {
-        grid.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📦</div><div class="empty-state-text">No models found</div><div class="empty-state-sub">Create your first model to get started</div></div>';
+        grid.innerHTML = '<div class="empty-state"><div class="empty-state-icon"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg></div><div class="empty-state-text">No models found</div><div class="empty-state-sub">Try changing your filters or create a new model</div></div>';
         return;
       }
       
@@ -574,7 +838,7 @@ const App = {
       }
     } catch (e) {
       console.error(e);
-      document.getElementById('models-grid').innerHTML = '<div class="empty-state"><div class="empty-state-icon">⚠️</div><div class="empty-state-text">Failed to load models</div></div>';
+      document.getElementById('models-grid').innerHTML = '<div class="empty-state"><div class="empty-state-icon"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="color:var(--accent-yellow)"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></div><div class="empty-state-text">Failed to load models</div></div>';
     }
   },
 
@@ -680,12 +944,13 @@ const App = {
       this.route();
     } catch(e) { this.toast(e.message, 'error'); }
   },
-  openBulkTag() { this.openModal('Bulk Tag', UI.bulkTagForm(this.cache.tags)); },
+  openBulkTag() { this.openModal('Bulk Tag Models', UI.bulkTagForm(this.cache.tags)); },
   async handleBulkTagSubmit(e) {
     e.preventDefault();
     const fd = new FormData(e.target);
     const selectedTags = fd.getAll('tags');
     const inlineTagInput = document.getElementById('new-bulk-tag-input');
+    const tagMode = fd.get('tag_mode') || 'add';
     
     let tagsToApply = [...selectedTags];
     if (inlineTagInput && inlineTagInput.value.trim()) {
@@ -699,10 +964,15 @@ const App = {
     }
     
     try {
-      await API.bulkUpdateModels(this.selectedModelIds, { tags: tagsToApply });
-      this.toast(`Tagged ${this.selectedModelIds.length} models`);
+      if (tagMode === 'replace') {
+        await API.bulkUpdateModels(this.selectedModelIds, { tags: tagsToApply });
+      } else {
+        await API.bulkUpdateModels(this.selectedModelIds, { add_tags: tagsToApply });
+      }
+      this.toast(`Updated tags on ${this.selectedModelIds.length} models`);
       this.clearSelection();
       this.closeModal();
+      this.cache.tags = await API.getTags().catch(() => this.cache.tags);
       this.route();
     } catch(e) { this.toast(e.message, 'error'); }
   },
@@ -711,11 +981,13 @@ const App = {
   async handleBulkMove(e) {
     e.preventDefault();
     const fd = new FormData(e.target);
+    const catId = fd.get('category_id') || null;
     try {
-      await API.bulkUpdateModels(this.selectedModelIds, { category_id: fd.get('category_id') });
-      this.toast(`Moved ${this.selectedModelIds.length} models`);
+      await API.bulkUpdateModels(this.selectedModelIds, { category_id: catId });
+      this.toast(`Updated category on ${this.selectedModelIds.length} models`);
       this.clearSelection();
       this.closeModal();
+      this.cache.categories = await API.getCategories().catch(() => this.cache.categories);
       this.route();
     } catch(e) { this.toast(e.message, 'error'); }
   },
@@ -869,6 +1141,7 @@ const App = {
     if (search) params.set('search', search);
     if (category) params.set('category', category);
     if (tag) params.set('tag', tag);
+    if (this.currentFormatFilter && this.currentFormatFilter !== 'all') params.set('format', this.currentFormatFilter);
     if (user) params.set('user', user);
     if (printed) params.set('printed', printed);
     if (sort && sort !== 'updated') params.set('sort', sort);
@@ -895,6 +1168,7 @@ const App = {
     if (search) params.set('search', search);
     if (category) params.set('category', category);
     if (tag) params.set('tag', tag);
+    if (this.currentFormatFilter && this.currentFormatFilter !== 'all') params.set('format', this.currentFormatFilter);
     if (user) params.set('user', user);
     if (printed) params.set('printed', printed);
     if (sort && sort !== 'updated') params.set('sort', sort);
@@ -1149,27 +1423,44 @@ const App = {
   },
   
   updateUserNav() {
+    const avatar = document.getElementById('sidebar-user-avatar');
+    const username = document.getElementById('sidebar-username');
+    const role = document.getElementById('sidebar-user-role');
     const wrapper = document.getElementById('nav-login-wrapper');
-    if (!wrapper) return;
+    const settingsLink = document.getElementById('nav-settings');
+    
     if (this.currentUser) {
-      wrapper.innerHTML = `
-        <div class="dropdown">
-          <button class="btn btn-ghost" style="display:flex;align-items:center;gap:8px;padding:8px 12px">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-            <span>${this.currentUser.username}</span>
-          </button>
-          <div class="dropdown-content" style="right: 0">
-            <div class="dropdown-header">${this.currentUser.role.toUpperCase()} ACCOUNT</div>
-            <a href="#/profile">Edit Profile</a>
-            <a href="#" onclick="event.preventDefault();App.handleLogout()">Log Out</a>
-          </div>
-        </div>`;
+      if (avatar) avatar.textContent = (this.currentUser.username || 'U').charAt(0).toUpperCase();
+      if (username) username.textContent = this.currentUser.username;
+      if (role) role.textContent = this.currentUser.role ? `${this.currentUser.role.charAt(0).toUpperCase()}${this.currentUser.role.slice(1)}` : 'Member';
+      if (settingsLink) {
+        settingsLink.style.display = (this.currentUser.role === 'admin') ? 'flex' : 'none';
+      }
+      if (wrapper) {
+        wrapper.innerHTML = `
+          <button class="btn-icon" onclick="App.handleLogout()" title="Log Out">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+          </button>`;
+      }
     } else {
-      wrapper.innerHTML = `
-        <button class="btn btn-ghost" onclick="App.showLogin()" style="display:flex;align-items:center;gap:8px">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
-          <span>Login</span>
-        </button>`;
+      if (avatar) avatar.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>';
+      if (username) username.textContent = 'Guest User';
+      if (role) role.textContent = 'Click to login';
+      if (settingsLink) settingsLink.style.display = 'none';
+      if (wrapper) {
+        wrapper.innerHTML = `
+          <button class="btn-icon" onclick="App.showLogin()" title="Login">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+          </button>`;
+      }
+    }
+  },
+
+  handleUserProfileClick() {
+    if (this.currentUser) {
+      this.navigate('/profile');
+    } else {
+      this.showLogin();
     }
   },
 
@@ -1249,12 +1540,14 @@ const App = {
                 </div>
                 <div class="form-group" style="margin-bottom:0">
                   <label class="form-label">Accent Color</label>
-                  <div style="display:flex; gap:10px; margin-top:10px; flex-wrap:wrap;">
-                    <button type="button" class="btn" style="background:#00d4ff; width:36px; height:36px; padding:0; border-radius:50%; box-shadow: ${localStorage.getItem('gv_accent') === 'cyan' || !localStorage.getItem('gv_accent') ? '0 0 0 2px var(--bg-card), 0 0 0 4px #00d4ff' : 'none'}" onclick="App.setAccent('cyan'); App.renderProfile();" title="Cyan"></button>
-                    <button type="button" class="btn" style="background:#ff4444; width:36px; height:36px; padding:0; border-radius:50%; box-shadow: ${localStorage.getItem('gv_accent') === 'red' ? '0 0 0 2px var(--bg-card), 0 0 0 4px #ff4444' : 'none'}" onclick="App.setAccent('red'); App.renderProfile();" title="Red"></button>
-                    <button type="button" class="btn" style="background:#a855f7; width:36px; height:36px; padding:0; border-radius:50%; box-shadow: ${localStorage.getItem('gv_accent') === 'purple' ? '0 0 0 2px var(--bg-card), 0 0 0 4px #a855f7' : 'none'}" onclick="App.setAccent('purple'); App.renderProfile();" title="Purple"></button>
-                    <button type="button" class="btn" style="background:#f97316; width:36px; height:36px; padding:0; border-radius:50%; box-shadow: ${localStorage.getItem('gv_accent') === 'orange' ? '0 0 0 2px var(--bg-card), 0 0 0 4px #f97316' : 'none'}" onclick="App.setAccent('orange'); App.renderProfile();" title="Orange"></button>
-                    <button type="button" class="btn" style="background:#3b82f6; width:36px; height:36px; padding:0; border-radius:50%; box-shadow: ${localStorage.getItem('gv_accent') === 'blue' ? '0 0 0 2px var(--bg-card), 0 0 0 4px #3b82f6' : 'none'}" onclick="App.setAccent('blue'); App.renderProfile();" title="Blue"></button>
+                  <p style="font-size:0.8rem; color:var(--text-muted); margin-bottom:12px">Choose your preferred studio accent color</p>
+                  <div style="display:flex; gap:12px; margin-top:6px; flex-wrap:wrap;">
+                    <button type="button" class="accent-color-btn" style="background:#3b82f6; outline: ${(localStorage.getItem('gv_accent') === 'blue' || localStorage.getItem('gv_accent') === 'cyan' || !localStorage.getItem('gv_accent')) ? '2px solid #ffffff' : 'none'}" onclick="App.setAccent('blue'); App.renderProfile();" title="Studio Blue (Default)"></button>
+                    <button type="button" class="accent-color-btn" style="background:#10b981; outline: ${localStorage.getItem('gv_accent') === 'emerald' || localStorage.getItem('gv_accent') === 'green' ? '2px solid #ffffff' : 'none'}" onclick="App.setAccent('emerald'); App.renderProfile();" title="Emerald Green"></button>
+                    <button type="button" class="accent-color-btn" style="background:#f59e0b; outline: ${localStorage.getItem('gv_accent') === 'amber' || localStorage.getItem('gv_accent') === 'orange' ? '2px solid #ffffff' : 'none'}" onclick="App.setAccent('amber'); App.renderProfile();" title="Amber Gold"></button>
+                    <button type="button" class="accent-color-btn" style="background:#f43f5e; outline: ${localStorage.getItem('gv_accent') === 'rose' || localStorage.getItem('gv_accent') === 'red' ? '2px solid #ffffff' : 'none'}" onclick="App.setAccent('rose'); App.renderProfile();" title="Coral Rose"></button>
+                    <button type="button" class="accent-color-btn" style="background:#8b5cf6; outline: ${localStorage.getItem('gv_accent') === 'violet' || localStorage.getItem('gv_accent') === 'purple' ? '2px solid #ffffff' : 'none'}" onclick="App.setAccent('violet'); App.renderProfile();" title="Studio Violet"></button>
+                    <button type="button" class="accent-color-btn" style="background:#14b8a6; outline: ${localStorage.getItem('gv_accent') === 'teal' ? '2px solid #ffffff' : 'none'}" onclick="App.setAccent('teal'); App.renderProfile();" title="Teal Sage"></button>
                   </div>
                 </div>
               </div>
@@ -1290,27 +1583,261 @@ const App = {
   },
 
   // ─── Collections ────────────────────────────────────────────────────────
+  cachedProjects: [],
+  selectedCollectionIds: [],
+  collectionsSortBy: 'recent',
+  collectionsSearchQuery: '',
+  selectedCollectionModelIds: [],
+  currentProject: null,
+  collectionModelSearchQuery: '',
+
   async renderProjects() {
     if (!this.currentUser) {
-      this.el.innerHTML = '<div class="empty-state"><div class="empty-state-icon">🔐</div><div class="empty-state-text">Login to view collections</div><div class="empty-state-sub">Collections are private and require an account</div><button class="btn btn-primary btn-sm" onclick="App.showLogin()" style="margin-top:16px">Login</button></div>';
+      this.el.innerHTML = '<div class="empty-state"><div class="empty-state-icon"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></div><div class="empty-state-text">Login to view collections</div><div class="empty-state-sub">Collections are private and require an account</div><button class="btn btn-primary btn-sm" onclick="App.showLogin()" style="margin-top:16px">Login</button></div>';
       return;
     }
     this.el.innerHTML = '<div class="skeleton-grid"></div>';
     try {
-      const projects = await API.getProjects();
-      this.el.innerHTML = UI.projectsPage(projects);
+      this.cachedProjects = await API.getProjects();
+      this.el.innerHTML = UI.projectsPage(this.cachedProjects, this.collectionsSortBy, this.collectionsSearchQuery);
+      this.renderSidebarCollections();
     } catch (e) { this.toast('Failed to load collections', 'error'); }
   },
 
+  handleCollectionsSearch(query) {
+    this.collectionsSearchQuery = query || '';
+    this.updateCollectionsGrid();
+  },
+
+  handleCollectionsSort(sort) {
+    this.collectionsSortBy = sort || 'recent';
+    this.updateCollectionsGrid();
+  },
+
+  updateCollectionsGrid() {
+    const grid = document.getElementById('collections-grid');
+    if (!grid) {
+      this.el.innerHTML = UI.projectsPage(this.cachedProjects, this.collectionsSortBy, this.collectionsSearchQuery);
+      return;
+    }
+    let filtered = (this.cachedProjects || []).slice();
+    if (this.collectionsSearchQuery?.trim()) {
+      const q = this.collectionsSearchQuery.toLowerCase().trim();
+      filtered = filtered.filter(p => (p.name || '').toLowerCase().includes(q) || (p.description || '').toLowerCase().includes(q));
+    }
+    if (this.collectionsSortBy === 'name') {
+      filtered.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+    } else if (this.collectionsSortBy === 'models') {
+      filtered.sort((a, b) => (b.model_count || 0) - (a.model_count || 0));
+    } else {
+      filtered.sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
+    }
+    grid.innerHTML = filtered.map(p => UI.projectCard(p)).join('') || `
+      <div class="empty-state" style="grid-column: 1/-1">
+        <div class="empty-state-icon"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></div>
+        <div class="empty-state-text">No collections found</div>
+        <div class="empty-state-sub">Try a different search query</div>
+      </div>
+    `;
+  },
+
+  handleCollectionCardClick(e, id) {
+    if (e.target.closest('.model-card-checkbox') || e.target.closest('.model-card-hover-actions') || e.target.closest('button') || e.target.closest('a')) {
+      return;
+    }
+    this.navigate('/projects/' + id);
+  },
+
+  toggleCollectionSelection(e, id) {
+    e?.stopPropagation();
+    const numId = Number(id);
+    if (!this.selectedCollectionIds) this.selectedCollectionIds = [];
+    const idx = this.selectedCollectionIds.indexOf(numId);
+    if (idx >= 0) {
+      this.selectedCollectionIds.splice(idx, 1);
+    } else {
+      this.selectedCollectionIds.push(numId);
+    }
+    this.el.innerHTML = UI.projectsPage(this.cachedProjects, this.collectionsSortBy, this.collectionsSearchQuery);
+  },
+
+  clearCollectionSelection() {
+    this.selectedCollectionIds = [];
+    this.el.innerHTML = UI.projectsPage(this.cachedProjects, this.collectionsSortBy, this.collectionsSearchQuery);
+  },
+
+  async bulkDeleteCollections() {
+    if (!this.selectedCollectionIds?.length) return;
+    const count = this.selectedCollectionIds.length;
+    if (!confirm(`Are you sure you want to delete ${count} collection${count > 1 ? 's' : ''}? Models inside them will remain safely in your library.`)) return;
+    try {
+      await API.bulkDeleteProjects(this.selectedCollectionIds);
+      this.toast(`Deleted ${count} collection${count > 1 ? 's' : ''}`);
+      this.selectedCollectionIds = [];
+      this.renderProjects();
+    } catch (e) {
+      this.toast(e.message || 'Failed to delete collections', 'error');
+    }
+  },
+
+  async bulkSetCollectionsVisibility(visibility) {
+    if (!this.selectedCollectionIds?.length) return;
+    const count = this.selectedCollectionIds.length;
+    try {
+      await API.bulkSetProjectsVisibility(this.selectedCollectionIds, visibility);
+      this.toast(`Updated ${count} collection${count > 1 ? 's' : ''} to ${visibility}`);
+      this.selectedCollectionIds = [];
+      this.renderProjects();
+    } catch (e) {
+      this.toast(e.message || 'Failed to update visibility', 'error');
+    }
+  },
+
   async renderProjectDetail(id) {
+    this.selectedCollectionModelIds = [];
+    this.collectionModelSearchQuery = '';
     this.el.innerHTML = '<div class="skeleton-grid"></div>';
     try {
-      const project = await API.getProject(id);
-      this.el.innerHTML = UI.projectDetail(project);
+      this.currentProject = await API.getProject(id);
+      this.el.innerHTML = UI.projectDetail(this.currentProject, this.collectionModelSearchQuery);
       if (typeof Viewer !== 'undefined' && Viewer.generateThumbnails) {
         setTimeout(() => Viewer.generateThumbnails(), 50);
       }
     } catch (e) { this.toast('Failed to load collection', 'error'); }
+  },
+
+  handleCollectionModelsSearch(query) {
+    this.collectionModelSearchQuery = query || '';
+    if (this.currentProject) {
+      this.el.innerHTML = UI.projectDetail(this.currentProject, this.collectionModelSearchQuery);
+    }
+  },
+
+  toggleCollectionModelSelection(e, modelId) {
+    e?.stopPropagation();
+    const numId = Number(modelId);
+    if (!this.selectedCollectionModelIds) this.selectedCollectionModelIds = [];
+    const idx = this.selectedCollectionModelIds.indexOf(numId);
+    if (idx >= 0) {
+      this.selectedCollectionModelIds.splice(idx, 1);
+    } else {
+      this.selectedCollectionModelIds.push(numId);
+    }
+    if (this.currentProject) {
+      this.el.innerHTML = UI.projectDetail(this.currentProject, this.collectionModelSearchQuery);
+    }
+  },
+
+  clearCollectionModelSelection() {
+    this.selectedCollectionModelIds = [];
+    if (this.currentProject) {
+      this.el.innerHTML = UI.projectDetail(this.currentProject, this.collectionModelSearchQuery);
+    }
+  },
+
+  async openAddModelsToCollectionModal(projectId) {
+    try {
+      const res = await API.getModels({ limit: 500 });
+      const allModels = res.models || res || [];
+      const currentModelIds = (this.currentProject?.models || []).map(m => m.id);
+      this.openModal('Add Models to Collection', UI.addModelsToCollectionModal(allModels, currentModelIds, projectId));
+    } catch (e) {
+      this.toast('Failed to load library models: ' + e.message, 'error');
+    }
+  },
+
+  filterModelPickerList(query) {
+    const q = (query || '').toLowerCase().trim();
+    const items = document.querySelectorAll('#model-picker-list .collection-model-picker-item');
+    items.forEach(item => {
+      const text = item.textContent.toLowerCase();
+      item.style.display = text.includes(q) ? 'flex' : 'none';
+    });
+  },
+
+  toggleSelectAllPickerModels() {
+    const checkboxes = document.querySelectorAll('#model-picker-list input[type="checkbox"]:not([style*="display: none"])');
+    if (!checkboxes.length) return;
+    const allChecked = Array.from(checkboxes).every(cb => cb.checked);
+    checkboxes.forEach(cb => cb.checked = !allChecked);
+  },
+
+  async handleAddModelsToCollectionSubmit(e, projectId) {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const modelIds = fd.getAll('model_ids').map(Number);
+    try {
+      // First, get currently assigned models to compute additions & removals
+      const currentIds = (this.currentProject?.models || []).map(m => m.id);
+      const toAdd = modelIds.filter(id => !currentIds.includes(id));
+      const toRemove = currentIds.filter(id => !modelIds.includes(id));
+
+      if (toAdd.length > 0) {
+        await API.bulkAddModelsToProject(projectId, toAdd);
+      }
+      if (toRemove.length > 0) {
+        await API.bulkRemoveModelsFromProject(projectId, toRemove);
+      }
+
+      this.toast(`Collection updated (${toAdd.length} added, ${toRemove.length} removed)`);
+      this.closeModal();
+      this.renderProjectDetail(projectId);
+      this.renderSidebarCollections();
+    } catch (err) {
+      this.toast(err.message || 'Failed to update collection models', 'error');
+    }
+  },
+
+  async removeFromProject(projectId, modelId) {
+    if (!confirm('Remove this model from the collection?')) return;
+    try {
+      await API.removeModelFromProject(projectId, modelId);
+      this.toast('Model removed from collection');
+      this.renderProjectDetail(projectId);
+      this.renderSidebarCollections();
+    } catch (e) {
+      this.toast(e.message || 'Failed to remove model', 'error');
+    }
+  },
+
+  async bulkRemoveFromCollection(projectId) {
+    if (!this.selectedCollectionModelIds?.length) return;
+    const count = this.selectedCollectionModelIds.length;
+    if (!confirm(`Remove ${count} model${count > 1 ? 's' : ''} from this collection?`)) return;
+    try {
+      await API.bulkRemoveModelsFromProject(projectId, this.selectedCollectionModelIds);
+      this.toast(`Removed ${count} model${count > 1 ? 's' : ''} from collection`);
+      this.selectedCollectionModelIds = [];
+      this.renderProjectDetail(projectId);
+      this.renderSidebarCollections();
+    } catch (e) {
+      this.toast(e.message || 'Failed bulk removal', 'error');
+    }
+  },
+
+  async bulkAddSelectedToAnotherCollection(currentProjectId) {
+    if (!this.selectedCollectionModelIds?.length) return;
+    try {
+      const projects = await API.getProjects();
+      const otherProjects = projects.filter(p => p.id !== Number(currentProjectId));
+      if (!otherProjects.length) {
+        this.toast('No other collections found to copy to', 'error');
+        return;
+      }
+      this.openModal('Copy Models to Collection', UI.collectionSelectForm(otherProjects, [], null));
+    } catch (e) {
+      this.toast(e.message, 'error');
+    }
+  },
+
+  downloadCollectionZip(projectId) {
+    this.toast('Generating collection ZIP...', 'info');
+    const a = document.createElement('a');
+    a.href = `/api/projects/${projectId}/download`;
+    a.download = `collection_${projectId}.zip`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
   },
 
   showCreateProject() {
@@ -1320,17 +1847,61 @@ const App = {
   async handleProjectSubmit(e, id) {
     e.preventDefault();
     const fd = new FormData(e.target);
-    const data = { name: fd.get('name'), description: fd.get('description') };
+    const data = {
+      name: fd.get('name'),
+      description: fd.get('description'),
+      visibility: fd.get('visibility') || 'public'
+    };
     try {
       if (id) {
-        // Update (TBD if needed)
+        await API.updateProject(id, data);
+        this.toast('Collection updated');
+        this.closeModal();
+        if (location.hash.startsWith('#/projects/') || location.hash.startsWith('#/collections/')) {
+          this.renderProjectDetail(id);
+        } else {
+          this.renderProjects();
+        }
       } else {
         await API.createProject(data);
         this.toast('Collection created');
         this.closeModal();
         this.renderProjects();
       }
+      this.renderSidebarCollections();
     } catch (e) { this.toast(e.message, 'error'); }
+  },
+
+  async openEditProjectModal(projectId) {
+    try {
+      const project = await API.getProject(projectId);
+      this.openModal('Edit Collection', UI.editProjectModal(project));
+    } catch (e) {
+      this.toast('Failed to load collection: ' + e.message, 'error');
+    }
+  },
+
+  async handleProjectUpdateSubmit(e, projectId) {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const data = {
+      name: fd.get('name'),
+      description: fd.get('description'),
+      visibility: fd.get('visibility')
+    };
+    try {
+      await API.updateProject(projectId, data);
+      this.toast('Collection updated');
+      this.closeModal();
+      if (location.hash.startsWith('#/projects/') || location.hash.startsWith('#/collections/')) {
+        this.renderProjectDetail(projectId);
+      } else {
+        this.renderProjects();
+      }
+      this.renderSidebarCollections();
+    } catch (err) {
+      this.toast(err.message, 'error');
+    }
   },
 
   async deleteProject(id) {
@@ -1339,33 +1910,60 @@ const App = {
       await API.deleteProject(id);
       this.toast('Collection deleted');
       this.navigate('/collections');
+      this.renderSidebarCollections();
     } catch (e) { this.toast(e.message, 'error'); }
   },
 
   async addToProject(modelId) {
-    const projects = await API.getProjects();
-    if (!projects.length) {
-      if (confirm('No collections found. Create one now?')) this.showCreateProject();
-      return;
-    }
-    const html = `
-      <div class="form-grid">
-        <label>Select Collection</label>
-        <select id="project-select" class="form-input">
-          ${projects.map(p => `<option value="${p.id}">${p.name}</option>`).join('')}
-        </select>
-        <button class="btn btn-primary" onclick="App.handleAddToProject(${modelId})" style="margin-top:16px;width:100%">Add to Collection</button>
-      </div>`;
-    this.openModal('Add to Collection', html);
+    return this.openModelCollectionsModal(modelId);
   },
 
-  async handleAddToProject(modelId) {
-    const projectId = document.getElementById('project-select').value;
+  async openModelCollectionsModal(modelId) {
     try {
-      await API.addModelToProject(projectId, modelId);
-      this.toast('Added to collection');
-      this.closeModal();
-    } catch (e) { this.toast(e.message, 'error'); }
+      const [model, projects] = await Promise.all([API.getModel(modelId), API.getProjects()]);
+      const selectedIds = (model.projects || []).map(p => p.id);
+      this.openModal('Manage Collections', UI.collectionSelectForm(projects, selectedIds, modelId));
+    } catch (e) {
+      this.toast('Failed to load collections: ' + e.message, 'error');
+    }
+  },
+
+  async handleCollectionSelectionSubmit(e, modelId) {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const selectedProjectIds = fd.getAll('project_ids').map(Number);
+    try {
+      if (modelId) {
+        await API.syncModelProjects(modelId, selectedProjectIds);
+        this.toast('Collections updated successfully');
+        this.closeModal();
+        if (location.hash.startsWith('#/models/')) {
+          this.renderModelDetail(modelId);
+        } else {
+          this.fetchAndRenderModels();
+        }
+      } else if (this.selectedModelIds?.length > 0) {
+        // Bulk add
+        for (const pid of selectedProjectIds) {
+          await API.bulkAddModelsToProject(pid, this.selectedModelIds);
+        }
+        this.toast(`Added ${this.selectedModelIds.length} models to ${selectedProjectIds.length} collection(s)`);
+        this.clearSelection();
+        this.closeModal();
+      }
+      this.renderSidebarCollections();
+    } catch (err) {
+      this.toast(err.message, 'error');
+    }
+  },
+
+  filterCollectionList(query) {
+    const q = (query || '').toLowerCase().trim();
+    const items = document.querySelectorAll('.collection-checkbox-item');
+    items.forEach(item => {
+      const text = item.textContent.toLowerCase();
+      item.style.display = text.includes(q) ? 'flex' : 'none';
+    });
   },
 
   // ─── Sharing ─────────────────────────────────────────────────────────
@@ -1393,11 +1991,13 @@ const App = {
   },
 
   showCreateVersion(id, name) {
+    const modelName = name || this.currentModel?.name || 'Model';
+    const safeName = UI.escapeHtml(modelName);
     const html = `
       <form onsubmit="App.handleVersionSubmit(event, ${id})" class="form-grid">
         <div class="form-group">
           <label>Version Name</label>
-          <input type="text" name="name" value="${name} (v2)" required class="form-input" placeholder="e.g. My Model v2">
+          <input type="text" name="name" value="${safeName} (v2)" required class="form-input" placeholder="e.g. My Model v2">
         </div>
         <div class="form-group">
           <label>Description of changes (optional)</label>
@@ -1436,7 +2036,7 @@ const App = {
         }, 100);
       }
     } catch (e) {
-      this.el.innerHTML = `<div class="empty-state">⚠️ Share link invalid or expired</div>`;
+      this.el.innerHTML = `<div class="empty-state"><div class="empty-state-icon"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="color:var(--accent-yellow)"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></div><div class="empty-state-text">Share link invalid or expired</div></div>`;
     }
   },
 
@@ -1471,20 +2071,25 @@ const App = {
         ${UI.modelDetail(model, hasPrinters)}`;
       // Initialize 3D viewer using chosen preview file or first stl/3mf
       const files = model.files || [];
+      const cadFiles = files.filter(f => f.file_type === 'stl' || f.file_type === '3mf');
       const previewFile = (model.preview_file_id && files.find(f => f.id === model.preview_file_id)) ||
-        files.find(f => f.file_type === 'stl') || files.find(f => f.file_type === '3mf');
+        cadFiles[0];
 
       if (previewFile && typeof Viewer !== 'undefined') {
         const stlUrl = `${previewFile.url || '/uploads/'+previewFile.filename}?t=${Date.now()}`;
         setTimeout(async () => {
-          const v = Viewer.create(`stl-viewer-${model.id}`, stlUrl, previewFile.file_type);
+          const v = Viewer.create(`stl-viewer-${model.id}`, stlUrl, previewFile.file_type, {
+            modelId: model.id,
+            activeFileId: previewFile.id,
+            modelFiles: cadFiles
+          });
           if (v && !model.thumbnail_url) {
             setTimeout(() => Viewer.takeSnapshot(model.id, v.renderer, v.scene, v.camera), 2500);
           }
         }, 100);
       }
     } catch (e) {
-      this.el.innerHTML = '<div class="empty-state"><div class="empty-state-icon">⚠️</div><div class="empty-state-text">Model not found</div></div>';
+      this.el.innerHTML = '<div class="empty-state"><div class="empty-state-icon"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="color:var(--accent-yellow)"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></div><div class="empty-state-text">Model not found</div></div>';
     }
   },
 
@@ -1496,6 +2101,15 @@ const App = {
     } catch (err) {
       this.toast(err.message, 'error');
     }
+  },
+
+  switchModelDetailTab(tabName) {
+    document.querySelectorAll('.model-detail-tab-btn').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.tab === tabName);
+    });
+    document.querySelectorAll('.model-detail-tab-pane').forEach(pane => {
+      pane.style.display = pane.id === `tab-pane-${tabName}` ? 'block' : 'none';
+    });
   },
 
   setDefaultMaterial(val) {
@@ -1582,9 +2196,9 @@ const App = {
         ${viewerArea}
         ${metadataRows}
         <div style="display:flex;gap:8px;justify-content:space-between;align-items:center;margin-top:16px;flex-wrap:wrap">
-          <div style="font-size:0.8rem;color:var(--text-muted)">
-            Size: <strong>${UI.formatSize(file.size)}</strong>
-            ${file.folderPath ? ` · 📁 ${file.folderPath}` : ''}
+          <div style="font-size:0.8rem;color:var(--text-muted);display:flex;align-items:center;gap:6px">
+            <span>Size: <strong>${UI.formatSize(file.size)}</strong></span>
+            ${file.folderPath ? `<span>·</span><span style="display:inline-flex;align-items:center;gap:3px;color:#f59e0b"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>${file.folderPath}</span>` : ''}
           </div>
           <div style="display:flex;gap:8px;align-items:center">
             ${(is3D || isGcode) ? `<button class="btn btn-secondary btn-sm" onclick="App.previewFileModal('${file.url}', '${file.name.replace(/'/g, "\\'")}', '${file.type}')">Full Screen</button>` : ''}
@@ -1605,42 +2219,97 @@ const App = {
     }
   },
 
+  scanPollTimer: null,
+
   async handleScanLibrary() {
+    return this.scanLibrary();
+  },
+
+  async scanLibrary() {
     const btn = document.getElementById('scan-btn');
-    if (!btn) return;
-    const originalText = btn.innerHTML;
-    btn.disabled = true;
-    btn.innerHTML = '<span class="btn-icon rotating">🔄</span> Scanning...';
+    if (btn) {
+      btn.disabled = true;
+      btn.innerHTML = '<span class="btn-icon rotating"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg></span> Starting...';
+    }
 
     try {
       const csrfToken = localStorage.getItem('pv_csrf_token');
-      const res = await fetch('/api/library/scan', { 
+      const res = await fetch('/api/library/scan', {
         method: 'POST',
         credentials: 'same-origin',
         headers: { 'X-CSRF-Token': csrfToken }
       });
       const data = await res.json();
-      if (res.ok) {
-        this.toast(`Scan complete! Added ${data.modelsAdded} models and ${data.filesAdded} files.`);
-        this.fetchAndRenderModels();
+      if (res.ok || res.status === 409) {
+        this.toast(res.status === 409 ? 'A scan is already in progress. Monitoring...' : 'Library scan started in background.');
+        this.monitorScanProgress();
       } else {
         if (res.status === 401) this.toast('Please login as admin to scan', 'error');
-        else alert('Scan failed: ' + data.error);
+        else this.toast('Scan start failed: ' + (data.error || 'Unknown error'), 'error');
+        if (btn) {
+          btn.disabled = false;
+          btn.innerHTML = '<span class="btn-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg></span> Scan Library';
+        }
       }
     } catch (e) {
       console.error(e);
-      this.toast('Scan failed', 'error');
-    } finally {
-      btn.disabled = false;
-      btn.innerHTML = originalText;
+      this.toast('Failed to reach server to start scan', 'error');
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = '<span class="btn-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg></span> Scan Library';
+      }
     }
+  },
+
+  monitorScanProgress() {
+    if (this.scanPollTimer) return;
+
+    const updateUI = (status) => {
+      const btn = document.getElementById('scan-btn');
+      if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = `<span class="btn-icon rotating"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg></span> ${status.foldersScanned || 0} folders (${status.filesAdded || 0} files)`;
+      }
+    };
+
+    this.scanPollTimer = setInterval(async () => {
+      try {
+        const res = await fetch('/api/library/scan/status', { credentials: 'same-origin' });
+        if (!res.ok) return;
+        const status = await res.json();
+
+        if (status.isScanning) {
+          updateUI(status);
+        } else {
+          clearInterval(this.scanPollTimer);
+          this.scanPollTimer = null;
+
+          const btn = document.getElementById('scan-btn');
+          if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = '<span class="btn-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg></span> Scan Library';
+          }
+
+          if (status.error) {
+            this.toast('Scan stopped with error: ' + status.error, 'error');
+          } else {
+            const addedModels = status.lastResults?.modelsAdded || 0;
+            const addedFiles = status.lastResults?.filesAdded || 0;
+            this.toast(`✓ Scan completed! ${addedModels} models and ${addedFiles} files added (${status.elapsedSeconds || 0}s).`);
+            this.fetchAndRenderModels();
+          }
+        }
+      } catch (e) {
+        console.warn('Could not poll scan status:', e);
+      }
+    }, 1500);
   },
 
   previewFileModal(url, name, fileType = null) {
     if (typeof Viewer === 'undefined') return;
     const modalHtml = `
-      <div class="modal-overlay active" style="z-index:9999;background:rgba(0,0,0,0.85)" onclick="App.closePreviewFileModal(event)">
-        <div class="modal" style="width:96vw;max-width:1400px;height:92vh;max-height:92vh;display:flex;flex-direction:column;overflow:hidden" onclick="event.stopPropagation()">
+      <div class="modal-overlay active" id="preview-file-overlay" style="z-index:9999;background:rgba(0,0,0,0.85)">
+        <div class="modal" style="width:96vw;max-width:1400px;height:92vh;max-height:92vh;display:flex;flex-direction:column;overflow:hidden">
           <div class="modal-header" style="padding:16px 24px">
             <h5 class="modal-title" style="margin:0">${name}</h5>
             <button type="button" class="modal-close" onclick="App.closePreviewFileModal(event)">✕</button>
@@ -1657,6 +2326,20 @@ const App = {
     container.id = 'preview-modal-container';
     container.innerHTML = modalHtml;
     document.body.appendChild(container);
+
+    const overlay = container.querySelector('#preview-file-overlay');
+    let overlayDown = false;
+    if (overlay) {
+      overlay.addEventListener('mousedown', (e) => {
+        overlayDown = (e.target === overlay);
+      });
+      overlay.addEventListener('mouseup', (e) => {
+        if (overlayDown && e.target === overlay) {
+          this.closePreviewFileModal();
+        }
+        overlayDown = false;
+      });
+    }
     
     this.previewKeyHandler = (e) => { if (e.key === 'Escape') this.closePreviewFileModal(); };
     document.addEventListener('keydown', this.previewKeyHandler);
@@ -1695,35 +2378,91 @@ const App = {
     }
   },
 
-  async renderSettings() {
+  async renderSettings(initialTab = 'categories') {
+    const isAdmin = this.currentUser?.role === 'admin';
+
     this.el.innerHTML = `
-      <div class="page-header">
-        <div><h1 class="page-title">Settings</h1><p class="page-subtitle">Configure your PrintVault instance</p></div>
+      <div class="page-header" style="margin-bottom:20px">
+        <div>
+          <h1 class="page-title">Settings</h1>
+          <p class="page-subtitle">Configure and personalize your GyroidVault 2.0 instance</p>
+        </div>
       </div>
-      <div class="settings-tabs" style="display:flex;gap:8px;margin-bottom:24px;border-bottom:1px solid var(--border);padding-bottom:1px">
-        <button class="tab-btn active" data-tab="categories" style="background:none;border:none;color:var(--text-secondary);padding:10px 20px;cursor:pointer;font-weight:600;border-bottom:2px solid transparent;transition:all .2s">Categories</button>
-        <button class="tab-btn" data-tab="tags" style="background:none;border:none;color:var(--text-secondary);padding:10px 20px;cursor:pointer;font-weight:600;border-bottom:2px solid transparent;transition:all .2s">Tags</button>
-        <button class="tab-btn" data-tab="materials" style="background:none;border:none;color:var(--text-secondary);padding:10px 20px;cursor:pointer;font-weight:600;border-bottom:2px solid transparent;transition:all .2s">Materials</button>
-        ${this.currentUser?.role === 'admin' ? '<button class="tab-btn" data-tab="printers" style="background:none;border:none;color:var(--text-secondary);padding:10px 20px;cursor:pointer;font-weight:600;border-bottom:2px solid transparent;transition:all .2s">Printers</button>' : ''}
-        ${this.currentUser?.role === 'admin' ? '<button class="tab-btn" data-tab="security" style="background:none;border:none;color:var(--text-secondary);padding:10px 20px;cursor:pointer;font-weight:600;border-bottom:2px solid transparent;transition:all .2s">Security</button>' : ''}
-        ${this.currentUser?.role === 'admin' ? '<button class="tab-btn" data-tab="maintenance" style="background:none;border:none;color:var(--text-secondary);padding:10px 20px;cursor:pointer;font-weight:600;border-bottom:2px solid transparent;transition:all .2s">Maintenance</button>' : ''}
-        ${this.currentUser?.role === 'admin' ? '<button class="tab-btn" data-tab="system" style="background:none;border:none;color:var(--text-secondary);padding:10px 20px;cursor:pointer;font-weight:600;border-bottom:2px solid transparent;transition:all .2s">System</button>' : ''}
-        ${this.currentUser?.role === 'admin' ? '<button class="tab-btn" data-tab="smtp" style="background:none;border:none;color:var(--text-secondary);padding:10px 20px;cursor:pointer;font-weight:600;border-bottom:2px solid transparent;transition:all .2s">SMTP & Mail</button>' : ''}
-        ${this.currentUser?.role === 'admin' ? '<button class="tab-btn" data-tab="users" style="background:none;border:none;color:var(--text-secondary);padding:10px 20px;cursor:pointer;font-weight:600;border-bottom:2px solid transparent;transition:all .2s">Users</button>' : ''}
-        <button class="tab-btn" data-tab="about" style="background:none;border:none;color:var(--text-secondary);padding:10px 20px;cursor:pointer;font-weight:600;border-bottom:2px solid transparent;transition:all .2s">About</button>
-      </div>
-      <div id="settings-content"></div>`;
+
+      <div class="settings-layout">
+        <!-- Modern Left Navigation Sub-Sidebar -->
+        <aside class="settings-nav-sidebar">
+          <div class="settings-nav-group">
+            <div class="settings-nav-group-title">Taxonomies</div>
+            <button class="settings-nav-btn active" data-tab="categories">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+              <span>Categories</span>
+            </button>
+            <button class="settings-nav-btn" data-tab="tags">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
+              <span>Tags</span>
+            </button>
+            <button class="settings-nav-btn" data-tab="materials">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+              <span>Materials</span>
+            </button>
+          </div>
+
+          ${isAdmin ? `
+            <div class="settings-nav-group">
+              <div class="settings-nav-group-title">Hardware</div>
+              <button class="settings-nav-btn" data-tab="printers">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+                <span>3D Printers</span>
+              </button>
+              <button class="settings-nav-btn" data-tab="smtp">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+                <span>SMTP & Mail</span>
+              </button>
+            </div>
+
+            <div class="settings-nav-group">
+              <div class="settings-nav-group-title">Administration</div>
+              <button class="settings-nav-btn" data-tab="security">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                <span>Security</span>
+              </button>
+              <button class="settings-nav-btn" data-tab="users">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                <span>Users & Roles</span>
+              </button>
+              <button class="settings-nav-btn" data-tab="system">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                <span>System</span>
+              </button>
+              <button class="settings-nav-btn" data-tab="maintenance">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                <span>Maintenance & Logs</span>
+              </button>
+            </div>
+          ` : ''}
+
+          <div class="settings-nav-group">
+            <div class="settings-nav-group-title">System Info</div>
+            <button class="settings-nav-btn" data-tab="about">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+              <span>About GyroidVault</span>
+            </button>
+          </div>
+        </aside>
+
+        <!-- Right Content Area -->
+        <main id="settings-content" style="min-width:0"></main>
+      </div>`;
 
     const content = this.el.querySelector('#settings-content');
-    const tabs = this.el.querySelectorAll('.tab-btn');
+    const navBtns = this.el.querySelectorAll('.settings-nav-btn');
 
     const switchTab = async (tab) => {
-      tabs.forEach(t => {
-        const active = t.dataset.tab === tab;
-        t.style.color = active ? 'var(--accent-cyan)' : 'var(--text-secondary)';
-        t.style.borderBottomColor = active ? 'var(--accent-cyan)' : 'transparent';
+      navBtns.forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.tab === tab);
       });
-      content.innerHTML = '<div class="skeleton" style="height:300px;width:100%"></div>';
+      content.innerHTML = '<div class="skeleton" style="height:320px;width:100%;border-radius:10px"></div>';
 
       try {
         if (tab === 'categories') {
@@ -1740,15 +2479,15 @@ const App = {
           let printers = [];
           try { if (config.printers) printers = JSON.parse(config.printers); } catch(e){}
           content.innerHTML = `
-            <div class="glass-panel" style="margin-bottom:24px">
-              <div class="panel-header"><div class="panel-title">🖨️ 3D Printers (Moonraker)</div></div>
+            <div class="glass-panel">
+              <div class="panel-header"><div class="panel-title"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:6px"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>3D Printers (Moonraker)</div></div>
               <div class="panel-body">${UI.printersSettingsForm(printers)}</div>
             </div>`;
         } else if (tab === 'security') {
           const config = await API.getSystemSettings();
           content.innerHTML = `
             <div class="glass-panel">
-              <div class="panel-header"><div class="panel-title">🛡️ Security & Access Control</div></div>
+              <div class="panel-header"><div class="panel-title"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:6px"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>Security & Access Control</div></div>
               <div class="panel-body">${UI.securitySettingsForm(config)}</div>
             </div>`;
           setTimeout(() => App.loadBlockedIps(), 50);
@@ -1756,12 +2495,12 @@ const App = {
           const logs = await API.getSystemLogs();
           content.innerHTML = `
             <div class="glass-panel" style="margin-bottom:24px">
-              <div class="panel-header"><div class="panel-title">🔍 Maintenance & Duplicates</div></div>
+              <div class="panel-header"><div class="panel-title"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:6px"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>Maintenance & Duplicates</div></div>
               <div class="panel-body">${UI.maintenanceSettingsForm()}</div>
             </div>
             <div class="glass-panel">
               <div class="panel-header">
-                <div class="panel-title">System Logs</div>
+                <div class="panel-title">System Event Logs</div>
                 <button class="btn btn-ghost btn-xs" onclick="App.handleClearLogs()" style="color:var(--error)">Clear Logs</button>
               </div>
               <div class="panel-body no-pad">
@@ -1786,7 +2525,7 @@ const App = {
         } else if (tab === 'system') {
           const config = await API.getSystemSettings();
           content.innerHTML = `
-            <div class="glass-panel" style="margin-bottom:24px">
+            <div class="glass-panel">
               <div class="panel-header"><div class="panel-title">System Settings</div></div>
               <div class="panel-body">${UI.systemSettingsForm(config)}</div>
             </div>`;
@@ -1796,45 +2535,54 @@ const App = {
             <div class="glass-panel" style="margin-bottom:20px">
               <div class="panel-header"><div class="panel-title">Invite User</div></div>
               <div class="panel-body">
-                <form onsubmit="App.handleInviteUser(event)" style="display:flex;gap:10px">
-                  <input type="email" name="email" required placeholder="Email address to invite" class="form-input" style="max-width:300px">
+                <form onsubmit="App.handleInviteUser(event)" style="display:flex;gap:10px;flex-wrap:wrap">
+                  <input type="email" name="email" required placeholder="Email address to invite" class="form-input" style="max-width:320px">
                   <button type="submit" class="btn btn-primary">Send Invite</button>
                 </form>
               </div>
             </div>
             <div class="glass-panel">
-              <div class="panel-header"><div class="panel-title">User Management</div></div>
-              <div class="panel-body">
-                <table style="width:100%;border-collapse:collapse;font-size:.9rem">
-                  <thead><tr style="text-align:left;color:var(--text-muted);border-bottom:1px solid var(--border)"><th style="padding:12px">ID</th><th style="padding:12px">Username</th><th style="padding:12px">Email</th><th style="padding:12px">Role</th><th style="padding:12px">Actions</th></tr></thead>
+              <div class="panel-header"><div class="panel-title">User Accounts & Roles</div></div>
+              <div class="panel-body no-pad" style="overflow-x:auto">
+                <table class="settings-table">
+                  <thead>
+                    <tr>
+                      <th>ID</th>
+                      <th>Username</th>
+                      <th>Email</th>
+                      <th>Role</th>
+                      <th style="text-align:right">Actions</th>
+                    </tr>
+                  </thead>
                   <tbody>${users.map(u => `
-                    <tr style="border-bottom:1px solid var(--border);color:var(--text-secondary)">
-                      <td style="padding:12px">${u.id}</td>
-                      <td style="padding:12px;font-weight:600">${u.username}</td>
-                      <td style="padding:12px">${u.email || '-'}</td>
-                      <td style="padding:12px">
+                    <tr>
+                      <td>#${u.id}</td>
+                      <td style="font-weight:600;color:var(--text-primary)">${u.username}</td>
+                      <td>${u.email || '-'}</td>
+                      <td>
                         <select class="form-input" style="padding:4px 8px;font-size:.85rem;width:auto;display:inline-block" onchange="App.changeUserRole(${u.id}, this)" ${u.id === 1 ? 'disabled' : ''}>
                           <option value="admin" ${u.role === 'admin' ? 'selected' : ''}>Admin</option>
                           <option value="uploader" ${u.role === 'uploader' ? 'selected' : ''}>Uploader</option>
                           <option value="viewer" ${u.role === 'viewer' ? 'selected' : ''}>Viewer</option>
                         </select>
-                        ${u.id === 1 ? '<div style="font-size:0.7rem;color:var(--text-muted);margin-top:4px">Master Admin</div>' : ''}
+                        ${u.id === 1 ? '<span style="font-size:0.7rem;color:var(--accent-cyan);margin-left:6px;font-weight:600">Master Admin</span>' : ''}
                       </td>
-                      <td style="padding:12px">
-                        ${u.id !== 1 ? `<button class="btn btn-danger btn-sm" onclick="App.deleteUser(${u.id})">🗑 Delete</button>` : ''}
+                      <td style="text-align:right">
+                        ${u.id !== 1 ? `<button class="btn btn-danger btn-xs" onclick="App.deleteUser(${u.id})" style="display:inline-flex;align-items:center;gap:4px"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>Delete</button>` : ''}
                       </td>
-                    </tr>`).join('')}</tbody>
+                    </tr>`).join('')}
+                  </tbody>
                 </table>
               </div>
             </div>`;
         } else if (tab === 'about') {
-          content.innerHTML = UI.aboutSection(this.versionInfo || { currentVersion: '1.0.0' });
+          content.innerHTML = UI.aboutSection({ currentVersion: '2.0.0' });
         }
       } catch (e) { console.error(e); }
     };
 
-    tabs.forEach(t => t.addEventListener('click', () => switchTab(t.dataset.tab)));
-    switchTab('categories');
+    navBtns.forEach(btn => btn.addEventListener('click', () => switchTab(btn.dataset.tab)));
+    switchTab(initialTab);
   },
 
   // ─── Actions ──────────────────────────────────────────────────────────
@@ -1872,13 +2620,16 @@ const App = {
 
   switchFilesTab(e, tab) {
     const container = e.target.closest('.glass-panel');
+    const tabEl = e.currentTarget || e.target.closest('div[onclick]');
     const tabs = container.querySelectorAll('.panel-header div[onclick]');
     tabs.forEach(t => {
       t.style.borderBottomColor = 'transparent';
       t.style.color = 'var(--text-muted)';
     });
-    e.target.style.borderBottomColor = 'var(--accent-cyan)';
-    e.target.style.color = 'var(--text)';
+    if (tabEl) {
+      tabEl.style.borderBottomColor = 'var(--accent-cyan)';
+      tabEl.style.color = 'var(--text)';
+    }
     
     container.querySelector('#tab-content-files').style.display = tab === 'files' ? 'block' : 'none';
     const docsContent = container.querySelector('#tab-content-docs');
@@ -2024,14 +2775,68 @@ const App = {
         this.closeModal();
         this.navigate(`/models/${model.id}`);
       }
-    } catch (e) { this.toast(e.message, 'error'); }
+    } catch (e) {
+      if (e.suggested_names?.length || e.suggested_name || (e.message && e.message.includes('already exists'))) {
+        const banner = document.getElementById('duplicate-warning-banner');
+        const warnText = document.getElementById('duplicate-warning-text');
+        const container = document.getElementById('duplicate-suggestions-container');
+        if (banner) {
+          banner.style.display = 'block';
+          if (warnText) warnText.textContent = e.message || 'A model with this name already exists.';
+          const suggestions = e.suggested_names && e.suggested_names.length ? e.suggested_names : (e.suggested_name ? [e.suggested_name] : []);
+          this.pendingSuggestedName = suggestions[0] || null;
+          if (container) {
+            container.innerHTML = suggestions.map(s => `
+              <button type="button" class="btn btn-secondary btn-xs" onclick="App.applySuggestedName('${s.replace(/'/g, "\\'")}')" style="background:var(--bg-input);border:1px solid var(--border-hover);color:var(--text-primary);padding:4px 10px;font-size:0.75rem;border-radius:6px;display:inline-flex;align-items:center;gap:4px">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg> ${s}
+              </button>
+            `).join('');
+          }
+          return;
+        }
+      }
+      this.toast(e.message, 'error');
+    }
+  },
+
+  applySuggestedName(chosenName = null) {
+    const nameToUse = chosenName || this.pendingSuggestedName;
+    if (nameToUse) {
+      const input = document.getElementById('model-name-input');
+      if (input) input.value = nameToUse;
+      const banner = document.getElementById('duplicate-warning-banner');
+      if (banner) banner.style.display = 'none';
+    }
+  },
+
+  async quickPreviewModel(modelId) {
+    try {
+      const model = await API.getModel(modelId);
+      const stlFile = (model.files || []).find(f => f.file_type === 'stl' || f.file_type === '3mf' || f.file_type === 'gcode');
+      if (stlFile) {
+        const fileUrl = stlFile.url || `/uploads/${stlFile.filename}`;
+        this.openBrowseFileModal(encodeURIComponent(JSON.stringify({
+          name: stlFile.original_name || stlFile.filename,
+          type: stlFile.file_type,
+          url: fileUrl,
+          size: stlFile.file_size
+        })));
+      } else if (model.thumbnail_url) {
+        this.openModal(model.name, `<div style="display:flex;justify-content:center;align-items:center;background:var(--bg-dark);height:400px"><img src="${model.thumbnail_url}" style="max-width:100%;max-height:100%;object-fit:contain"></div>`);
+      } else {
+        this.navigate(`/models/${modelId}`);
+      }
+    } catch (e) {
+      this.navigate(`/models/${modelId}`);
+    }
   },
 
   confirmDeleteModel(id, name) {
     if (!this.currentUser || this.currentUser.role === 'viewer') {
       return this.toast('You must be logged in to delete models', 'error');
     }
-    this.openModal('Delete Model', UI.deleteModelForm(id, name));
+    const modelName = name || this.currentModel?.name || '';
+    this.openModal('Delete Model', UI.deleteModelForm(id, modelName));
   },
 
   async handleDeleteModel(e, id) {
@@ -2106,7 +2911,7 @@ const App = {
       this.renderModelDetail(modelId);
     } catch (e) {
       this.toast(e.message, 'error');
-      if (progress) progress.innerHTML = `<div style="color:var(--error);font-size:.875rem;margin-top:8px">❌ ${e.message}</div>`;
+      if (progress) progress.innerHTML = `<div style="color:var(--error);font-size:.875rem;margin-top:8px;display:flex;align-items:center;gap:6px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>${e.message}</div>`;
     }
   },
 
@@ -2305,7 +3110,7 @@ const App = {
               <div style="display:flex;flex-direction:column;gap:4px">
                 ${group.files.map(f => `
                   <div style="display:flex;justify-content:space-between;align-items:center;font-size:0.85rem">
-                    <span>📄 <strong>${f.original_name}</strong> in model <a href="#/models/${f.model_id}" style="color:var(--accent-cyan)">${f.model_name || 'Model #'+f.model_id}</a></span>
+                    <span style="display:inline-flex;align-items:center;gap:4px"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg><strong>${f.original_name}</strong> in model <a href="#/models/${f.model_id}" style="color:var(--accent-cyan)">${f.model_name || 'Model #'+f.model_id}</a></span>
                     <a href="#/models/${f.model_id}" class="btn btn-ghost btn-xs">View Model</a>
                   </div>
                 `).join('')}
@@ -2319,14 +3124,37 @@ const App = {
   }
 };
 
-// ── Close modal on overlay click ──
-document.getElementById('modal-overlay')?.addEventListener('click', (e) => {
-  if (e.target === e.currentTarget) App.closeModal();
-});
+// ── Drag-Safe Overlay Dismiss Handler (PR #51) ──
+let overlayMouseDownTarget = null;
+const modalOverlayEl = document.getElementById('modal-overlay');
+
+if (modalOverlayEl) {
+  modalOverlayEl.addEventListener('mousedown', (e) => {
+    overlayMouseDownTarget = e.target;
+  });
+
+  modalOverlayEl.addEventListener('mouseup', (e) => {
+    if (overlayMouseDownTarget === modalOverlayEl && e.target === modalOverlayEl) {
+      App.dismissModal();
+    }
+    overlayMouseDownTarget = null;
+  });
+
+  window.addEventListener('mouseup', () => {
+    overlayMouseDownTarget = null;
+  });
+}
 
 // ── Close modal on Escape & Ctrl+K search shortcut ──
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') App.closeModal();
+  if (e.key === 'Escape') {
+    const previewContainer = document.getElementById('preview-modal-container');
+    if (previewContainer) {
+      App.closePreviewFileModal();
+    } else if (document.getElementById('modal-overlay')?.classList.contains('active')) {
+      App.dismissModal();
+    }
+  }
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
     e.preventDefault();
     const searchInput = document.getElementById('search-input');

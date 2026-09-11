@@ -1,4 +1,7 @@
-Welcome to version 1.4.1. This update introduces interactive 3D G-code layer slicing inspection, dynamic build plate scaling, IP rate-limit administration, duplicate file detection, and redesigned security and maintenance panels.
+# GyroidVault v1.4.1 — 3D G-Code Layer Inspection & Security
+**Release Date:** August 1, 2026
+
+Welcome to version 1.4.1! This update introduces interactive 3D G-code layer slicing inspection, dynamic build plate scaling, IP rate-limit administration, duplicate file detection, and redesigned security and maintenance panels.
 
 ## New Features
 

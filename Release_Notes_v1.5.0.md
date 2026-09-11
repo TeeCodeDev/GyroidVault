@@ -1,4 +1,7 @@
-Welcome to version 1.5.0. This major update brings full support for Binary G-Code (`.bgcode`), a customizable primary 3D preview selector, rich metadata & preview modals in Folder Mode, real-time upload progress with speed & ETA, Autodesk Fusion 360 (`.f3d`) file support, Markdown descriptions with live preview, default print materials, and light/dark theme fixes.
+# GyroidVault v1.5.0 — Binary G-Code & CAD Ecosystem
+**Release Date:** August 15, 2026
+
+Welcome to version 1.5.0! This major update brings full support for Binary G-Code (`.bgcode`), a customizable primary 3D preview selector, rich metadata & preview modals in Folder Mode, real-time upload progress with speed & ETA, Autodesk Fusion 360 (`.f3d`) file support, Markdown descriptions with live preview, default print materials, and light/dark theme fixes.
 
 ## New Features
 
