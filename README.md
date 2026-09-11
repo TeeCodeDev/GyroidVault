@@ -14,13 +14,13 @@
 
 ## What's New in v2.0.0
 
-- 🧩 **Studio 2.0 & Multi-Part Assembly:** View individual CAD parts or render all project files simultaneously on the virtual build plate with distinct material colors.
-- 📐 **Real-Time Physical Dimensions:** Automatically calculates and displays model bounding boxes in millimeters (`W × D × H mm`).
-- ⚡ **Background Library Scanner:** Asynchronous, non-blocking filesystem indexing with live status updates, SHA-256 duplicate detection, concurrency locks, and memory safeguards designed for 2TB+ collections.
-- 🎨 **Calm 2-Column Detail View:** Modern CAD-inspired layout with clean metadata panels, print logs, and unified file tables.
-- 📚 **2x2 Collection Collages & 1-Click ZIP:** Dynamic folder/collection previews and browser-direct ZIP streaming.
-- 🛡️ **Hardened Security & Defense:** 256-bit cryptographic keys, parameterized SQL binding, strict filesystem path confinement, IP rate-limiting, and auto-blocking.
-- 🚀 **1-Click Slicer Integration:** Direct protocol links to Bambu Studio, PrusaSlicer, OrcaSlicer, and Elegoo Slicer.
+- 🧩 **Multi-Part 3D Assembly:** Render all STL and 3MF parts together on the virtual build plate in contrasting colors, or inspect them one by one.
+- 📐 **Real Physical Dimensions:** See the exact size in millimeters (`W × D × H mm`) right in the 3D header before firing up your slicer.
+- ⚡ **Background Scanner for 2TB+ Libraries:** Non-blocking indexing that runs in the background with live progress counters and memory safety guards for giant folders.
+- 🎨 **2-Column Studio Workspace:** A clean, distraction-free layout with a full-size 3D viewport, Markdown notes, slicing specs, and print history tabs.
+- 📚 **2x2 Collection Collages & 1-Click ZIP:** Visual grid previews for folders and direct ZIP downloads straight to your browser.
+- 🛡️ **Under-the-Hood Security:** Stronger access control on private collections, path traversal defenses, parameterized queries, and login rate limiting.
+- 🚀 **1-Click Slicer Integration:** Launch models directly into Bambu Studio, PrusaSlicer, OrcaSlicer, or Elegoo Slicer.
 
 ---
 
@@ -137,12 +137,12 @@ npm start
 
 ---
 
-## Security & Privacy Architecture
-
-- **Your Data Stays on Your Hardware:** Everything is stored locally in your SQLite database and data folder. No mandatory cloud accounts or external telemetry.
-- **Strict Path Confinement:** File operations are strictly bound within `LIBRARY_PATH`, preventing directory traversal attacks.
-- **256-Bit Cryptographic Secrets:** Ephemeral or persistent CSPRNG secrets protect authentication cookies and session tokens.
-- **Tiered Rate-Limiting & IP Blocking:** Protects against login brute-forcing. Flagged IPs can be reviewed and unblocked from the admin Security tab.
+## Security & Privacy
+ 
+- **100% Local & Self-Hosted:** Everything lives on your own storage in a lightweight SQLite database. No mandatory cloud accounts, no third-party trackers, no telemetry.
+- **Strict Path Confinement:** File reads and uploads stay strictly inside your configured `LIBRARY_PATH` — no directory escaping.
+- **Brute-Force Protection:** Rate limiting on logins and sensitive actions. Malicious IPs are temporarily blocked and can be inspected or unblocked from admin settings.
+- **Session Tokens & Safe Queries:** Parameterized database queries and securely generated session secrets keep your vault private.
 
 ---
 
