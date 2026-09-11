@@ -1184,6 +1184,48 @@ app.post('/api/models/:id/files', authenticate, upload.array('files', 20), (req,
       }
 
       uploaded.push({ id: r.lastId, model_id: id, filename: path.basename(finalDest), original_name: file.originalname, file_type: ft, file_size: file.size, metadata, library_path: finalDest, thumbnail: fileThumbnail });
+
+      // Inspect internal files in uploaded ZIP archive without full disk extraction
+      if (ft === 'zip') {
+        try {
+          const AdmZip = require('adm-zip');
+          const zip = new AdmZip(finalDest);
+          const entries = zip.getEntries();
+          const { SUPPORTED_EXTENSIONS, IMAGE_EXTENSIONS } = require('./utils/library');
+          for (const entry of entries) {
+            if (entry.isDirectory) continue;
+            const entryExt = path.extname(entry.entryName).toLowerCase();
+            if (SUPPORTED_EXTENSIONS.includes(entryExt) || IMAGE_EXTENSIONS.includes(entryExt)) {
+              const entryVirtualPath = finalDest + '::' + entry.entryName;
+              const entryFt = getFileType(entry.name);
+              let entryThumb = null;
+
+              if (entryFt === 'image' && !model.thumbnail) {
+                try {
+                  const thumbFilename = `thumb_${Date.now()}_${path.basename(entry.entryName)}`;
+                  const outPath = path.join(UPLOADS_DIR, thumbFilename);
+                  fs.writeFileSync(outPath, entry.getData());
+                  entryThumb = thumbFilename;
+                  run('UPDATE models SET thumbnail=? WHERE id=?', [thumbFilename, id]);
+                  model.thumbnail = thumbFilename;
+                } catch (e) {}
+              }
+
+              const entryR = run('INSERT INTO files (model_id, filename, original_name, file_type, file_size, library_path, is_archive_entry, archive_entry_path, thumbnail) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                [id, entry.name, entry.entryName, entryFt, entry.header.size, entryVirtualPath, 1, entry.entryName, entryThumb]);
+
+              if (!model.preview_file_id && (entryFt === 'stl' || entryFt === '3mf')) {
+                run('UPDATE models SET preview_file_id=? WHERE id=?', [entryR.lastId, id]);
+                model.preview_file_id = entryR.lastId;
+              }
+
+              uploaded.push({ id: entryR.lastId, model_id: id, filename: entry.name, original_name: entry.entryName, file_type: entryFt, file_size: entry.header.size, library_path: entryVirtualPath, thumbnail: entryThumb });
+            }
+          }
+        } catch (zipErr) {
+          console.warn('Could not inspect uploaded zip archive:', zipErr);
+        }
+      }
     }
     run("UPDATE models SET updated_at=datetime('now') WHERE id=?", [id]);
     res.status(201).json(uploaded);
