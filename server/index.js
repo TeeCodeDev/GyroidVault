@@ -95,17 +95,21 @@ app.use(helmet({
       connectSrc: ["'self'", "https://api.github.com", "blob:", "data:"],
       workerSrc: ["'self'", "blob:"],
       objectSrc: ["'none'"],
-      baseUri: ["'self'"]
+      baseUri: ["'self'"],
+      upgradeInsecureRequests: null
     }
   },
-  crossOriginEmbedderPolicy: false
+  crossOriginEmbedderPolicy: false,
+  crossOriginOpenerPolicy: false,
+  crossOriginResourcePolicy: false,
+  hsts: false
 }));
 app.use(cors());
 app.use(cookieParser());
 app.use(express.json());
 
 app.use((req, res, next) => {
-  // Always permit public auth, public config, public release notes, and public shares
+  // Always permit public auth, public config, public release notes, static assets, and public shares
   if (
     req.path.startsWith('/api/auth/') ||
     req.path === '/api/system/public-config' ||
@@ -114,6 +118,9 @@ app.use((req, res, next) => {
     req.path === '/api/system/release-notes' ||
     req.path.startsWith('/js/') ||
     req.path.startsWith('/css/') ||
+    req.path.startsWith('/img/') ||
+    req.path.startsWith('/favicon') ||
+    req.path.startsWith('/icon') ||
     req.path === '/' ||
     req.path.startsWith('/index.html')
   ) {
