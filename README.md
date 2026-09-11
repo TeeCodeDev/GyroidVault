@@ -1,121 +1,171 @@
 # GyroidVault
 
-**GyroidVault** is a self-hosted 3D model library and print manager. It helps you organize your STL, 3MF, and Gcode files, keep track of your print history, and group files into project collections.
+[![Version](https://img.shields.io/badge/version-2.0.0-blue.svg)](https://github.com/TeeCodeDev/GyroidVault/releases)
+[![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-purple.svg)](LICENSE)
+[![Docker](https://img.shields.io/badge/docker-ghcr.io-cyan.svg)](https://github.com/TeeCodeDev/GyroidVault/pkgs/container/gyroidvault)
+[![Website](https://img.shields.io/badge/website-gyroidvault.com-emerald.svg)](https://gyroidvault.com)
 
-![GyroidVault Dashboard](screenshots/GyroidVault-Dashboard_page.png)
+**GyroidVault** is a fast, self-hosted 3D model vault and slicing workspace built for 3D printing enthusiasts, makers, and print farm owners. Organize your STL, 3MF, STEP, and G-Code files on your own hardware, inspect multi-part assemblies in a calm 3D studio, measure exact physical dimensions in millimeters, and send slices directly to your printers.
 
-> **⚠️ Early Release Notice:** GyroidVault is a brand-new project and still under active development. You may encounter bugs or rough edges. If you do, please [open an issue](https://github.com/TeeCodeDev/GyroidVault/issues) — your feedback helps make GyroidVault better for everyone!
+🌐 **Official Website:** [gyroidvault.com](https://gyroidvault.com)  
+📖 **Documentation & Wiki:** [GitHub Wiki](https://github.com/TeeCodeDev/GyroidVault/wiki)
+
+---
+
+## What's New in v2.0.0
+
+- 🧩 **Studio 2.0 & Multi-Part Assembly:** View individual CAD parts or render all project files simultaneously on the virtual build plate with distinct material colors.
+- 📐 **Real-Time Physical Dimensions:** Automatically calculates and displays model bounding boxes in millimeters (`W × D × H mm`).
+- ⚡ **Background Library Scanner:** Asynchronous, non-blocking filesystem indexing with live status updates, SHA-256 duplicate detection, concurrency locks, and memory safeguards designed for 2TB+ collections.
+- 🎨 **Calm 2-Column Detail View:** Modern CAD-inspired layout with clean metadata panels, print logs, and unified file tables.
+- 📚 **2x2 Collection Collages & 1-Click ZIP:** Dynamic folder/collection previews and browser-direct ZIP streaming.
+- 🛡️ **Hardened Security & Defense:** 256-bit cryptographic keys, parameterized SQL binding, strict filesystem path confinement, IP rate-limiting, and auto-blocking.
+- 🚀 **1-Click Slicer Integration:** Direct protocol links to Bambu Studio, PrusaSlicer, OrcaSlicer, and Elegoo Slicer.
+
+---
 
 ## Screenshots
 
-<table style="border: none; border-collapse: collapse;">
+<table style="border: none; border-collapse: collapse; width: 100%;">
   <tr>
-    <td style="padding: 5px; border: none;"><img src="screenshots/GyroidVault-Models_page.png" alt="Models Gallery"></td>
-    <td style="padding: 5px; border: none;"><img src="screenshots/GyroidVault-Collection_page.png" alt="Collections Management"></td>
+    <td style="padding: 6px; border: none; width: 50%;">
+      <img src="screenshots/library-grid.png" alt="Library Grid View & Collages" style="border-radius: 8px; width: 100%;">
+      <p align="center"><em>Library Grid with Dynamic 2x2 Collages & Quick Tags</em></p>
+    </td>
+    <td style="padding: 6px; border: none; width: 50%;">
+      <img src="screenshots/studio-model-detail.png" alt="Studio 2.0 Model Detail Workspace" style="border-radius: 8px; width: 100%;">
+      <p align="center"><em>Studio 2.0 2-Column Workspace with mm Dimensions</em></p>
+    </td>
   </tr>
   <tr>
-    <td style="padding: 5px; border: none;"><img src="screenshots/GyroidVault-Single_model_page.png" alt="Model Detail View"></td>
-    <td style="padding: 5px; border: none;"><img src="screenshots/GyroidVault-Dashboard_page.png" alt="Dashboard Statistics"></td>
+    <td style="padding: 6px; border: none; width: 50%;">
+      <img src="screenshots/studio-pawn.png" alt="Interactive 3D Studio & Filament Swatches" style="border-radius: 8px; width: 100%;">
+      <p align="center"><em>Interactive 3D Studio with Real-time Filament Swatches</em></p>
+    </td>
+    <td style="padding: 6px; border: none; width: 50%;">
+      <img src="screenshots/GyroidVault-Dashboard_page.png" alt="Dashboard Statistics" style="border-radius: 8px; width: 100%;">
+      <p align="center"><em>Dashboard Statistics & Material Usage Tracking</em></p>
+    </td>
   </tr>
 </table>
 
-## Features
+---
 
-- **Dark/Light Mode & Themes**: Toggle between dark and light themes, and choose from multiple application themes (e.g., Glass) depending on your preference.
-- **Interactive 3D G-Code Previewer**: Inspect parsed G-code layer by layer with live layer numbers, Z-heights, auto-centered camera framing, dynamic build volume grids, and filament color matching.
-- **IP Auto-Block & Security Control**: Monitor rate-limited IP addresses from failed login attempts and unblock them with 1-click in the dedicated Security settings tab.
-- **Duplicate File Finder**: Scan your 3D model library using SHA-256 file hashes to locate identical 3D models across your collection.
-- **Batch Actions**: Use `Ctrl+Click` (or `Shift+Click`) to select multiple models in the grid to bulk tag, delete, or add to collections at once.
-- **Folder Watching**: Automatically scan your local directories to import models, or upload them manually.
-- **Folder View Collages**: Browse your local directories directly. Folders automatically generate dynamic 2x2 image collages based on the 3D files inside them.
-- **Built-in 3D Viewer**: Preview STL and 3MF files directly in your browser.
-- **Extended G-Code Analysis**: Extract deep metadata from your G-Code files including infill, layers, temperatures, volumetric speed, print cost, and the slicer/printer used.
-- **Moonraker / Klipper Integration**: Configure your printers and seamlessly send G-Code files directly to your printer with one click.
-- **Custom Meta Boxes**: Add and manage custom metadata fields for your models for ultimate flexibility.
-- **Collections**: Group related files together for multi-part projects.
-- **Model Versioning**: Track design iterations (v1, v2, final) under a single model entry.
-- **Print Log**: Keep a history of your prints, filament types used, and success rates.
-- **Public Share Links**: Generate secure, expiring links to share specific models with others.
-- **1-Click Slicer Integration**: Set your "Preferred Slicer" in your profile to instantly send files to Bambu Studio, PrusaSlicer, OrcaSlicer, or Elegoo Slicer.
-- **Multi-User & Roles (RBAC)**: Assign roles (Admin, Uploader, Viewer) to restrict access. Viewers get a clean, read-only interface with hidden action buttons.
+## Core Features
+
+- **3D Interactive Studio:** Smooth WebGL rendering for STL and 3MF files with isometric presets, wireframe, X-ray inspection, and 1-click thumbnail snapshot generation (`Cover`).
+- **Interactive G-Code Previewer:** Inspect toolpaths layer by layer with live layer counts, Z-heights, auto-centered camera framing, and nozzle/bed temperature readouts.
+- **Scale Ready for 2TB+ Libraries:** Optimized SQLite indexing and throttled batch disk writes handle tens of thousands of models without UI lag or memory exhaustion.
+- **Moonraker & Klipper Integration:** Connect your 3D printers and upload sliced G-Code files straight to your printer with a single click.
+- **Power Batch Editing:** `Ctrl+Click` or `Shift+Click` to select dozens of models at once for bulk tagging, category re-assignment, or collection grouping.
+- **Folder Watching & Direct Browsing:** Point GyroidVault to your existing 3D print folders on NAS/Unraid shares. It indexes non-destructively without forcing strange directory structures.
+- **Duplicate File Finder:** Scans your library with SHA-256 hashes to uncover identical copies eating up drive space.
+- **Role-Based Access Control (RBAC):** Admin, Uploader, and Viewer permissions. Keep private collections safe while letting family or team members browse read-only.
+- **Expiring Public Share Links:** Generate secure, timed links to share specific models without giving access to your entire library.
+- **Custom Metadata Fields:** Add custom key-value pairs (designer, license, print orientation notes, nozzle size) tailored to your workflow.
+
+---
 
 ## Quick Start (Docker Compose)
 
-The easiest way to get GyroidVault running is using Docker Compose.
+The recommended installation method is using Docker Compose:
 
-1. **Create a file** named `docker-compose.yml`:
-    ```yaml
-    services:
-      gyroidvault:
-        image: ghcr.io/teecodedev/gyroidvault:latest
-        container_name: gyroidvault
-        ports:
-          - "3457:3000"
-        volumes:
-          - ./data:/app/data
-          - /path/to/your/3dprints:/library
-        environment:
-          - NODE_ENV=production
-          - PORT=3000
-          - LIBRARY_PATH=/library
-        restart: unless-stopped
-    ```
+```yaml
+services:
+  gyroidvault:
+    image: ghcr.io/teecodedev/gyroidvault:latest
+    container_name: gyroidvault
+    ports:
+      - "3457:3000"
+    volumes:
+      - ./data:/app/data
+      - /path/to/your/3dprints:/library
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - LIBRARY_PATH=/library
+    restart: unless-stopped
+```
 
-2. **Configure your library**: Replace `/path/to/your/3dprints` with the path on your host machine where your models are stored.
+1. Replace `/path/to/your/3dprints` with the directory path where your 3D files live.
+2. Start the service:
+   ```bash
+   docker compose up -d
+   ```
+3. Open your browser and go to `http://localhost:3457` (or your server IP).
 
-3. **Start the container**:
-    ```bash
-    docker-compose up -d
-    ```
+> 💡 **Unraid Users:** GyroidVault is available directly in the Unraid Community Applications store. Search for `GyroidVault` to install with pre-configured templates!
 
-4. **Open in browser**:
-    Go to [http://localhost:3457](http://localhost:3457) in your browser.
+---
 
 ## Initial Setup
 
-### 1. Registering the Admin
-The very first person to register on a new GyroidVault instance automatically becomes the Administrator.
-- You do not need an invite code for the first registration.
-- If you are prompted for an invite code on a fresh install, make sure your `./data` directory is empty.
+### 1. Register the Administrator
+The first user account created on a fresh GyroidVault installation is automatically promoted to **Administrator**. No invite code is required for the initial setup.
 
-### 2. Configuring SMTP (Email)
-To enable password resets and user invitations, you need to configure SMTP:
-1. Log in as the **Administrator**.
-2. Go to **Settings** > **SMTP & Mail**.
-3. Enter your SMTP server details (Host, Port, User, Password).
-4. Save and test the configuration.
+### 2. Optional: Configure SMTP Mail
+To enable password recovery and email invites:
+1. Log in as **Administrator**.
+2. Go to **Settings** → **SMTP & Mail**.
+3. Fill in your SMTP host, port, credentials, and from-address, then click **Send Test Email**.
 
-## Manual Installation
+### 3. Connect Moonraker / Klipper Printers
+1. Go to **Settings** → **Printers**.
+2. Add your printer name, Moonraker HTTP URL (e.g., `http://192.168.1.50:7125`), and optional API key.
+3. You can now send G-Code files straight to your printer from any model detail page!
 
-1. Install [Node.js](https://nodejs.org/) (v18+).
-2. Clone this repo and run `npm install`.
-3. Copy `.env.example` to `.env` and configure your settings.
-4. Run `npm start`.
+---
 
-## Security & Privacy
+## Manual Installation (Without Docker)
 
-- **Local SQLite Database**: Your data stays on your own hardware. No external cloud database or telemetry is forced.
-- **Admin Control**: The first registered user automatically becomes the Admin. Invited users need token codes.
-- **Advanced API Security**: Uses secure `HttpOnly` cookies for authentication, double-submit CSRF protection, and strict rate-limiting on login endpoints to prevent brute-force attacks.
-- **File Management**: Uploaded files are kept locally in the database/uploads structure.
+For running directly on bare metal or custom homelab environments:
 
-## Troubleshooting & Support
+```bash
+# 1. Clone the repository
+git clone https://github.com/TeeCodeDev/GyroidVault.git
+cd GyroidVault
 
-### Common Issues
-- **Viewer not loading**: Make sure your browser supports WebGL and that you are not using an ad-blocker that blocks Three.js components.
-- **File scanning issues**: Verify that your `LIBRARY_PATH` or the volume mapping in Docker is correct and that the app has read permissions for that directory.
-- **Slicer links not opening**: Make sure the slicer (Bambu Studio, etc.) is installed and has registered its URL scheme on your OS.
-- 💡 **Mac / Apple Silicon Users**: If GyroidVault doesn't respond on `http://localhost:3457/` after starting the container, try navigating to `http://127.0.0.1:3457/` instead. This is a common Docker networking quirk on Mac OSX!
+# 2. Install dependencies (Node.js 18+ required)
+npm install
 
-### Support
-- **Unraid Users**: Please use the dedicated support thread on the Unraid Forums.
-- **General Issues**: Open an issue on [GitHub Issues](https://github.com/TeeCodeDev/GyroidVault/issues).
+# 3. Setup configuration
+cp .env.example .env
+
+# 4. Start the server
+npm start
+```
+
+---
+
+## Security & Privacy Architecture
+
+- **Your Data Stays on Your Hardware:** Everything is stored locally in your SQLite database and data folder. No mandatory cloud accounts or external telemetry.
+- **Strict Path Confinement:** File operations are strictly bound within `LIBRARY_PATH`, preventing directory traversal attacks.
+- **256-Bit Cryptographic Secrets:** Ephemeral or persistent CSPRNG secrets protect authentication cookies and session tokens.
+- **Tiered Rate-Limiting & IP Blocking:** Protects against login brute-forcing. Flagged IPs can be reviewed and unblocked from the admin Security tab.
+
+---
+
+## Slicer URL Handlers
+
+GyroidVault supports direct file launching into major slicers via desktop URI protocols:
+- **Bambu Studio:** `bambustudio://`
+- **PrusaSlicer:** `prusaslicer://`
+- **OrcaSlicer:** `orcaslicer://`
+
+Make sure your slicer has URL protocol registration enabled in its system preferences.
+
+---
+
+## Community & Support
+
+- **Bug Reports & Feature Requests:** [GitHub Issues](https://github.com/TeeCodeDev/GyroidVault/issues)
+- **Official Documentation:** [GyroidVault Wiki](https://github.com/TeeCodeDev/GyroidVault/wiki)
+- **Website:** [gyroidvault.com](https://gyroidvault.com)
+- **Support the Project:** If you enjoy using GyroidVault, you can support ongoing maintenance via [Ko-fi](https://ko-fi.com/D1D51ZGUNL).
+
+---
 
 ## License
 
-This project is licensed under the **GNU Affero General Public License v3.0 (AGPL-3.0)**. See the [LICENSE](LICENSE) file for details. This ensures that the software remains free and that improvements made by the community are shared back.
-
----
-*Built for the 3D Printing Community.*
-
-*Note: Since English isn't my first language, I used AI to help write the documentation and structure the README. The application itself, the architecture, the UI, and the features are all my own, with AI helping me debug and iterate faster.*
+GyroidVault is open-source software licensed under the **GNU Affero General Public License v3.0 (AGPL-3.0)**. See the [LICENSE](LICENSE) file for complete details.

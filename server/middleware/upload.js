@@ -16,7 +16,7 @@ const storage = multer.diskStorage({
   }
 });
 
-const ALLOWED_EXTENSIONS = ['.stl', '.gcode', '.bgcode', '.3mf', '.obj', '.step', '.stp', '.f3d', '.png', '.jpg', '.jpeg', '.gif', '.webp', '.pdf', '.txt', '.md'];
+const ALLOWED_EXTENSIONS = ['.stl', '.gcode', '.bgcode', '.3mf', '.obj', '.step', '.stp', '.f3d', '.png', '.jpg', '.jpeg', '.gif', '.webp', '.pdf', '.txt', '.md', '.zip'];
 
 const fileFilter = (req, file, cb) => {
   const ext = path.extname(file.originalname).toLowerCase();
@@ -39,7 +39,7 @@ const getFileType = (filename) => {
   const ext = path.extname(filename).toLowerCase();
   const typeMap = {
     '.stl': 'stl', '.gcode': 'gcode', '.bgcode': 'gcode', '.3mf': '3mf', '.obj': 'obj',
-    '.step': 'step', '.stp': 'step', '.f3d': 'f3d',
+    '.step': 'step', '.stp': 'step', '.f3d': 'f3d', '.zip': 'zip',
     '.png': 'image', '.jpg': 'image', '.jpeg': 'image', '.gif': 'image', '.webp': 'image',
     '.pdf': 'document', '.txt': 'document', '.md': 'document'
   };

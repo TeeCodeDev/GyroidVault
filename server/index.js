@@ -6,7 +6,8 @@ const { initDatabase, all, get, run, UPLOADS_DIR } = require('./database');
 const { upload, getFileType, setUploadsDir } = require('./middleware/upload');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const { authenticate, SECRET } = require('./middleware/auth');
+const { authenticate, requireAdmin, requireUploader, getJwtSecret } = require('./middleware/auth');
+const { validatePathConfinement, safeInt, safeUrl } = require('./middleware/security');
 const helmet = require('helmet');
 const cors = require('cors');
 const cookieParser = require('cookie-parser');
@@ -81,23 +82,59 @@ function getSettingBool(key, defaultValue = false) {
   return row.value === 'true' || row.value === '1';
 }
 
-app.use(helmet({ contentSecurityPolicy: false }));
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'"],
+      scriptSrcAttr: ["'unsafe-inline'"],
+      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https:"],
+      styleSrcAttr: ["'unsafe-inline'"],
+      fontSrc: ["'self'", "https:", "data:", "blob:", "chrome-extension:", "moz-extension:"],
+      imgSrc: ["'self'", "data:", "blob:", "https:"],
+      connectSrc: ["'self'", "https://api.github.com", "blob:", "data:"],
+      workerSrc: ["'self'", "blob:"],
+      objectSrc: ["'none'"],
+      baseUri: ["'self'"]
+    }
+  },
+  crossOriginEmbedderPolicy: false
+}));
 app.use(cors());
 app.use(cookieParser());
 app.use(express.json());
 
-app.use('/api', (req, res, next) => {
-  if (req.path.startsWith('/auth/') || req.path === '/system/public-config') {
+app.use((req, res, next) => {
+  // Always permit public auth, public config, public release notes, and public shares
+  if (
+    req.path.startsWith('/api/auth/') ||
+    req.path === '/api/system/public-config' ||
+    req.path.startsWith('/api/shares/') ||
+    req.path === '/api/system/updates' ||
+    req.path === '/api/system/release-notes' ||
+    req.path.startsWith('/js/') ||
+    req.path.startsWith('/css/') ||
+    req.path === '/' ||
+    req.path.startsWith('/index.html')
+  ) {
     return next();
   }
-  if (getSettingBool('require_login_to_view')) {
-    const token = req.cookies.pv_token;
-    if (!token) return res.status(401).json({ error: 'Private instance - login required' });
+
+  // Populate req.user whenever a valid token is present; enforce if private instance is enabled
+  let token = req.cookies.pv_token;
+  if (!token && req.headers.authorization && req.headers.authorization.startsWith('Bearer ')) {
+    token = req.headers.authorization.split(' ')[1];
+  }
+  if (token) {
     try {
-      jwt.verify(token, SECRET);
+      req.user = jwt.verify(token, getJwtSecret());
     } catch(e) {
-      return res.status(401).json({ error: 'Private instance - invalid token' });
+      if (getSettingBool('require_login_to_view')) {
+        return res.status(401).json({ error: 'Private instance - invalid token' });
+      }
     }
+  } else if (getSettingBool('require_login_to_view')) {
+    return res.status(401).json({ error: 'Private instance - login required' });
   }
   next();
 });
@@ -115,6 +152,33 @@ function trackFailedLogin(ip) {
   blockedIPsStore.set(ip, entry);
 }
 
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 1000,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests, please try again later.' },
+  validate: { xForwardedForHeader: false }
+});
+
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 15,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many authentication attempts, please try again after 15 minutes.' },
+  validate: { xForwardedForHeader: false }
+});
+
+const heavyLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many resource-intensive requests, please try again later.' },
+  validate: { xForwardedForHeader: false }
+});
+
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 5,
@@ -125,9 +189,12 @@ const loginLimiter = rateLimit({
   validate: { xForwardedForHeader: false }
 });
 
+// Apply baseline rate limiting to all /api routes
+app.use('/api', apiLimiter);
+
 // ─── AUTH ───────────────────────────────────────────────────────────────────
 
-app.post('/api/auth/register', async (req, res) => {
+app.post('/api/auth/register', authLimiter, async (req, res) => {
   try {
     const { username, password, email, invite_token } = req.body;
     if (!username || !password || !email) return res.status(400).json({ error: 'Missing fields' });
@@ -180,7 +247,7 @@ app.post('/api/auth/invite', authenticate, async (req, res) => {
     run("INSERT OR REPLACE INTO user_invites (token, email, expires_at) VALUES (?, ?, datetime('now', '+7 days'))", [token, email]);
     
     const { sendInviteEmail } = require('./utils/email');
-    await sendInviteEmail(email, token, req.headers.origin || `http://${req.headers.host}`);
+    await sendInviteEmail(email, token, req);
     
     res.json({ message: 'Invitation sent' });
   } catch (e) {
@@ -198,7 +265,7 @@ app.post('/api/auth/login', loginLimiter, async (req, res) => {
     }
     
     const csrfToken = crypto.randomBytes(32).toString('hex');
-    const token = jwt.sign({ id: user.id, role: user.role, csrfToken }, SECRET, { expiresIn: '30d' });
+    const token = jwt.sign({ id: user.id, role: user.role, csrfToken }, getJwtSecret(), { expiresIn: '30d' });
     
     res.cookie('pv_token', token, { 
       httpOnly: true, 
@@ -258,7 +325,7 @@ app.post('/api/auth/api-key', authenticate, (req, res) => {
   try {
     const token = jwt.sign(
       { id: req.user.id, username: req.user.username, role: req.user.role },
-      SECRET
+      getJwtSecret()
       // No expiration for API tokens (or set a very long one like 10y)
     );
     res.json({ api_key: token });
@@ -268,7 +335,7 @@ app.post('/api/auth/api-key', authenticate, (req, res) => {
   }
 });
 
-app.post('/api/auth/forgot-password', async (req, res) => {
+app.post('/api/auth/forgot-password', authLimiter, async (req, res) => {
   try {
     const { email } = req.body;
     const user = get('SELECT * FROM users WHERE email=?', [email]);
@@ -278,12 +345,12 @@ app.post('/api/auth/forgot-password', async (req, res) => {
     run("UPDATE users SET password_reset_token=?, password_reset_expires=datetime('now', '+1 hour') WHERE id=?", [token, user.id]);
     
     const { sendResetEmail } = require('./utils/email');
-    await sendResetEmail(email, token, req.headers.origin || `http://${req.headers.host}`);
+    await sendResetEmail(email, token, req);
     res.json({ message: 'Reset email sent' });
   } catch (e) { console.error(e); res.status(500).json({ error: 'Failed to send reset email' }); }
 });
 
-app.post('/api/auth/reset-password', async (req, res) => {
+app.post('/api/auth/reset-password', authLimiter, async (req, res) => {
   try {
     const { token, password } = req.body;
     if (!password) return res.status(400).json({ error: 'Password is required' });
@@ -300,6 +367,9 @@ app.post('/api/auth/reset-password', async (req, res) => {
 });
 
 function getFileUrl(file) {
+  if (file.is_archive_entry || (file.library_path && file.library_path.includes('::'))) {
+    return `/api/files/${file.id}/stream`;
+  }
   if (file.library_path) {
     const relPath = path.relative(LIBRARY_PATH, file.library_path).replace(/\\/g, '/');
     const encodedPath = relPath.split('/').map(segment => encodeURIComponent(segment)).join('/');
@@ -333,17 +403,109 @@ if (fs.existsSync(LIBRARY_PATH)) {
   app.use('/library-files', express.static(LIBRARY_PATH));
 }
 
+// Stream file content directly from disk or from inside ZIP archives
+app.get('/api/files/:id/stream', (req, res, next) => {
+  const shareSlug = req.query.share;
+  const doStream = () => {
+    try {
+      const id = Number(req.params.id);
+      const file = get('SELECT * FROM files WHERE id=?', [id]);
+      if (!file) return res.status(404).json({ error: 'File not found' });
+
+      if (shareSlug) {
+        const share = get("SELECT * FROM shares WHERE id=? AND (expires_at IS NULL OR expires_at > datetime('now'))", [shareSlug]);
+        if (!share || file.model_id !== share.model_id) {
+          return res.status(403).json({ error: 'Invalid or expired share link' });
+        }
+      } else {
+        // Enforce privacy check: if model is in private project(s), ensure user is owner or admin
+        const privateProjects = all('SELECT p.user_id FROM projects p JOIN project_models pm ON p.id=pm.project_id WHERE pm.model_id=? AND p.visibility="private"', [file.model_id]);
+        if (privateProjects.length > 0) {
+          if (!req.user || (req.user.role !== 'admin' && !privateProjects.some(p => p.user_id === req.user.id))) {
+            return res.status(403).json({ error: 'Access denied to private file' });
+          }
+        }
+      }
+
+    if (file.is_archive_entry && file.library_path && file.library_path.includes('::')) {
+      const [zipPath, entryPath] = file.library_path.split('::');
+      if (!fs.existsSync(zipPath)) return res.status(404).json({ error: 'Archive file not found' });
+
+      const AdmZip = require('adm-zip');
+      const zip = new AdmZip(zipPath);
+      const entry = zip.getEntry(entryPath);
+      if (!entry) return res.status(404).json({ error: 'File not found in archive' });
+
+      const mimeMap = {
+        '.stl': 'model/stl',
+        '.3mf': 'model/3mf',
+        '.obj': 'model/obj',
+        '.step': 'model/step',
+        '.stp': 'model/step',
+        '.f3d': 'application/octet-stream',
+        '.gcode': 'text/x-gcode',
+        '.bgcode': 'application/octet-stream',
+        '.png': 'image/png',
+        '.jpg': 'image/jpeg',
+        '.jpeg': 'image/jpeg',
+        '.webp': 'image/webp',
+        '.pdf': 'application/pdf',
+        '.txt': 'text/plain',
+        '.md': 'text/markdown'
+      };
+      const ext = path.extname(file.filename).toLowerCase();
+      const contentType = mimeMap[ext] || 'application/octet-stream';
+
+      res.setHeader('Content-Type', contentType);
+      res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(file.filename)}"`);
+      return res.send(entry.getData());
+    }
+
+    if (file.library_path && fs.existsSync(file.library_path)) {
+      const confined = validatePathConfinement(LIBRARY_PATH, path.relative(LIBRARY_PATH, file.library_path));
+      if (!confined) return res.status(403).json({ error: 'Access denied' });
+      return res.sendFile(confined);
+    }
+    const uploadPath = path.join(UPLOADS_DIR, file.filename);
+    if (fs.existsSync(uploadPath)) {
+      const confined = validatePathConfinement(UPLOADS_DIR, path.relative(UPLOADS_DIR, uploadPath));
+      if (!confined) return res.status(403).json({ error: 'Access denied' });
+      return res.sendFile(confined);
+    }
+
+      res.status(404).json({ error: 'File data not found on disk' });
+    } catch (e) {
+      console.error('Stream error:', e);
+      res.status(500).json({ error: 'Failed to stream file' });
+    }
+  };
+
+  if (shareSlug) {
+    doStream();
+  } else if (getSettingBool('require_login_to_view')) {
+    authenticate(req, res, doStream);
+  } else {
+    doStream();
+  }
+});
+
 // ─── MODELS ───────────────────────────────────────────────────────────
 
 app.get('/api/models', (req, res) => {
   try {
-    const { search, category, tag, user, printed, sort = 'updated', order, project_id, page = 1, limit = 24 } = req.query;
+    const { search, category, tag, format, user, printed, sort = 'updated', order, project_id, page = 1, limit = 24 } = req.query;
     let query = `SELECT m.*, c.name as category_name, c.color as category_color, u.username as uploader_name,
       (SELECT COUNT(*) FROM files WHERE model_id=m.id) as file_count,
       (SELECT COUNT(*) FROM print_history WHERE model_id=m.id) as print_count,
       (SELECT GROUP_CONCAT(DISTINCT file_type) FROM files WHERE model_id=m.id) as file_types,
-      (SELECT filename FROM files WHERE model_id=m.id AND file_type='stl' ORDER BY uploaded_at DESC LIMIT 1) as stl_file,
-      (SELECT library_path FROM files WHERE model_id=m.id AND file_type='stl' ORDER BY uploaded_at DESC LIMIT 1) as stl_library_path,
+      COALESCE(
+        (SELECT filename FROM files WHERE id=m.preview_file_id AND file_type IN ('stl','3mf')),
+        (SELECT filename FROM files WHERE model_id=m.id AND file_type='stl' ORDER BY uploaded_at DESC LIMIT 1)
+      ) as stl_file,
+      COALESCE(
+        (SELECT library_path FROM files WHERE id=m.preview_file_id AND file_type IN ('stl','3mf')),
+        (SELECT library_path FROM files WHERE model_id=m.id AND file_type='stl' ORDER BY uploaded_at DESC LIMIT 1)
+      ) as stl_library_path,
       (SELECT filename FROM files WHERE model_id=m.id AND file_type='3mf' ORDER BY uploaded_at DESC LIMIT 1) as mf_file,
       (SELECT library_path FROM files WHERE model_id=m.id AND file_type='3mf' ORDER BY uploaded_at DESC LIMIT 1) as mf_library_path
       FROM models m 
@@ -360,6 +522,10 @@ app.get('/api/models', (req, res) => {
     if (search) { conds.push("(m.name LIKE ? OR m.description LIKE ?)"); params.push(`%${search}%`, `%${search}%`); }
     if (category) { conds.push("m.category_id=?"); params.push(Number(category)); }
     if (tag) { conds.push("m.id IN (SELECT model_id FROM model_tags WHERE tag_id=?)"); params.push(Number(tag)); }
+    if (format && format !== 'all') {
+      conds.push("m.id IN (SELECT DISTINCT model_id FROM files WHERE file_type=?)");
+      params.push(format.toLowerCase());
+    }
     if (user) { conds.push("m.user_id=?"); params.push(Number(user)); }
     if (printed === 'true') conds.push("m.id IN (SELECT DISTINCT model_id FROM print_history)");
     else if (printed === 'false') conds.push("m.id NOT IN (SELECT DISTINCT model_id FROM print_history)");
@@ -383,7 +549,28 @@ app.get('/api/models', (req, res) => {
     query += ` ORDER BY ${sortMap[sort]||'m.updated_at'} ${sqlOrder} LIMIT ? OFFSET ?`;
     params.push(parsedLimit, offset);
     
-    const models = all(query, params).map(m => {
+    const rawModels = all(query, params);
+    const modelIds = rawModels.map(m => m.id);
+
+    // High-performance batched tag and project fetching for all models on current page
+    const tagsByModel = {};
+    const projectsByModel = {};
+    if (modelIds.length) {
+      const placeholders = modelIds.map(() => '?').join(',');
+      const allTags = all(`SELECT mt.model_id, t.id, t.name FROM tags t JOIN model_tags mt ON mt.tag_id=t.id WHERE mt.model_id IN (${placeholders})`, modelIds);
+      allTags.forEach(t => {
+        if (!tagsByModel[t.model_id]) tagsByModel[t.model_id] = [];
+        tagsByModel[t.model_id].push({ id: t.id, name: t.name });
+      });
+
+      const allProjects = all(`SELECT pm.model_id, p.id, p.name, p.visibility FROM projects p JOIN project_models pm ON pm.project_id=p.id WHERE pm.model_id IN (${placeholders})`, modelIds);
+      allProjects.forEach(p => {
+        if (!projectsByModel[p.model_id]) projectsByModel[p.model_id] = [];
+        projectsByModel[p.model_id].push({ id: p.id, name: p.name, visibility: p.visibility });
+      });
+    }
+
+    const models = rawModels.map(m => {
       let stl_url = null;
       if (m.stl_file) {
         stl_url = getFileUrl({ filename: m.stl_file, library_path: m.stl_library_path });
@@ -398,17 +585,22 @@ app.get('/api/models', (req, res) => {
         thumbnail: thumb_url,
         stl_file: stl_url,
         file_types: m.file_types ? [...new Set(m.file_types.split(','))] : [],
-        tags: all('SELECT t.id,t.name FROM tags t JOIN model_tags mt ON mt.tag_id=t.id WHERE mt.model_id=?', [m.id]),
+        tags: tagsByModel[m.id] || [],
+        projects: projectsByModel[m.id] || [],
         has_printed: m.print_count > 0,
       };
     });
+
+    const totalSizeObj = get('SELECT SUM(file_size) as total_bytes FROM files');
+    const totalStorageBytes = totalSizeObj?.total_bytes || 0;
     
     res.json({
       models,
       totalItems,
       totalPages,
       currentPage: parsedPage,
-      limit: parsedLimit
+      limit: parsedLimit,
+      totalStorageBytes
     });
   } catch (e) { console.error(e); res.status(500).json({ error: 'Failed to fetch models' }); }
 });
@@ -418,6 +610,15 @@ app.get('/api/models/:id', (req, res) => {
     const id = Number(req.params.id);
     const model = get('SELECT m.*,c.name as category_name,c.color as category_color, u.username as uploader_name FROM models m LEFT JOIN categories c ON m.category_id=c.id LEFT JOIN users u ON m.user_id=u.id WHERE m.id=?', [id]);
     if (!model) return res.status(404).json({ error: 'Model not found' });
+
+    // Enforce private collection access control
+    const privateProjects = all('SELECT p.id, p.user_id FROM projects p JOIN project_models pm ON p.id=pm.project_id WHERE pm.model_id=? AND p.visibility="private"', [id]);
+    const publicProjects = all('SELECT p.id FROM projects p JOIN project_models pm ON p.id=pm.project_id WHERE pm.model_id=? AND p.visibility="public"', [id]);
+    if (privateProjects.length > 0 && publicProjects.length === 0) {
+      if (!req.user || (req.user.role !== 'admin' && !privateProjects.some(p => p.user_id === req.user.id) && model.user_id !== req.user.id)) {
+        return res.status(403).json({ error: 'Access denied to private model' });
+      }
+    }
 
     if (model.thumbnail) {
       model.thumbnail_url = getThumbUrl(model.thumbnail, model.library_path);
@@ -430,10 +631,11 @@ app.get('/api/models/:id', (req, res) => {
     }));
     model.prints = all('SELECT ph.*,mat.name as material_name, u.username as printer_name FROM print_history ph LEFT JOIN materials mat ON ph.material_id=mat.id LEFT JOIN users u ON ph.user_id=u.id WHERE ph.model_id=? ORDER BY ph.printed_at DESC', [model.id]);
     model.tags = all('SELECT t.id,t.name FROM tags t JOIN model_tags mt ON mt.tag_id=t.id WHERE mt.model_id=?', [model.id]);
+    model.projects = all('SELECT p.id, p.name, p.visibility FROM projects p JOIN project_models pm ON p.id=pm.project_id WHERE pm.model_id=?', [model.id]);
     model.has_printed = model.prints.length > 0;
     
     // Versions
-    const rootId = model.parent_id || model.id;
+    const rootId = parent_id = model.parent_id || model.id;
     model.versions = all(`
       SELECT id, name, created_at, 
       (SELECT COUNT(*) FROM files WHERE model_id = models.id) as file_count 
@@ -458,9 +660,13 @@ app.put('/api/models/:id/preview-file', authenticate, (req, res) => {
 
     run("UPDATE models SET preview_file_id=?, updated_at=datetime('now') WHERE id=?", [file.id, id]);
 
-    // If file has a thumbnail, update model thumbnail as well
+    // If file has a thumbnail or is an image, update model thumbnail; if 3D, clear old snapshot so 3D preview renders
     if (file.thumbnail) {
       run('UPDATE models SET thumbnail=? WHERE id=?', [file.thumbnail, id]);
+    } else if (file.file_type === 'image') {
+      run('UPDATE models SET thumbnail=? WHERE id=?', [file.filename, id]);
+    } else if (file.file_type === 'stl' || file.file_type === '3mf') {
+      run('UPDATE models SET thumbnail=NULL WHERE id=?', [id]);
     }
 
     res.json({ success: true, preview_file_id: file.id });
@@ -495,41 +701,147 @@ app.post('/api/models/:id/versions', authenticate, (req, res) => {
   } catch (e) { console.error(e); res.status(500).json({ error: 'Failed to create version' }); }
 });
 
-app.post('/api/library/scan', authenticate, async (req, res) => {
+app.post('/api/library/scan', authenticate, (req, res) => {
   if (req.user.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
   try {
-    const { scanLibrary } = require('./utils/library');
-    const results = await scanLibrary(LIBRARY_PATH);
-    res.json(results);
-    } catch (e) {
-      console.error('Scan error:', e);
-      res.status(500).json({ error: e.message });
+    const { startScanAsync } = require('./utils/library');
+    const result = startScanAsync(LIBRARY_PATH);
+    if (result.alreadyRunning) {
+      return res.status(409).json({ error: 'A library scan is already in progress', status: result.status });
     }
-  });
+    res.json({ message: 'Library scan started in background', status: result.status });
+  } catch (e) {
+    console.error('Scan start error:', e);
+    res.status(500).json({ error: e.message });
+  }
+});
 
-app.post('/api/models', authenticate, (req, res) => {
+app.get('/api/library/scan/status', authenticate, (req, res) => {
+  try {
+    const { getScanStatus } = require('./utils/library');
+    res.json(getScanStatus());
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/api/library/scan/cancel', authenticate, (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
+  try {
+    const { cancelScan, getScanStatus } = require('./utils/library');
+    const cancelled = cancelScan();
+    res.json({ cancelled, status: getScanStatus() });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/api/models', authenticate, requireUploader, (req, res) => {
   const userId = req.user.id;
   try {
-    const { name, description, print_tips, source_url, category_id, tags, custom_meta, parent_folder, create_subfolder } = req.body;
+    let { name, description, print_tips, source_url, category_id, tags, custom_meta, parent_folder, create_subfolder, auto_rename } = req.body;
     if (!name?.trim()) return res.status(400).json({ error: 'Name is required' });
     
-    let metaStr = '{}';
-    if (custom_meta !== undefined) {
-      metaStr = typeof custom_meta === 'string' ? custom_meta : JSON.stringify(custom_meta);
-    }
+    let trimmedName = name.trim();
+    let safeName = trimmedName.replace(/[<>:"/\\|?*]/g, '').trim() || `model_${Date.now()}`;
     
-    // Create library folder for this model
-    const safeName = name.trim().replace(/[<>:"/\\|?*]/g, '').trim() || `model_${Date.now()}`;
-    const basePath = parent_folder ? path.join(LIBRARY_PATH, parent_folder) : LIBRARY_PATH;
-    const libPath = create_subfolder !== false && create_subfolder !== 'false' ? path.join(basePath, safeName) : basePath;
+    // Strict path confinement check on parent_folder
+    let basePath = LIBRARY_PATH;
+    if (parent_folder) {
+      const confined = validatePathConfinement(LIBRARY_PATH, parent_folder);
+      if (!confined) return res.status(400).json({ error: 'Invalid parent folder path' });
+      basePath = confined;
+    }
+
+    let libPath = create_subfolder !== false && create_subfolder !== 'false' ? path.join(basePath, safeName) : basePath;
+    const confinedLib = validatePathConfinement(LIBRARY_PATH, path.relative(LIBRARY_PATH, libPath));
+    if (!confinedLib) return res.status(400).json({ error: 'Invalid model folder path' });
+    libPath = confinedLib;
+
+    if (source_url) {
+      source_url = safeUrl(source_url);
+    }
+
+    // Check if model with this name or library_path already exists
+    const existingModel = get('SELECT id, name, library_path FROM models WHERE name = ? OR library_path = ?', [trimmedName, libPath]);
+    if (existingModel) {
+      const isAvailable = (candidate) => {
+        const safe = candidate.replace(/[<>:"/\\|?*]/g, '').trim();
+        const p = create_subfolder !== false && create_subfolder !== 'false' ? path.join(basePath, safe) : basePath;
+        return !get('SELECT id FROM models WHERE name = ? OR library_path = ?', [candidate, p]);
+      };
+
+      const suggestions = [];
+      const currentYear = new Date().getFullYear();
+
+      // 1. Versioning: detect if name ends with v1, v2, etc.
+      const versionMatch = trimmedName.match(/^(.*?)\s*\(?v(\d+)\)?$/i);
+      if (versionMatch) {
+        const base = versionMatch[1].trim();
+        const nextVer = parseInt(versionMatch[2], 10) + 1;
+        const vCandidate = `${base} v${nextVer}`;
+        if (isAvailable(vCandidate)) suggestions.push(vCandidate);
+      } else {
+        const vCandidate = `${trimmedName} (v2)`;
+        if (isAvailable(vCandidate)) suggestions.push(vCandidate);
+      }
+
+      // 2. Creative / Workflow suffixes
+      const contextualVariants = [
+        `${trimmedName} - Remix`,
+        `${trimmedName} (Mod)`,
+        `${trimmedName} - Variant`,
+        `${trimmedName} [${currentYear}]`,
+        `${trimmedName} (Copy)`
+      ];
+
+      for (const v of contextualVariants) {
+        if (isAvailable(v) && !suggestions.includes(v)) {
+          suggestions.push(v);
+        }
+      }
+
+      // 3. Numbered fallback
+      let counter = 2;
+      while (suggestions.length < 5 && counter < 100) {
+        const numCandidate = `${trimmedName} (${counter})`;
+        if (isAvailable(numCandidate) && !suggestions.includes(numCandidate)) {
+          suggestions.push(numCandidate);
+        }
+        counter++;
+      }
+
+      const primarySuggestion = suggestions[0] || `${trimmedName} (2)`;
+
+      if (auto_rename !== true && auto_rename !== 'true') {
+        return res.status(409).json({
+          error: `A model with the name "${trimmedName}" already exists.`,
+          suggested_name: primarySuggestion,
+          suggested_names: suggestions
+        });
+      }
+
+      trimmedName = primarySuggestion;
+      safeName = trimmedName.replace(/[<>:"/\\|?*]/g, '').trim();
+      libPath = create_subfolder !== false && create_subfolder !== 'false' ? path.join(basePath, safeName) : basePath;
+      const reconfined = validatePathConfinement(LIBRARY_PATH, path.relative(LIBRARY_PATH, libPath));
+      if (!reconfined) return res.status(400).json({ error: 'Invalid model folder path' });
+      libPath = reconfined;
+    }
+
     try {
       if (!fs.existsSync(libPath)) fs.mkdirSync(libPath, { recursive: true });
     } catch (dirErr) {
       console.warn('Could not create library folder for model:', dirErr);
     }
 
+    let metaStr = '{}';
+    if (custom_meta !== undefined) {
+      metaStr = typeof custom_meta === 'string' ? custom_meta : JSON.stringify(custom_meta);
+    }
+
     const r = run('INSERT INTO models (name,description,print_tips,source_url,category_id,custom_meta,user_id,library_path) VALUES (?,?,?,?,?,?,?,?)',
-      [name.trim(), description||'', print_tips||'', source_url||'', category_id||null, metaStr, userId, libPath]);
+      [trimmedName, description||'', print_tips||'', source_url||'', category_id||null, metaStr, userId, libPath]);
     if (tags?.length) { 
       for (const t of tags) {
         let tagId = t;
@@ -541,7 +853,10 @@ app.post('/api/models', authenticate, (req, res) => {
       }
     }
     res.status(201).json(get('SELECT * FROM models WHERE id=?', [r.lastId]));
-  } catch (e) { console.error(e); res.status(500).json({ error: 'Failed to create model' }); }
+  } catch (e) {
+    console.error('Failed to create model:', e);
+    res.status(500).json({ error: 'Failed to create model' });
+  }
 });
 
 app.put('/api/models/:id', authenticate, (req, res) => {
@@ -557,8 +872,13 @@ app.put('/api/models/:id', authenticate, (req, res) => {
       metaStr = typeof custom_meta === 'string' ? custom_meta : JSON.stringify(custom_meta);
     }
 
+    let cleanSourceUrl = model.source_url;
+    if (source_url !== undefined) {
+      cleanSourceUrl = safeUrl(source_url);
+    }
+
     run("UPDATE models SET name=?,description=?,print_tips=?,source_url=?,category_id=?,custom_meta=?,updated_at=datetime('now') WHERE id=?",
-      [name||model.name, description!==undefined?description:model.description, print_tips!==undefined?print_tips:model.print_tips, source_url!==undefined?source_url:model.source_url, category_id!==undefined?category_id:model.category_id, metaStr, id]);
+      [name||model.name, description!==undefined?description:model.description, print_tips!==undefined?print_tips:model.print_tips, cleanSourceUrl, category_id!==undefined?category_id:model.category_id, metaStr, id]);
     if (tags !== undefined) {
       run('DELETE FROM model_tags WHERE model_id=?', [id]);
       if (tags?.length) {
@@ -642,7 +962,7 @@ app.post('/api/models/bulk-delete', authenticate, (req, res) => {
 
 app.post('/api/models/bulk-update', authenticate, (req, res) => {
   try {
-    const { ids, category_id, tags } = req.body;
+    const { ids, category_id, tags, add_tags, remove_tags } = req.body;
     if (!Array.isArray(ids)) return res.status(400).json({ error: 'IDs array required' });
     
     for (const id of ids) {
@@ -654,6 +974,28 @@ app.post('/api/models/bulk-update', authenticate, (req, res) => {
       if (category_id !== undefined) {
         run("UPDATE models SET category_id=?, updated_at=datetime('now') WHERE id=?", [category_id || null, id]);
       }
+
+      if (add_tags && Array.isArray(add_tags)) {
+        for (const t of add_tags) {
+          if (!t) continue;
+          run('INSERT OR IGNORE INTO tags (name) VALUES (?)', [t]);
+          const tagRow = get('SELECT id FROM tags WHERE name=?', [t]);
+          if (tagRow) {
+            run('INSERT OR IGNORE INTO model_tags (model_id,tag_id) VALUES (?,?)', [id, tagRow.id]);
+          }
+        }
+      }
+
+      if (remove_tags && Array.isArray(remove_tags)) {
+        for (const t of remove_tags) {
+          if (!t) continue;
+          const tagRow = get('SELECT id FROM tags WHERE name=?', [t]);
+          if (tagRow) {
+            run('DELETE FROM model_tags WHERE model_id=? AND tag_id=?', [id, tagRow.id]);
+          }
+        }
+      }
+
       if (tags !== undefined) {
         run('DELETE FROM model_tags WHERE model_id=?', [id]);
         if (tags?.length) {
@@ -661,9 +1003,12 @@ app.post('/api/models/bulk-update', authenticate, (req, res) => {
             let tagId = t;
             if (typeof t === 'string') {
               run('INSERT OR IGNORE INTO tags (name) VALUES (?)', [t]);
-              tagId = get('SELECT id FROM tags WHERE name=?', [t]).id;
+              const tagRow = get('SELECT id FROM tags WHERE name=?', [t]);
+              tagId = tagRow ? tagRow.id : null;
             }
-            run('INSERT OR IGNORE INTO model_tags (model_id,tag_id) VALUES (?,?)', [id, tagId]);
+            if (tagId) {
+              run('INSERT OR IGNORE INTO model_tags (model_id,tag_id) VALUES (?,?)', [id, tagId]);
+            }
           }
         }
       }
@@ -745,8 +1090,16 @@ app.post('/api/models/:id/files', authenticate, upload.array('files', 20), (req,
     let libPath = model.library_path;
     if (!libPath || !fs.existsSync(libPath)) {
       const safeName = model.name.replace(/[<>:"/\\|?*]/g, '').trim() || `model_${id}`;
-      const basePath = req.body.parent_folder ? path.join(LIBRARY_PATH, req.body.parent_folder) : LIBRARY_PATH;
+      let basePath = LIBRARY_PATH;
+      if (req.body.parent_folder) {
+        const confined = validatePathConfinement(LIBRARY_PATH, req.body.parent_folder);
+        if (!confined) return res.status(400).json({ error: 'Invalid parent folder path' });
+        basePath = confined;
+      }
       libPath = req.body.create_subfolder !== 'false' ? path.join(basePath, safeName) : basePath;
+      const confinedLib = validatePathConfinement(LIBRARY_PATH, path.relative(LIBRARY_PATH, libPath));
+      if (!confinedLib) return res.status(400).json({ error: 'Invalid model library path' });
+      libPath = confinedLib;
       if (!fs.existsSync(libPath)) fs.mkdirSync(libPath, { recursive: true });
       run('UPDATE models SET library_path=? WHERE id=?', [libPath, id]);
       model.library_path = libPath;
@@ -770,19 +1123,26 @@ app.post('/api/models/:id/files', authenticate, upload.array('files', 20), (req,
         console.error('Failed to validate magic bytes for', file.originalname, err);
       }
       
-      const ft = getFileType(file.originalname);
+      const safeOriginalName = path.basename(file.originalname);
+      const ft = getFileType(safeOriginalName);
       
-      // Move file into library folder
-      let finalDest = path.join(libPath, file.originalname);
+      // Move file into library folder with strict path confinement
+      let finalDest = path.join(libPath, safeOriginalName);
       try {
         let counter = 1;
         while (fs.existsSync(finalDest)) {
-          const ext = path.extname(file.originalname);
-          const base = path.basename(file.originalname, ext);
+          const ext = path.extname(safeOriginalName);
+          const base = path.basename(safeOriginalName, ext);
           finalDest = path.join(libPath, `${base}_${counter}${ext}`);
           counter++;
         }
-        fs.copyFileSync(file.path, finalDest);
+        const confinedDest = validatePathConfinement(libPath, path.relative(libPath, finalDest));
+        if (!confinedDest) {
+          fs.unlinkSync(file.path);
+          continue;
+        }
+        fs.copyFileSync(file.path, confinedDest);
+        finalDest = confinedDest;
         fs.unlinkSync(file.path);
       } catch (err) {
         console.error('Failed to move uploaded file to library:', err);
@@ -843,14 +1203,45 @@ app.post('/api/models/:id/thumbnail', authenticate, upload.single('thumbnail'), 
   } catch (e) { console.error(e); res.status(500).json({ error: 'Failed to upload thumbnail' }); }
 });
 
-app.get('/api/files/:id/download/:filename?', (req, res) => {
-  try {
-    const file = get('SELECT * FROM files WHERE id=?', [Number(req.params.id)]);
-    if (!file) return res.status(404).json({ error: 'File not found' });
-    const p = file.library_path || path.join(UPLOADS_DIR, file.filename);
-    if (!fs.existsSync(p)) return res.status(404).json({ error: 'File not found on disk' });
-    res.download(p, file.original_name);
-  } catch (e) { console.error(e); res.status(500).json({ error: 'Failed to download' }); }
+app.get('/api/files/:id/download/:filename?', heavyLimiter, (req, res, next) => {
+  const shareSlug = req.query.share;
+  const doDownload = () => {
+    try {
+      const file = get('SELECT * FROM files WHERE id=?', [Number(req.params.id)]);
+      if (!file) return res.status(404).json({ error: 'File not found' });
+
+      if (shareSlug) {
+        const share = get("SELECT * FROM shares WHERE id=? AND (expires_at IS NULL OR expires_at > datetime('now'))", [shareSlug]);
+        if (!share || file.model_id !== share.model_id) {
+          return res.status(403).json({ error: 'Invalid or expired share link' });
+        }
+      } else {
+        const privateProjects = all('SELECT p.user_id FROM projects p JOIN project_models pm ON p.id=pm.project_id WHERE pm.model_id=? AND p.visibility="private"', [file.model_id]);
+        if (privateProjects.length > 0) {
+          if (!req.user || (req.user.role !== 'admin' && !privateProjects.some(p => p.user_id === req.user.id))) {
+            return res.status(403).json({ error: 'Access denied to private file' });
+          }
+        }
+      }
+
+      const p = file.library_path || path.join(UPLOADS_DIR, file.filename);
+      if (!fs.existsSync(p)) return res.status(404).json({ error: 'File not found on disk' });
+
+      const baseDir = file.library_path ? LIBRARY_PATH : UPLOADS_DIR;
+      const confined = validatePathConfinement(baseDir, path.relative(baseDir, p));
+      if (!confined) return res.status(403).json({ error: 'Access denied' });
+
+      res.download(confined, file.original_name);
+    } catch (e) { console.error(e); res.status(500).json({ error: 'Failed to download' }); }
+  };
+
+  if (shareSlug) {
+    doDownload();
+  } else if (getSettingBool('require_login_to_view')) {
+    authenticate(req, res, doDownload);
+  } else {
+    doDownload();
+  }
 });
 
 app.delete('/api/files/:id', authenticate, (req, res) => {
@@ -928,8 +1319,7 @@ app.post('/api/files/:id/send-to-printer', authenticate, async (req, res) => {
   }
 });
 
-// ─── PROJECTS ───────────────────────────────────────────────────────────────
-
+// ─── PROJECTS / COLLECTIONS ───────────────────────────────────────────────
 app.get('/api/projects', authenticate, (req, res) => {
   try {
     let query = 'SELECT p.*, COUNT(pm.model_id) as model_count FROM projects p LEFT JOIN project_models pm ON p.id=pm.project_id ';
@@ -939,6 +1329,32 @@ app.get('/api/projects', authenticate, (req, res) => {
     query += 'GROUP BY p.id ORDER BY p.created_at DESC';
     
     const projects = req.user.role === 'admin' ? all(query) : all(query, [req.user.id]);
+
+    // Attach up to 4 sample model thumbnails for rich collage cards
+    if (projects.length > 0) {
+      const projectIds = projects.map(p => p.id);
+      const placeholders = projectIds.map(() => '?').join(',');
+      const sampleModels = all(`
+        SELECT pm.project_id, m.thumbnail, m.name
+        FROM project_models pm
+        JOIN models m ON pm.model_id = m.id
+        WHERE pm.project_id IN (${placeholders})
+        ORDER BY pm.rowid DESC
+      `, projectIds);
+
+      const samplesByProject = {};
+      sampleModels.forEach(sm => {
+        if (!samplesByProject[sm.project_id]) samplesByProject[sm.project_id] = [];
+        if (samplesByProject[sm.project_id].length < 4 && sm.thumbnail) {
+          samplesByProject[sm.project_id].push(sm.thumbnail);
+        }
+      });
+
+      projects.forEach(p => {
+        p.sample_thumbnails = samplesByProject[p.id] || [];
+      });
+    }
+
     res.json(projects);
   } catch (e) { console.error(e); res.status(500).json({ error: 'Failed to fetch projects' }); }
 });
@@ -956,6 +1372,25 @@ app.get('/api/projects/:id', authenticate, (req, res) => {
       JOIN project_models pm ON m.id=pm.model_id 
       LEFT JOIN categories c ON m.category_id=c.id 
       WHERE pm.project_id=?`, [project.id]);
+
+    // Compute collection file stats
+    const modelIds = project.models.map(m => m.id);
+    if (modelIds.length > 0) {
+      const placeholders = modelIds.map(() => '?').join(',');
+      const stats = get(`
+        SELECT COUNT(id) as total_files, SUM(size) as total_size, GROUP_CONCAT(DISTINCT file_type) as file_types
+        FROM files
+        WHERE model_id IN (${placeholders})
+      `, modelIds);
+      project.total_files = stats?.total_files || 0;
+      project.total_size = stats?.total_size || 0;
+      project.file_types = (stats?.file_types || '').split(',').filter(Boolean);
+    } else {
+      project.total_files = 0;
+      project.total_size = 0;
+      project.file_types = [];
+    }
+
     res.json(project);
   } catch (e) { console.error(e); res.status(500).json({ error: 'Failed to fetch project' }); }
 });
@@ -970,11 +1405,80 @@ app.post('/api/projects', authenticate, (req, res) => {
   } catch (e) { console.error(e); res.status(500).json({ error: 'Failed to create project' }); }
 });
 
+app.put('/api/projects/:id', authenticate, (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const project = get('SELECT * FROM projects WHERE id=?', [id]);
+    if (!project) return res.status(404).json({ error: 'Project not found' });
+    if (req.user.role !== 'admin' && project.user_id !== req.user.id) return res.status(403).json({ error: 'Forbidden' });
+
+    const { name, description, visibility } = req.body;
+    if (!name?.trim()) return res.status(400).json({ error: 'Name is required' });
+    const vis = visibility === 'private' ? 'private' : (visibility || project.visibility || 'public');
+
+    run('UPDATE projects SET name=?, description=?, visibility=? WHERE id=?', [name.trim(), description !== undefined ? description : project.description, vis, id]);
+    res.json(get('SELECT * FROM projects WHERE id=?', [id]));
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'Failed to update project' });
+  }
+});
+
 app.delete('/api/projects/:id', authenticate, (req, res) => {
   try {
-    run('DELETE FROM projects WHERE id=?', [Number(req.params.id)]);
+    const id = Number(req.params.id);
+    const p = get('SELECT user_id FROM projects WHERE id=?', [id]);
+    if (!p) return res.status(404).json({ error: 'Project not found' });
+    if (req.user.role !== 'admin' && p.user_id !== req.user.id) return res.status(403).json({ error: 'Forbidden' });
+
+    run('DELETE FROM projects WHERE id=?', [id]);
     res.json({ success: true });
   } catch (e) { console.error(e); res.status(500).json({ error: 'Failed to delete project' }); }
+});
+
+// Bulk Delete Projects / Collections
+app.post('/api/projects/bulk-delete', authenticate, (req, res) => {
+  try {
+    const { project_ids } = req.body;
+    if (!Array.isArray(project_ids) || project_ids.length === 0) {
+      return res.status(400).json({ error: 'project_ids array required' });
+    }
+    let deletedCount = 0;
+    for (const id of project_ids) {
+      const p = get('SELECT user_id FROM projects WHERE id=?', [Number(id)]);
+      if (p && (req.user.role === 'admin' || p.user_id === req.user.id)) {
+        run('DELETE FROM projects WHERE id=?', [Number(id)]);
+        deletedCount++;
+      }
+    }
+    res.json({ success: true, count: deletedCount });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'Failed bulk delete projects' });
+  }
+});
+
+// Bulk Update Visibility for Projects / Collections
+app.post('/api/projects/bulk-visibility', authenticate, (req, res) => {
+  try {
+    const { project_ids, visibility } = req.body;
+    if (!Array.isArray(project_ids) || !visibility) {
+      return res.status(400).json({ error: 'project_ids array and visibility required' });
+    }
+    const vis = visibility === 'private' ? 'private' : 'public';
+    let updatedCount = 0;
+    for (const id of project_ids) {
+      const p = get('SELECT user_id FROM projects WHERE id=?', [Number(id)]);
+      if (p && (req.user.role === 'admin' || p.user_id === req.user.id)) {
+        run('UPDATE projects SET visibility=? WHERE id=?', [vis, Number(id)]);
+        updatedCount++;
+      }
+    }
+    res.json({ success: true, count: updatedCount });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'Failed bulk update visibility' });
+  }
 });
 
 app.post('/api/projects/:id/models', authenticate, (req, res) => {
@@ -983,6 +1487,31 @@ app.post('/api/projects/:id/models', authenticate, (req, res) => {
     run('INSERT OR IGNORE INTO project_models (project_id, model_id) VALUES (?, ?)', [Number(req.params.id), Number(model_id)]);
     res.json({ success: true });
   } catch (e) { console.error(e); res.status(500).json({ error: 'Failed to add model to project' }); }
+});
+
+app.put('/api/models/:id/projects', authenticate, (req, res) => {
+  try {
+    const modelId = Number(req.params.id);
+    const model = get('SELECT id FROM models WHERE id=?', [modelId]);
+    if (!model) return res.status(404).json({ error: 'Model not found' });
+
+    const { project_ids } = req.body;
+    if (!Array.isArray(project_ids)) return res.status(400).json({ error: 'project_ids array required' });
+
+    // Remove existing assignments
+    run('DELETE FROM project_models WHERE model_id=?', [modelId]);
+
+    // Insert new assignments
+    for (const pid of project_ids) {
+      run('INSERT OR IGNORE INTO project_models (project_id, model_id) VALUES (?, ?)', [Number(pid), modelId]);
+    }
+
+    const updatedProjects = all('SELECT p.id, p.name, p.visibility FROM projects p JOIN project_models pm ON p.id=pm.project_id WHERE pm.model_id=?', [modelId]);
+    res.json({ success: true, projects: updatedProjects });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'Failed to sync model projects' });
+  }
 });
 
 app.post('/api/projects/:id/models/bulk', authenticate, (req, res) => {
@@ -997,6 +1526,18 @@ app.post('/api/projects/:id/models/bulk', authenticate, (req, res) => {
   } catch (e) { console.error(e); res.status(500).json({ error: 'Failed bulk add to project' }); }
 });
 
+app.post('/api/projects/:id/models/bulk-remove', authenticate, (req, res) => {
+  try {
+    const { model_ids } = req.body;
+    if (!Array.isArray(model_ids)) return res.status(400).json({ error: 'model_ids array required' });
+    const projectId = Number(req.params.id);
+    for (const mid of model_ids) {
+      run('DELETE FROM project_models WHERE project_id=? AND model_id=?', [projectId, Number(mid)]);
+    }
+    res.json({ success: true, count: model_ids.length });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Failed bulk remove from project' }); }
+});
+
 app.delete('/api/projects/:id/models/:modelId', authenticate, (req, res) => {
   try {
     run('DELETE FROM project_models WHERE project_id=? AND model_id=?', [Number(req.params.id), Number(req.params.modelId)]);
@@ -1004,18 +1545,73 @@ app.delete('/api/projects/:id/models/:modelId', authenticate, (req, res) => {
   } catch (e) { console.error(e); res.status(500).json({ error: 'Failed to remove model from project' }); }
 });
 
+// Download Collection as ZIP
+app.get('/api/projects/:id/download', authenticate, heavyLimiter, (req, res) => {
+  try {
+    const AdmZip = require('adm-zip');
+    const projectId = Number(req.params.id);
+    const project = get('SELECT * FROM projects WHERE id=?', [projectId]);
+    if (!project) return res.status(404).json({ error: 'Collection not found' });
+    if (project.visibility === 'private' && req.user.role !== 'admin' && project.user_id !== req.user.id) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const models = all(`
+      SELECT m.id, m.name
+      FROM models m
+      JOIN project_models pm ON m.id = pm.model_id
+      WHERE pm.project_id = ?
+    `, [projectId]);
+
+    if (!models.length) return res.status(400).json({ error: 'No models in this collection to download' });
+
+    const zip = new AdmZip();
+
+    for (const model of models) {
+      const files = all('SELECT filename, filepath FROM files WHERE model_id=?', [model.id]);
+      const folderName = model.name.replace(/[/\\?%*:|"<>]/g, '_');
+      for (const file of files) {
+        if (file.filepath && fs.existsSync(file.filepath)) {
+          zip.addLocalFile(file.filepath, folderName);
+        }
+      }
+    }
+
+    const zipBuffer = zip.toBuffer();
+    const safeName = (project.name || 'collection').replace(/[/\\?%*:|"<>]/g, '_');
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', `attachment; filename="${safeName}.zip"`);
+    res.setHeader('Content-Length', zipBuffer.length);
+    res.send(zipBuffer);
+  } catch (e) {
+    console.error('Error creating collection zip:', e);
+    res.status(500).json({ error: 'Failed to create collection zip' });
+  }
+});
+
 // ─── SHARING ────────────────────────────────────────────────────────────────
 
 app.post('/api/shares', authenticate, (req, res) => {
   try {
     const { model_id, expires_days } = req.body;
+    const modelId = safeInt(model_id, 0);
+    if (!modelId) return res.status(400).json({ error: 'Valid model_id is required' });
+
+    const model = get('SELECT id, user_id FROM models WHERE id=?', [modelId]);
+    if (!model) return res.status(404).json({ error: 'Model not found' });
+    if (req.user.role !== 'admin' && model.user_id !== req.user.id) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
     const slug = require('crypto').randomBytes(6).toString('hex');
-    const expires_at = expires_days ? `datetime('now', '+${expires_days} days')` : null;
+    const days = (expires_days !== undefined && expires_days !== null && expires_days !== '') 
+      ? safeInt(expires_days, 7, 1, 365) 
+      : null;
     
-    if (expires_at) {
-      run(`INSERT INTO shares (id, model_id, expires_at) VALUES (?, ?, ${expires_at})`, [slug, Number(model_id)]);
+    if (days !== null) {
+      run("INSERT INTO shares (id, model_id, expires_at) VALUES (?, ?, datetime('now', '+' || ? || ' days'))", [slug, modelId, days]);
     } else {
-      run('INSERT INTO shares (id, model_id, expires_at) VALUES (?, ?, NULL)', [slug, Number(model_id)]);
+      run('INSERT INTO shares (id, model_id, expires_at) VALUES (?, ?, NULL)', [slug, modelId]);
     }
     
     res.json({ slug });
@@ -1132,6 +1728,36 @@ app.get('/api/system/updates', async (req, res) => {
   } catch (e) {
     console.error('Update check failed:', e);
     res.status(500).json({ error: 'Failed to check for updates' });
+  }
+});
+
+app.get('/api/system/release-notes', (req, res) => {
+  try {
+    const rootDir = path.join(__dirname, '..');
+    const files = fs.readdirSync(rootDir).filter(f => f.startsWith('Release_Notes_') && f.endsWith('.md'));
+    files.sort((a, b) => {
+      const vA = a.match(/Release_Notes_v?([\d\.]+)\.md/i)?.[1] || '';
+      const vB = b.match(/Release_Notes_v?([\d\.]+)\.md/i)?.[1] || '';
+      return vB.localeCompare(vA, undefined, { numeric: true });
+    });
+
+    const notes = files.map(filename => {
+      const match = filename.match(/Release_Notes_v?([\d\.]+)\.md/i);
+      const version = match ? match[1] : filename;
+      const content = fs.readFileSync(path.join(rootDir, filename), 'utf8');
+      
+      const titleMatch = content.match(/^#\s+(.+)$/m);
+      const dateMatch = content.match(/\*\*Release Date:\*\*\s*(.+)$/m);
+      const title = titleMatch ? titleMatch[1].trim() : `GyroidVault v${version}`;
+      const releaseDate = dateMatch ? dateMatch[1].trim() : '';
+
+      return { version, filename, content, title, releaseDate };
+    });
+
+    res.json({ notes });
+  } catch (e) {
+    console.error('Failed to get release notes:', e);
+    res.status(500).json({ error: 'Failed to read release notes' });
   }
 });
 
@@ -1377,7 +2003,7 @@ app.post('/api/browse/bulk-tag', authenticate, (req, res) => {
 });
 
 // browse the library folder structure on disk
-app.get('/api/browse', (req, res) => {
+app.get('/api/browse', authenticate, (req, res) => {
   try {
     const reqPath = req.query.path || '';
     const fullPath = path.resolve(LIBRARY_PATH, reqPath);
@@ -1512,7 +2138,7 @@ app.get('/api/browse', (req, res) => {
 });
 
 // folder tree for sidebar nav (recursive, folders only)
-app.get('/api/browse/tree', (req, res) => {
+app.get('/api/browse/tree', authenticate, (req, res) => {
   try {
     const maxDepth = 4; // dont go too deep, keeps it snappy
     
@@ -1545,7 +2171,7 @@ app.get('/api/browse/tree', (req, res) => {
 });
 
 // global folder search (recursive)
-app.get('/api/browse/search', (req, res) => {
+app.get('/api/browse/search', authenticate, (req, res) => {
   try {
     const q = (req.query.q || '').toLowerCase();
     if (!q) return res.json({ folders: [], files: [] });
@@ -1762,7 +2388,14 @@ app.get('/api/settings/smtp', authenticate, (req, res) => {
   if (req.user.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
   const settings = all('SELECT * FROM system_settings WHERE key LIKE "smtp_%"');
   const config = {};
-  settings.forEach(s => config[s.key] = s.value);
+  settings.forEach(s => {
+    if (s.key === 'smtp_pass') {
+      config[s.key] = s.value ? '••••••••' : '';
+      config.smtp_has_pass = Boolean(s.value);
+    } else {
+      config[s.key] = s.value;
+    }
+  });
   res.json(config);
 });
 
@@ -1771,6 +2404,9 @@ app.post('/api/settings/smtp', authenticate, (req, res) => {
   try {
     const config = req.body;
     for (const [key, value] of Object.entries(config)) {
+      if (key === 'smtp_pass' && (value === '••••••••' || value === '')) {
+        continue; // Keep existing stored password when mask is submitted
+      }
       run('INSERT OR REPLACE INTO system_settings (key, value) VALUES (?, ?)', [key, value]);
     }
     res.json({ success: true });
@@ -1880,14 +2516,16 @@ function setupBackgroundScanner() {
   
   if (hours > 0) {
     console.log(`Starting background library scanner (interval: ${hours} hours)`);
-    scanIntervalId = setInterval(async () => {
-      console.log('Running scheduled library scan...');
+    scanIntervalId = setInterval(() => {
+      console.log('[Scanner] Running scheduled background library scan...');
       try {
-        const { scanLibrary } = require('./utils/library');
-        await scanLibrary(LIBRARY_PATH);
-        console.log('Scheduled library scan completed.');
+        const { startScanAsync } = require('./utils/library');
+        const res = startScanAsync(LIBRARY_PATH);
+        if (res.alreadyRunning) {
+          console.log('[Scanner] Scheduled scan skipped: another scan is already active.');
+        }
       } catch (e) {
-        console.error('Scheduled library scan failed:', e);
+        console.error('Scheduled library scan launch failed:', e);
       }
     }, hours * 3600 * 1000);
   } else {
@@ -1912,8 +2550,19 @@ function setupBackgroundScanner() {
   process.on('SIGTERM', shutdown);
   process.on('SIGUSR2', shutdown); // nodemon restart signal
 
-  app.listen(PORT, '0.0.0.0', () => {
+  const server = app.listen(PORT, '0.0.0.0', () => {
     console.log(`GyroidVault running on http://0.0.0.0:${PORT}`);
     setupBackgroundScanner();
+  });
+  server.on('error', (err) => {
+    if (err.code === 'EADDRINUSE') {
+      console.log(`0.0.0.0:${PORT} in use, binding to 127.0.0.1:${PORT}...`);
+      app.listen(PORT, '127.0.0.1', () => {
+        console.log(`GyroidVault running on http://localhost:${PORT}`);
+        setupBackgroundScanner();
+      });
+    } else {
+      throw err;
+    }
   });
 })();

@@ -1326,6 +1326,22 @@
 
 				}
 
+				// Fallback: If buildData didn't add any visible meshes (common with Bambu/OrcaSlicer production 3MFs),
+				// add all decoded meshes directly from the parsed objects dictionary
+				let hasVisibleMesh = false;
+				group.traverse(c => { if (c.isMesh) hasVisibleMesh = true; });
+
+				if (!hasVisibleMesh) {
+					for (const objId in objects) {
+						const obj = objects[objId];
+						if (obj) {
+							let objHasMesh = false;
+							obj.traverse(c => { if (c.isMesh) objHasMesh = true; });
+							if (objHasMesh) group.add(obj.clone());
+						}
+					}
+				}
+
 				return group;
 
 			}

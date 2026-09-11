@@ -27,3 +27,5 @@ Thumbs.db
 .ai-changelog.md
 .ai-instructions.md
 scratch/
+.vscode/
+import_models/

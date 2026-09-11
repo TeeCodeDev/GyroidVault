@@ -23,7 +23,11 @@ const API = {
     }
     if (!res.ok) {
       const err = await res.json().catch(() => ({ error: 'Request failed' }));
-      throw new Error(err.error || 'Request failed');
+      const error = new Error(err.error || 'Request failed');
+      error.status = res.status;
+      error.suggested_name = err.suggested_name;
+      error.suggested_names = err.suggested_names || (err.suggested_name ? [err.suggested_name] : []);
+      throw error;
     }
     return res.json();
   },
@@ -208,13 +212,18 @@ const API = {
   createMaterial(data) { return this.request('/api/materials', { method: 'POST', body: JSON.stringify(data) }); },
   deleteMaterial(id) { return this.request(`/api/materials/${id}`, { method: 'DELETE' }); },
 
-  // Projects
+  // Projects / Collections
   getProjects() { return this.request('/api/projects'); },
   getProject(id) { return this.request(`/api/projects/${id}`); },
   createProject(data) { return this.request('/api/projects', { method: 'POST', body: JSON.stringify(data) }); },
+  updateProject(id, data) { return this.request(`/api/projects/${id}`, { method: 'PUT', body: JSON.stringify(data) }); },
   deleteProject(id) { return this.request(`/api/projects/${id}`, { method: 'DELETE' }); },
+  bulkDeleteProjects(projectIds) { return this.request('/api/projects/bulk-delete', { method: 'POST', body: JSON.stringify({ project_ids: projectIds }) }); },
+  bulkSetProjectsVisibility(projectIds, visibility) { return this.request('/api/projects/bulk-visibility', { method: 'POST', body: JSON.stringify({ project_ids: projectIds, visibility }) }); },
   addModelToProject(projectId, modelId) { return this.request(`/api/projects/${projectId}/models`, { method: 'POST', body: JSON.stringify({ model_id: modelId }) }); },
+  syncModelProjects(modelId, projectIds) { return this.request(`/api/models/${modelId}/projects`, { method: 'PUT', body: JSON.stringify({ project_ids: projectIds }) }); },
   bulkAddModelsToProject(projectId, modelIds) { return this.request(`/api/projects/${projectId}/models/bulk`, { method: 'POST', body: JSON.stringify({ model_ids: modelIds }) }); },
+  bulkRemoveModelsFromProject(projectId, modelIds) { return this.request(`/api/projects/${projectId}/models/bulk-remove`, { method: 'POST', body: JSON.stringify({ model_ids: modelIds }) }); },
   removeModelFromProject(projectId, modelId) { return this.request(`/api/projects/${projectId}/models/${modelId}`, { method: 'DELETE' }); },
 
   // Sharing
@@ -229,5 +238,6 @@ const API = {
   getPublicConfig() { return this.request('/api/system/public-config'); },
   getBlockedIps() { return this.request('/api/system/blocked-ips'); },
   unblockIp(ip) { return this.request('/api/system/unblock-ip', { method: 'POST', body: JSON.stringify({ ip }) }); },
-  scanDuplicates() { return this.request('/api/system/duplicates'); }
+  scanDuplicates() { return this.request('/api/system/duplicates'); },
+  getReleaseNotes() { return this.request('/api/system/release-notes'); }
 };

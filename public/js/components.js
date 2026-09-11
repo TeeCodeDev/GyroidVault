@@ -1,5 +1,25 @@
 /* ─── UI Components ───────────────────────────────────────────────────── */
 const UI = {
+  // HTML entity escaping helper
+  escapeHtml(str) {
+    if (str === null || str === undefined) return '';
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  },
+
+  // Safe URL protocol validator (only http, https, mailto allowed)
+  safeUrl(url) {
+    if (!url || typeof url !== 'string') return '';
+    const trimmed = url.trim();
+    if (/^(https?:\/\/|mailto:)/i.test(trimmed)) return trimmed;
+    if (trimmed.startsWith('/') && !trimmed.startsWith('//') && !trimmed.includes('\\')) return trimmed;
+    return '';
+  },
+
   // Gradient generator based on string hash
   gradient(str) {
     let h = 0;
@@ -47,16 +67,16 @@ const UI = {
   // dashboard stats 
   statsCards(stats) {
     return `<div class="stats-grid">
-      <div class="stat-card"><div class="stat-icon cyan">📦</div><div class="stat-value">${stats.totalModels}</div><div class="stat-label">Total Models</div></div>
-      <div class="stat-card"><div class="stat-icon green">✅</div><div class="stat-value">${stats.printedModels}</div><div class="stat-label">Printed Models</div></div>
-      <div class="stat-card"><div class="stat-icon purple">🎯</div><div class="stat-value">${stats.successRate}%</div><div class="stat-label">Success Rate</div></div>
-      <div class="stat-card"><div class="stat-icon pink">📁</div><div class="stat-value">${stats.totalFiles}</div><div class="stat-label">Total Files (${this.formatSize(stats.totalSize)})</div></div>
+      <div class="stat-card"><div class="stat-icon cyan"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg></div><div class="stat-value">${stats.totalModels}</div><div class="stat-label">Total Models</div></div>
+      <div class="stat-card"><div class="stat-icon green"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></div><div class="stat-value">${stats.printedModels}</div><div class="stat-label">Printed Models</div></div>
+      <div class="stat-card"><div class="stat-icon purple"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg></div><div class="stat-value">${stats.successRate}%</div><div class="stat-label">Success Rate</div></div>
+      <div class="stat-card"><div class="stat-icon pink"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></div><div class="stat-value">${stats.totalFiles}</div><div class="stat-label">Total Files (${this.formatSize(stats.totalSize)})</div></div>
     </div>`;
   },
   // breadcrumb nav for folder browser
   breadcrumbs(currentPath) {
     const parts = currentPath ? currentPath.split('/').filter(Boolean) : [];
-    let crumbs = `<a href="#" onclick="event.preventDefault();App.browseTo('')" style="color:var(--accent-cyan);text-decoration:none;font-weight:600">🏠 Home</a>`;
+    let crumbs = `<a href="#" onclick="event.preventDefault();App.browseTo('')" style="color:var(--accent-cyan);text-decoration:none;font-weight:600;display:inline-flex;align-items:center;gap:4px"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>Home</a>`;
     
     let accumulated = '';
     for (let i = 0; i < parts.length; i++) {
@@ -87,7 +107,7 @@ const UI = {
         : `<span style="display:inline-block;width:14px"></span>`;
       
       let html = `<div class="tree-node" style="padding:4px 8px 4px ${8 + indent}px;cursor:pointer;border-radius:4px;font-size:.8rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;${isActive ? 'background:var(--accent-cyan);background:rgba(0,212,255,0.15);color:var(--accent-cyan);font-weight:600' : 'color:var(--text-secondary)'}" onclick="App.browseTo('${node.path}')" title="${node.name}" ondragover="event.preventDefault(); this.classList.add('drag-over')" ondragleave="this.classList.remove('drag-over')" ondrop="App.handleDrop(event, '${node.path}')">
-        ${arrow} 📁 ${node.name}
+        ${arrow} <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:4px;color:#f59e0b"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>${node.name}
       </div>`;
       
       if (hasChildren) {
@@ -99,8 +119,8 @@ const UI = {
     
     // root item
     const isRootActive = activePath === '';
-    let html = `<div class="tree-node" style="padding:4px 8px;cursor:pointer;border-radius:4px;font-size:.8rem;font-weight:600;${isRootActive ? 'background:rgba(0,212,255,0.15);color:var(--accent-cyan)' : 'color:var(--text-secondary)'}" onclick="App.browseTo('')" ondragover="event.preventDefault(); this.classList.add('drag-over')" ondragleave="this.classList.remove('drag-over')" ondrop="App.handleDrop(event, '')">
-      🏠 Library Root
+    let html = `<div class="tree-node" style="padding:4px 8px;cursor:pointer;border-radius:4px;font-size:.8rem;font-weight:600;display:flex;align-items:center;gap:6px;${isRootActive ? 'background:rgba(0,212,255,0.15);color:var(--accent-cyan)' : 'color:var(--text-secondary)'}" onclick="App.browseTo('')" ondragover="event.preventDefault(); this.classList.add('drag-over')" ondragleave="this.classList.remove('drag-over')" ondrop="App.handleDrop(event, '')">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>Library Root
     </div>`;
     
     html += nodes.map(n => renderNode(n, 0)).join('');
@@ -121,7 +141,7 @@ const UI = {
             : `<div style="display:grid;grid-template-columns:1fr 1fr;grid-template-rows:${folder.thumbnails.length > 2 ? '1fr 1fr' : '1fr'};width:100%;height:100%;gap:1px;background:var(--bg-card)">
                 ${folder.thumbnails.map((t, i) => `<img src="${t}" style="width:100%;height:100%;object-fit:cover;${folder.thumbnails.length === 3 && i === 2 ? 'grid-column:span 2' : ''}" loading="lazy">`).join('')}
               </div>`)
-          : `<div class="model-card-placeholder" style="background:linear-gradient(135deg, hsl(220,50%,22%), hsl(240,40%,16%));display:flex;align-items:center;justify-content:center;font-size:3rem">📁</div>`
+          : `<div class="model-card-placeholder" style="background:linear-gradient(135deg, hsl(220,50%,22%), hsl(240,40%,16%));display:flex;align-items:center;justify-content:center;color:var(--text-muted);opacity:.5"><svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></div>`
         }
       </div>
       <div class="model-card-body">
@@ -138,16 +158,16 @@ const UI = {
     if (file.thumbnailUrl) {
       thumb = `<img src="${file.thumbnailUrl}" alt="${file.name}">`;
     } else if (is3D) {
-      thumb = `<div class="model-card-placeholder stl-thumb-target" data-stl-url="${file.url}?t=${Date.now()}" style="background:${this.gradient(file.name)}">📦</div>`;
+      thumb = `<div class="model-card-placeholder stl-thumb-target" data-stl-url="${file.url}?t=${Date.now()}" style="background:${this.gradient(file.name)};display:flex;align-items:center;justify-content:center"><svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="opacity:.4"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg></div>`;
     } else if (file.type === 'image') {
       thumb = `<img src="${file.url}" alt="${file.name}">`;
     } else if (isGcode) {
-      thumb = `<div class="model-card-placeholder" style="background:linear-gradient(135deg, #78350f, #b45309);color:#fbbf24;font-size:2.5rem;display:flex;align-items:center;justify-content:center">🖨️</div>`;
+      thumb = `<div class="model-card-placeholder" style="background:linear-gradient(135deg, #78350f, #b45309);color:#fbbf24;display:flex;align-items:center;justify-content:center"><svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="opacity:.6"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg></div>`;
     } else {
-      thumb = `<div class="model-card-placeholder" style="background:${this.gradient(file.name)}">📦</div>`;
+      thumb = `<div class="model-card-placeholder" style="background:${this.gradient(file.name)};display:flex;align-items:center;justify-content:center"><svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="opacity:.4"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg></div>`;
     }
     
-    const folderLabel = file.folderPath ? `<div style="font-size:0.65rem;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px" title="${file.folderPath}">📁 ${file.folderPath}</div>` : '';
+    const folderLabel = file.folderPath ? `<div style="font-size:0.65rem;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px;display:flex;align-items:center;gap:3px" title="${file.folderPath}"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:#f59e0b"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>${file.folderPath}</div>` : '';
     const itemPath = `${file.folderPath ? file.folderPath+'/' : ''}${file.name}`;
     const isSelected = App.selectedBrowsePaths?.includes(itemPath);
     
@@ -155,9 +175,9 @@ const UI = {
     let metaChips = '';
     if (file.metadata) {
       const chips = [];
-      if (file.metadata.printTime) chips.push(`⏱️ ${file.metadata.printTime}`);
-      if (file.metadata.filamentType) chips.push(`🧵 ${file.metadata.filamentType}`);
-      if (file.metadata.tempNozzle) chips.push(`🌡️ ${file.metadata.tempNozzle}°C`);
+      if (file.metadata.printTime) chips.push(`<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:2px"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>${file.metadata.printTime}`);
+      if (file.metadata.filamentType) chips.push(`<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:2px"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/></svg>${file.metadata.filamentType}`);
+      if (file.metadata.tempNozzle) chips.push(`<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:2px"><path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z"/></svg>${file.metadata.tempNozzle}°C`);
       if (chips.length) {
         metaChips = `<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:4px">${chips.map(c => `<span style="font-size:0.65rem;background:var(--bg-input);padding:1px 5px;border-radius:4px;color:var(--text-secondary);border:1px solid var(--border)">${c}</span>`).join('')}</div>`;
       }
@@ -186,9 +206,9 @@ const UI = {
       thumb = `<img src="${thumbUrl}" alt="${m.name}">`;
     } else if (m.stl_file) {
       const stlUrl = m.stl_file.startsWith('/') ? m.stl_file : `/uploads/${m.stl_file}`;
-      thumb = `<div class="model-card-placeholder stl-thumb-target" data-stl-url="${stlUrl}?t=${Date.now()}" style="background:${this.gradient(m.name)}">📦</div>`;
+      thumb = `<div class="model-card-placeholder stl-thumb-target" data-stl-url="${stlUrl}?t=${Date.now()}" style="background:${this.gradient(m.name)};display:flex;align-items:center;justify-content:center"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="opacity:.35"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg></div>`;
     } else {
-      thumb = `<div class="model-card-placeholder" style="background:${this.gradient(m.name)}">📦</div>`;
+      thumb = `<div class="model-card-placeholder" style="background:${this.gradient(m.name)};display:flex;align-items:center;justify-content:center"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="opacity:.35"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg></div>`;
     }
     const types = (m.file_types || []).filter(t => t !== 'image').map(t =>
       `<span class="badge badge-${t}">${t}</span>`
@@ -226,9 +246,9 @@ const UI = {
       <div class="bulk-action-bar ${count > 0 ? 'active' : ''}">
         <div class="bulk-count">${count} items selected</div>
         <div class="bulk-actions">
-          <button class="btn btn-secondary btn-sm" onclick="App.openBulkTag()">🏷️ Tag</button>
-          <button class="btn btn-secondary btn-sm" onclick="App.openBulkAddToCollection()">➕ Collection</button>
-          <button class="btn btn-danger btn-sm" onclick="App.openBulkDelete()">🗑 Delete</button>
+          <button class="btn btn-secondary btn-sm" onclick="App.openBulkTag()" style="display:inline-flex;align-items:center;gap:4px"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>Tag</button>
+          <button class="btn btn-secondary btn-sm" onclick="App.openBulkAddToCollection()" style="display:inline-flex;align-items:center;gap:4px"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/></svg>Collection</button>
+          <button class="btn btn-danger btn-sm" onclick="App.openBulkDelete()" style="display:inline-flex;align-items:center;gap:4px"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>Delete</button>
           <button class="btn btn-ghost btn-sm" onclick="App.clearSelection()">✕ Clear</button>
         </div>
       </div>`;
@@ -240,9 +260,9 @@ const UI = {
         <div class="bulk-count">${count} items selected</div>
         <div class="bulk-actions">
           <button class="btn btn-secondary btn-sm" onclick="App.toggleBrowseSelectAll()">${isAllSelected ? '✕ Deselect All' : '✓ Select All'}</button>
-          <button class="btn btn-secondary btn-sm" onclick="App.openBulkBrowseMove()">📁 Move</button>
-          <button class="btn btn-secondary btn-sm" onclick="App.openBulkBrowseTag()">🏷️ Tag</button>
-          <button class="btn btn-danger btn-sm" onclick="App.openBulkBrowseDelete()">🗑 Delete</button>
+          <button class="btn btn-secondary btn-sm" onclick="App.openBulkBrowseMove()" style="display:inline-flex;align-items:center;gap:4px"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>Move</button>
+          <button class="btn btn-secondary btn-sm" onclick="App.openBulkBrowseTag()" style="display:inline-flex;align-items:center;gap:4px"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>Tag</button>
+          <button class="btn btn-danger btn-sm" onclick="App.openBulkBrowseDelete()" style="display:inline-flex;align-items:center;gap:4px"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>Delete</button>
           <button class="btn btn-ghost btn-sm" onclick="App.clearBrowseSelection()">✕ Clear</button>
         </div>
       </div>`;
@@ -392,8 +412,9 @@ const UI = {
     const printed = model.has_printed
       ? '<span class="badge badge-printed">✓ Printed</span>'
       : '<span class="badge badge-not-printed">Not printed</span>';
-    const sourceLink = model.source_url
-      ? `<a href="${model.source_url}" target="_blank" class="badge badge-category" style="background:var(--bg-tertiary);color:var(--accent-cyan);text-decoration:none;border:1px solid var(--border)">🔗 Source</a>`
+    const cleanSourceUrl = this.safeUrl(model.source_url);
+    const sourceLink = cleanSourceUrl
+      ? `<a href="${this.escapeHtml(cleanSourceUrl)}" target="_blank" rel="noopener noreferrer" class="badge badge-category" style="background:var(--bg-tertiary);color:var(--accent-cyan);text-decoration:none;border:1px solid var(--border)"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:4px"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>Source</a>`
       : '';
 
     // Find first STL or 3MF file for 3D preview
@@ -404,14 +425,14 @@ const UI = {
       viewerHtml = `
       <div class="glass-panel" style="margin-bottom:24px;overflow:visible">
         <div class="panel-header">
-          <div class="panel-title">🔮 3D Preview</div>
+          <div class="panel-title"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:6px"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>3D Studio</div>
         </div>
         <div class="panel-body no-pad">
           <div class="viewer-container" id="stl-viewer-${model.id}" data-stl-url="${stlFile.url || '/uploads/'+stlFile.filename}" data-fallback-thumbnail="${model.thumbnail_url || ''}">
             <div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-muted)">Loading 3D preview...</div>
           </div>
           <div style="padding:12px 16px;font-size:.7rem;color:var(--text-muted);border-top:1px solid var(--border);background:rgba(0,0,0,0.1)">
-            🖱 Drag to rotate · Scroll to zoom · Right-click to pan
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:4px"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>Drag to rotate · Scroll to zoom · Right-click to pan
           </div>
         </div>
       </div>`;
@@ -419,7 +440,7 @@ const UI = {
       viewerHtml = `
       <div class="glass-panel" style="margin-bottom:24px;overflow:hidden">
         <div class="panel-header">
-          <div class="panel-title">🖼️ Model Preview</div>
+          <div class="panel-title"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:6px"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>Model Preview</div>
         </div>
         <div class="panel-body no-pad" style="height:400px;background:var(--bg-dark);display:flex;align-items:center;justify-content:center">
           <img src="${model.thumbnail_url}" style="max-width:100%;max-height:100%;object-fit:contain">
@@ -429,11 +450,11 @@ const UI = {
       viewerHtml = `
       <div class="glass-panel" style="margin-bottom:24px;overflow:visible">
         <div class="panel-header">
-          <div class="panel-title">🔮 3D Preview</div>
+          <div class="panel-title"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:6px"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>3D Studio</div>
         </div>
         <div class="panel-body">
           <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:350px;color:var(--text-muted);text-align:center">
-            <div style="font-size:3.5rem;margin-bottom:16px;opacity:.2">📦</div>
+            <div style="margin-bottom:16px;opacity:.25;color:var(--text-muted)"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg></div>
             <div style="font-size:1.1rem;font-weight:600;color:var(--text-secondary)">No 3D Preview Available</div>
             <div style="font-size:.85rem;margin-top:6px;max-width:280px">Upload an STL or 3MF file to this model to enable the interactive 3D viewer.</div>
           </div>
@@ -447,7 +468,7 @@ const UI = {
       gcodeHtml = `
         <div class="glass-panel" style="margin-bottom:16px; border: 1px solid var(--accent-cyan); box-shadow: 0 0 10px rgba(0, 212, 255, 0.1);">
           <div class="panel-header">
-            <div class="panel-title" style="color:var(--accent-cyan)">🖨️ G-Code Profiles</div>
+            <div class="panel-title" style="color:var(--accent-cyan)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:6px"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>G-Code Profiles</div>
           </div>
           <div class="panel-body no-pad">
             ${gcodeFiles.map(f => {
@@ -529,7 +550,7 @@ const UI = {
                   ` : ''}
                 </div>
                 <div style="margin-top:12px; display:flex; gap:8px">
-                  <button class="btn btn-ghost btn-sm" style="color:var(--accent-cyan);border:1px solid rgba(0,212,255,0.4);" onclick="App.previewStl(${model.id}, '${f.url || '/uploads/'+f.filename}', 'gcode')">👁 Preview G-Code</button>
+                  <button class="btn btn-ghost btn-sm" style="color:var(--accent-cyan);border:1px solid rgba(0,212,255,0.4);" onclick="App.previewStl(${model.id}, '${f.url || '/uploads/'+f.filename}', 'gcode')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:4px"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>Preview G-Code</button>
                   ${hasPrinters ? `<button class="btn btn-primary btn-sm" style="flex:1" onclick="App.sendToPrinter(${f.id})">Send to Printer</button>` : ''}
                   <a href="/api/files/${f.id}/download/${encodeURIComponent(f.filename)}" class="btn btn-secondary btn-sm" download>Download</a>
                 </div>
@@ -544,57 +565,90 @@ const UI = {
     const filesHtml = (model.files || []).filter(f => f.file_type !== 'document').map(f => {
       let metaHtml = '';
       const isPreview = Boolean(f.is_preview || f.id === model.preview_file_id);
+      const is3D = f.file_type === 'stl' || f.file_type === '3mf';
+      const isGcode = f.file_type === 'gcode' || f.file_type === 'bgcode';
+
+      const slicerLinks = {
+        'orcaslicer': { name: 'OrcaSlicer', url: `orcaslicer://open?file=${encodeURI(window.location.origin + '/api/files/' + f.id + '/download/model.' + f.file_type)}` },
+        'elegooslicer': { name: 'Elegoo Slicer', url: `elegooslicer://open?file=${encodeURI(window.location.origin + '/api/files/' + f.id + '/download/model.' + f.file_type)}` },
+        'cura': { name: 'Ultimaker Cura', url: `cura://open?file=${encodeURI(window.location.origin + '/api/files/' + f.id + '/download/model.' + f.file_type)}` }
+      };
+      const pref = App.currentUser?.preferred_slicer;
+
+      let slicerBtnHtml = '';
+      if (is3D) {
+        if (pref && slicerLinks[pref]) {
+          slicerBtnHtml = `
+            <div style="display:inline-flex;align-items:stretch">
+              <a href="${slicerLinks[pref].url}" class="btn btn-ghost btn-xs" title="Open in ${slicerLinks[pref].name}" style="color:var(--accent-purple);font-weight:600;font-size:0.7rem;border:1px solid var(--accent-purple);border-right:none;padding:3px 8px;border-radius:4px 0 0 4px;line-height:1;white-space:nowrap;display:inline-flex;align-items:center;gap:5px">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
+                OPEN IN ${slicerLinks[pref].name.toUpperCase()}
+              </a>
+              <div class="dropdown">
+                <button class="btn btn-ghost btn-xs" style="color:var(--accent-purple);border:1px solid var(--accent-purple);padding:3px 6px;border-radius:0 4px 4px 0;height:100%;display:flex;align-items:center"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg></button>
+                <div class="dropdown-content">
+                  <div class="dropdown-header">Other Slicers</div>
+                  ${Object.entries(slicerLinks).filter(([k]) => k !== pref).map(([_, s]) => `<a href="${s.url}">${s.name}</a>`).join('')}
+                </div>
+              </div>
+            </div>
+          `;
+        } else {
+          slicerBtnHtml = `
+            <div class="dropdown" style="display:inline-block">
+              <button class="btn btn-ghost btn-xs" title="Open in Slicer" style="color:var(--accent-purple);font-weight:600;font-size:0.7rem;border:1px solid var(--accent-purple);padding:3px 8px;border-radius:4px;line-height:1;white-space:nowrap;display:inline-flex;align-items:center;gap:5px">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
+                OPEN IN SLICER
+                <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+              </button>
+              <div class="dropdown-content">
+                <div class="dropdown-header">Open in Slicer</div>
+                ${Object.values(slicerLinks).map(s => `<a href="${s.url}">${s.name}</a>`).join('')}
+              </div>
+            </div>
+          `;
+        }
+      }
+
+      const hasBottomBar = (canEdit && !isPreview && is3D) || is3D;
 
       return `
-      <div class="file-item">
-        ${this.fileTypeIcon(f.file_type)}
-        <div class="file-info">
-          <div style="display:flex;align-items:center;gap:6px">
-            <span class="file-name">${f.original_name}</span>
-            ${isPreview ? `<span class="badge-preview">★ Primary Preview</span>` : ''}
+      <div class="file-item-card" style="padding:10px 14px;border-bottom:1px solid var(--border);transition:background var(--transition)">
+        <!-- Top Row: Icon, File Details, Quick Action Buttons -->
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px">
+          <div style="display:flex;align-items:center;gap:10px;min-width:0;flex:1">
+            ${this.fileTypeIcon(f.file_type)}
+            <div style="min-width:0;flex:1">
+              <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+                <span class="file-name" style="font-weight:600;font-size:0.85rem;color:var(--text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%" title="${f.original_name}">${f.original_name}</span>
+                ${isPreview ? `<span class="badge badge-primary badge-xs" style="font-size:0.65rem;padding:2px 6px;background:rgba(0,212,255,0.15);color:var(--accent-cyan);border:1px solid rgba(0,212,255,0.3);display:inline-flex;align-items:center;gap:3px"><svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>Primary</span>` : ''}
+              </div>
+              <div class="file-meta" style="font-size:0.72rem;color:var(--text-muted);display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-top:2px">
+                <span>${this.formatSize(f.file_size)}</span>
+                <span>·</span>
+                <span>${this.formatDateShort(f.uploaded_at)}</span>
+                <span>·</span>
+                <span style="display:inline-flex;align-items:center;gap:3px">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;opacity:0.8"><circle cx="12" cy="7" r="4"/><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/></svg>
+                  ${f.uploader_name || 'System'}
+                </span>
+              </div>
+            </div>
           </div>
-          <div class="file-meta">${this.formatSize(f.file_size)} · ${this.formatDate(f.uploaded_at)} · 👤 ${f.uploader_name || 'System'}</div>
-          ${metaHtml}
+          <!-- Quick Actions: 3D Preview Eye, Download, Delete -->
+          <div style="display:flex;align-items:center;gap:5px;flex-shrink:0">
+            ${(is3D || isGcode) ? `<button class="file-action-btn preview" onclick="event.stopPropagation();App.previewStl(${model.id},'${f.url || '/uploads/'+f.filename}', '${f.file_type}')" title="Preview 3D / G-Code"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg></button>` : ''}
+            <a href="/api/files/${f.id}/download" class="file-action-btn" title="Download file"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></a>
+            ${canEdit ? `<button class="file-action-btn delete" onclick="event.stopPropagation();App.confirmDeleteFile(${f.id},'${(f.original_name || f.filename).replace(/'/g, "\\'")}',${model.id})" title="Delete file"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>` : ''}
+          </div>
         </div>
-        <div class="file-actions" style="display:flex;gap:4px;align-items:center">
-          ${(canEdit && !isPreview && (f.file_type === 'stl' || f.file_type === '3mf')) ? `<button class="btn btn-ghost btn-xs" style="color:var(--text-muted);font-size:0.7rem;border:1px solid var(--border);padding:3px 8px;border-radius:4px" onclick="event.stopPropagation();App.setPreviewFile(${model.id}, ${f.id})" title="Use this file as the model 3D preview">Set as Preview</button>` : ''}
-          ${(f.file_type === 'stl' || f.file_type === '3mf') ? (() => {
-            const slicerLinks = {
-              'orcaslicer': { name: 'OrcaSlicer', url: `orcaslicer://open?file=${encodeURI(window.location.origin + '/api/files/' + f.id + '/download/model.' + f.file_type)}` },
-              'elegooslicer': { name: 'Elegoo Slicer', url: `elegooslicer://open?file=${encodeURI(window.location.origin + '/api/files/' + f.id + '/download/model.' + f.file_type)}` },
-              'cura': { name: 'Ultimaker Cura', url: `cura://open?file=${encodeURI(window.location.origin + '/api/files/' + f.id + '/download/model.' + f.file_type)}` }
-            };
-            const pref = App.currentUser?.preferred_slicer;
-            
-            if (pref && slicerLinks[pref]) {
-              return `
-                <div style="display:flex;align-items:stretch">
-                  <a href="${slicerLinks[pref].url}" class="btn btn-ghost btn-xs" title="Open in ${slicerLinks[pref].name}" style="color:var(--accent-purple);font-weight:600;font-size:0.7rem;border:1px solid var(--accent-purple);border-right:none;padding:3px 10px;border-radius:4px 0 0 4px;line-height:1;white-space:nowrap;display:flex;align-items:center">OPEN IN ${slicerLinks[pref].name.toUpperCase()}</a>
-                  <div class="dropdown">
-                    <button class="btn btn-ghost btn-xs" style="color:var(--accent-purple);border:1px solid var(--accent-purple);padding:3px 4px;border-radius:0 4px 4px 0;height:100%;display:flex;align-items:center"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg></button>
-                    <div class="dropdown-content">
-                      <div class="dropdown-header">Other Slicers</div>
-                      ${Object.entries(slicerLinks).filter(([k]) => k !== pref).map(([_, s]) => `<a href="${s.url}">${s.name}</a>`).join('')}
-                    </div>
-                  </div>
-                </div>
-              `;
-            } else {
-              return `
-                <div class="dropdown">
-                  <button class="btn btn-ghost btn-xs" title="Open in Slicer" style="color:var(--accent-purple);font-weight:600;font-size:0.7rem;border:1px solid var(--accent-purple);padding:3px 10px;border-radius:4px;line-height:1;white-space:nowrap">OPEN IN SLICER</button>
-                  <div class="dropdown-content">
-                    <div class="dropdown-header">Open in Slicer</div>
-                    ${Object.values(slicerLinks).map(s => `<a href="${s.url}">${s.name}</a>`).join('')}
-                  </div>
-                </div>
-              `;
-            }
-          })() : ''}
-          ${(f.file_type === 'stl' || f.file_type === '3mf' || f.file_type === 'gcode') ? `<button class="btn btn-ghost" style="padding:6px;color:var(--accent-cyan)" onclick="event.stopPropagation();App.previewStl(${model.id},'${f.url || '/uploads/'+f.filename}', '${f.file_type}')" title="Preview 3D / G-Code"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg></button>` : ''}
-          <a href="/api/files/${f.id}/download" class="btn btn-ghost" style="padding:6px" title="Download"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg></a>
-          ${canEdit ? `<button class="btn btn-ghost" style="padding:6px;color:var(--error)" onclick="event.stopPropagation();App.confirmDeleteFile(${f.id},'${(f.original_name || f.filename).replace(/'/g, "\\'")}',${model.id})" title="Delete"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg></button>` : ''}
-        </div>
+
+        <!-- Optional Bottom Action Bar (Slicer / Set Preview) -->
+        ${hasBottomBar ? `
+        <div style="display:flex;align-items:center;gap:6px;margin-top:8px;padding-top:8px;border-top:1px dashed rgba(255,255,255,0.06);flex-wrap:wrap">
+          ${(canEdit && !isPreview && is3D) ? `<button class="btn btn-ghost btn-xs" style="color:var(--text-secondary);font-size:0.7rem;border:1px solid var(--border);padding:3px 8px;border-radius:4px;display:inline-flex;align-items:center;gap:4px;transition:all var(--transition)" onclick="event.stopPropagation();App.setPreviewFile(${model.id}, ${f.id})" title="Use this file as model 3D preview"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>Set as Preview</button>` : ''}
+          ${slicerBtnHtml}
+        </div>` : ''}
       </div>`;
     }).join('');
 
@@ -604,7 +658,16 @@ const UI = {
         <div class="file-type-icon" style="background:rgba(255,165,0,0.2);color:#ffa500;width:36px;height:36px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:0.7rem">DOC</div>
         <div class="file-info">
           <div class="file-name">${f.original_name}</div>
-          <div class="file-meta">${this.formatSize(f.file_size)} · ${this.formatDate(f.uploaded_at)} · 👤 ${f.uploader_name || 'System'}</div>
+          <div class="file-meta" style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-top:2px">
+            <span>${this.formatSize(f.file_size)}</span>
+            <span>·</span>
+            <span>${this.formatDate(f.uploaded_at)}</span>
+            <span>·</span>
+            <span style="display:inline-flex;align-items:center;gap:3px">
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+              ${f.uploader_name || 'System'}
+            </span>
+          </div>
         </div>
         <div class="file-actions" style="display:flex;gap:4px;align-items:center">
           <a href="/api/files/${f.id}/download" target="_blank" class="btn btn-ghost" style="padding:6px;color:var(--accent-cyan)" title="View Document"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg></a>
@@ -638,10 +701,10 @@ const UI = {
       ${breadcrumbs}
       <div class="detail-header">
         <div>
-          <div class="detail-title">${model.name}</div>
+          <div class="detail-title">${this.escapeHtml(model.name)}</div>
           <div class="detail-meta">${cat} ${printed}</div>
         </div>
-        <div class="detail-actions" style="display:flex;gap:8px;flex-wrap:wrap">
+        <div class="detail-actions">
           ${canEdit ? `
           <button class="btn btn-secondary btn-sm" onclick="App.showShareModal(${model.id})" title="Share Model">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
@@ -651,7 +714,7 @@ const UI = {
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
             Collection
           </button>
-          <button class="btn btn-secondary btn-sm" onclick="App.showCreateVersion(${model.id},'${model.name.replace(/'/g, "\\'")}')">
+          <button class="btn btn-secondary btn-sm" onclick="App.showCreateVersion(${model.id})">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
             New Version
           </button>
@@ -659,7 +722,7 @@ const UI = {
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
             Edit
           </button>
-          <button class="btn btn-danger btn-sm" onclick="App.confirmDeleteModel(${model.id},'${model.name.replace(/'/g, "\\'")}')">
+          <button class="btn btn-danger btn-sm" onclick="App.confirmDeleteModel(${model.id})">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
             Delete
           </button>
@@ -672,12 +735,12 @@ const UI = {
           ${viewerHtml}
           ${model.description ? `
           <div class="glass-panel" style="margin-bottom:24px">
-            <div class="panel-header"><div class="panel-title">📝 Description</div></div>
+            <div class="panel-header"><div class="panel-title"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:6px"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>Description</div></div>
             <div class="panel-body"><div class="detail-description">${this.renderMarkdown(model.description)}</div></div>
           </div>` : ''}
           ${(tags || sourceLink) ? `
           <div class="glass-panel" style="margin-bottom:24px">
-            <div class="panel-header"><div class="panel-title">🏷️ Tags & Links</div></div>
+            <div class="panel-header"><div class="panel-title"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:6px"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>Tags & Links</div></div>
             <div class="panel-body">
               <div style="display:flex;gap:8px;flex-wrap:wrap">
                 ${tags}
@@ -691,7 +754,7 @@ const UI = {
           ${gcodeHtml}
           <div class="glass-panel">
             <div class="panel-header">
-              <div class="panel-title">🖨 Print History</div>
+              <div class="panel-title"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:6px"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>Print History</div>
               <button class="btn btn-secondary btn-sm" onclick="App.showLogPrint(${model.id})">+ Log Print</button>
             </div>
             <div class="panel-body">
@@ -705,11 +768,17 @@ const UI = {
             <div class="panel-header" style="border-bottom:1px solid var(--border-color);padding:0">
               <div style="display:flex;width:100%;align-items:center;">
                 <div style="display:flex;gap:20px;padding:16px 16px 0 16px;flex:1">
-                  <div onclick="App.switchFilesTab(event, 'files')" style="padding-bottom:12px;cursor:pointer;border-bottom:2px solid var(--accent-cyan);color:var(--text);font-weight:600">📁 Files (${model.files?.filter(f => f.file_type !== 'document').length || 0})</div>
-                  ${docsHtml ? `<div onclick="App.switchFilesTab(event, 'docs')" style="padding-bottom:12px;cursor:pointer;border-bottom:2px solid transparent;color:var(--text-muted);font-weight:600">📄 Documentation (${model.files?.filter(f => f.file_type === 'document').length || 0})</div>` : ''}
+                  <div onclick="App.switchFilesTab(event, 'files')" style="font-size:0.95rem;font-weight:600;line-height:1.4;padding-bottom:12px;cursor:pointer;border-bottom:2px solid var(--accent-cyan);color:var(--text);display:inline-flex;align-items:center;gap:6px">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/></svg>
+                    Files (${model.files?.filter(f => f.file_type !== 'document').length || 0})
+                  </div>
+                  ${docsHtml ? `<div onclick="App.switchFilesTab(event, 'docs')" style="font-size:0.95rem;font-weight:600;line-height:1.4;padding-bottom:12px;cursor:pointer;border-bottom:2px solid transparent;color:var(--text-muted);display:inline-flex;align-items:center;gap:6px">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                    Documentation (${model.files?.filter(f => f.file_type === 'document').length || 0})
+                  </div>` : ''}
                 </div>
                 <div style="padding:12px 16px">
-                  ${canEdit ? `<button class="btn btn-primary btn-xs" onclick="App.showUploadFiles(${model.id})">+ Upload</button>` : ''}
+                  ${canEdit ? `<button class="btn btn-primary btn-xs" onclick="App.showUploadFiles(${model.id})" style="display:inline-flex;align-items:center;gap:4px"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>Upload</button>` : ''}
                 </div>
               </div>
             </div>
@@ -726,7 +795,7 @@ const UI = {
 
           ${model.versions?.length ? `
           <div class="glass-panel" style="margin-top:16px">
-            <div class="panel-header"><div class="panel-title">🔄 Other Versions</div></div>
+            <div class="panel-header"><div class="panel-title"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:6px"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>Other Versions</div></div>
             <div class="panel-body no-pad">
               ${model.versions.map(v => `
                 <div class="activity-item" style="cursor:pointer;padding:12px" onclick="App.navigate('/models/${v.id}')">
@@ -740,8 +809,8 @@ const UI = {
           </div>` : ''}
           ${model.print_tips ? `
           <div class="glass-panel" style="margin-top:16px">
-            <div class="panel-header"><div class="panel-title">💡 Print Tips</div></div>
-            <div class="panel-body"><div class="detail-tips">${model.print_tips}</div></div>
+            <div class="panel-header"><div class="panel-title"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:6px"><path d="M9 18h6"/><path d="M10 22h4"/><path d="M15.09 14c.18-.98.65-1.74 1.41-2.5A4.65 4.65 0 0 0 18 8 6 6 0 0 0 6 8c0 1 .23 2.23 1.5 3.5.76.76 1.23 1.52 1.41 2.5"/></svg>Print Tips</div></div>
+            <div class="panel-body"><div class="detail-tips">${this.escapeHtml(model.print_tips)}</div></div>
           </div>` : ''}
         </div>
       </div>`;
@@ -809,7 +878,7 @@ const UI = {
             ondragover="event.preventDefault();this.classList.add('dragover')"
             ondragleave="this.classList.remove('dragover')"
             ondrop="event.preventDefault();this.classList.remove('dragover');App.handleCreateFileDrop(event)">
-            <div class="upload-zone-icon">📁</div>
+            <div class="upload-zone-icon" style="color:var(--accent-cyan);opacity:0.8"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></div>
             <div class="upload-zone-text"><strong>Click to browse</strong> or drag & drop files</div>
             <div style="color:var(--text-muted);font-size:.7rem;margin-top:4px">STL · Gcode · BGCODE · 3MF · OBJ · STEP · F3D · Images · Documents</div>
             <input type="file" id="create-file-input" multiple accept=".stl,.gcode,.bgcode,.3mf,.obj,.step,.stp,.f3d,.png,.jpg,.jpeg,.gif,.webp,.pdf,.txt,.md" onchange="App.handleCreateFileSelect(event)">
@@ -831,7 +900,7 @@ const UI = {
         ondragover="event.preventDefault();this.classList.add('dragover')"
         ondragleave="this.classList.remove('dragover')"
         ondrop="event.preventDefault();this.classList.remove('dragover');App.handleFileDrop(event,${modelId})">
-        <div class="upload-zone-icon">📁</div>
+        <div class="upload-zone-icon" style="color:var(--accent-cyan);opacity:0.8"><svg width="42" height="42" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></div>
         <div class="upload-zone-text"><strong>Click to browse</strong> or drag & drop files</div>
         <div style="color:var(--text-muted);font-size:.75rem;margin-top:6px">STL · Gcode · BGCODE · 3MF · OBJ · STEP · F3D · Images · Documents</div>
         <input type="file" id="file-input" multiple accept=".stl,.gcode,.bgcode,.3mf,.obj,.step,.stp,.f3d,.png,.jpg,.jpeg,.gif,.webp,.pdf,.txt,.md" onchange="App.handleFileSelect(event,${modelId})">
@@ -875,10 +944,11 @@ const UI = {
 
   // ── Delete Confirmations ──
   deleteModelForm(id, name) {
+    const safeName = this.escapeHtml(name || '');
     return `
       <form id="delete-model-form" onsubmit="App.handleDeleteModel(event, ${id})">
         <div style="margin-bottom: 20px; color: var(--text-secondary)">
-          Are you sure you want to delete <strong>"${name}"</strong>?<br>
+          Are you sure you want to delete <strong>"${safeName}"</strong>?<br>
           This will remove the model, all its files, and print history from GyroidVault.
         </div>
         <div class="form-group" style="padding: 12px; background: rgba(239, 68, 68, 0.1); border-radius: 6px; border: 1px solid rgba(239, 68, 68, 0.2)">
@@ -1187,7 +1257,7 @@ const UI = {
       <div class="settings-item">
         <div style="flex:1">
           <div style="font-weight:500">${p.name}</div>
-          <div style="font-size:0.8rem;color:var(--text-muted)">${p.url} ${p.api_key ? '🔑' : ''}</div>
+          <div style="font-size:0.8rem;color:var(--text-muted);display:flex;align-items:center;gap:4px">${p.url} ${p.api_key ? '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--accent-yellow)" title="API Key Configured"><circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6"/><path d="m15.5 7.5 3 3M18.5 4.5l3 3"/></svg>' : ''}</div>
         </div>
         <button class="btn btn-danger btn-sm" onclick="App.deletePrinter('${p.id}')">Delete</button>
       </div>
@@ -1234,16 +1304,36 @@ const UI = {
   },
 
   systemSettingsForm(config = {}) {
+    config = config || {};
     return `
       <form onsubmit="App.handleSaveSystemSettings(event)" class="form-grid">
         <h3 style="grid-column: 1 / -1; margin-bottom: 10px; border-bottom: 1px solid var(--border-color); padding-bottom: 5px;">General Settings</h3>
-        <div class="form-group">
-          <label>Library View Mode</label>
-          <select name="library_view_mode" class="form-input">
-            <option value="grid" ${(config.library_view_mode || 'grid') === 'grid' ? 'selected' : ''}>All Models (flat grid)</option>
-            <option value="folder" ${config.library_view_mode === 'folder' ? 'selected' : ''}>Folder View (browse disk)</option>
+        <div class="form-group" style="grid-column: 1 / -1">
+          <label style="font-weight:600">Default Library View Mode</label>
+          <select name="library_view_mode" class="form-input" style="max-width:420px;margin-bottom:12px">
+            <option value="grid" ${(config.library_view_mode || 'grid') === 'grid' ? 'selected' : ''}>All Models (Flat Grid Gallery)</option>
+            <option value="folder" ${config.library_view_mode === 'folder' ? 'selected' : ''}>Folder View (Disk Directory Hierarchy)</option>
           </select>
-          <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;">Choose how the Models page displays your library.</p>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(280px, 1fr));gap:12px;margin-top:4px">
+            <div style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:8px;padding:12px 14px;display:flex;gap:12px;align-items:flex-start">
+              <div style="width:36px;height:36px;border-radius:6px;background:rgba(59,130,246,0.1);color:var(--accent-cyan);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+              </div>
+              <div>
+                <div style="font-weight:600;font-size:0.875rem;color:var(--text-primary);margin-bottom:3px">All Models (Flat Grid Gallery)</div>
+                <div style="font-size:0.8rem;color:var(--text-secondary);line-height:1.4">Displays all indexed 3D models across subfolders in a single unified gallery. Best for fast global searching, tag filtering, and print status tracking.</div>
+              </div>
+            </div>
+            <div style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:8px;padding:12px 14px;display:flex;gap:12px;align-items:flex-start">
+              <div style="width:36px;height:36px;border-radius:6px;background:rgba(245,158,11,0.1);color:var(--warning);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+              </div>
+              <div>
+                <div style="font-weight:600;font-size:0.875rem;color:var(--text-primary);margin-bottom:3px">Folder View (Directory Hierarchy)</div>
+                <div style="font-size:0.8rem;color:var(--text-secondary);line-height:1.4">Mirrors your exact storage directory layout on disk. Browse and drill down through nested folders and collections just like a file manager.</div>
+              </div>
+            </div>
+          </div>
         </div>
         <div class="form-group">
           <label>Auto-Scan Interval (Hours)</label>
@@ -1258,6 +1348,7 @@ const UI = {
   },
 
   securitySettingsForm(config = {}) {
+    config = config || {};
     return `
       <form onsubmit="App.handleSaveSystemSettings(event)" style="display:flex;flex-direction:column;gap:20px">
         <div style="display:flex;flex-direction:column;gap:14px">
@@ -1286,7 +1377,7 @@ const UI = {
       </form>
 
       <div style="margin-top:32px; border-top:1px solid var(--border); padding-top:20px">
-        <h3 style="margin-bottom:12px; font-size:1.1rem; color:var(--text-primary); display:flex; align-items:center; gap:8px">🛡️ Blocked IP Addresses</h3>
+        <h3 style="margin-bottom:12px; font-size:1.1rem; color:var(--text-primary); display:flex; align-items:center; gap:8px"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--accent-purple)"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>Blocked IP Addresses</h3>
         <div id="blocked-ips-container">
           <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
             <button type="button" class="btn btn-secondary btn-sm" onclick="App.loadBlockedIps()">Refresh Blocked IPs</button>
@@ -1301,7 +1392,7 @@ const UI = {
     return `
       <div style="display:flex;flex-direction:column;gap:24px">
         <div>
-          <h3 style="margin-bottom:8px; font-size:1.1rem; color:var(--text-primary); display:flex; align-items:center; gap:8px">🔍 Duplicate File Finder</h3>
+          <h3 style="margin-bottom:8px; font-size:1.1rem; color:var(--text-primary); display:flex; align-items:center; gap:8px"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--accent-cyan)"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>Duplicate File Finder</h3>
           <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:16px">Scans your library using SHA-256 file hashes to find identical 3D model files across different folders or models.</p>
           <button type="button" class="btn btn-primary btn-sm" onclick="App.scanForDuplicates()">Scan for Duplicate Files</button>
           <div id="duplicates-results" style="margin-top:16px"></div>
@@ -1310,6 +1401,7 @@ const UI = {
   },
 
   smtpSettingsForm(config = {}) {
+    config = config || {};
     return `
       <form onsubmit="App.handleSaveSMTP(event)" class="form-grid">
         <div class="form-group">
@@ -1398,10 +1490,10 @@ const UI = {
     return `
       <div class="model-card" onclick="App.navigate('/projects/${p.id}')">
         <div class="model-card-thumb">
-          ${p.thumbnail ? `<img src="/uploads/${p.thumbnail}">` : '<div style="display:flex;align-items:center;justify-content:center;height:100%;font-size:3rem;opacity:.1">📁</div>'}
+          ${p.thumbnail ? `<img src="/uploads/${p.thumbnail}">` : '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-muted);opacity:.35"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></div>'}
         </div>
         <div class="model-card-body">
-          <div class="model-card-title">${p.visibility === 'private' ? '🔒 ' : ''}${p.name}</div>
+          <div class="model-card-title">${p.visibility === 'private' ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:4px;color:var(--accent-purple)"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>' : ''}${p.name}</div>
           <div class="model-card-meta">${p.model_count} models</div>
         </div>
       </div>`;
@@ -1415,11 +1507,11 @@ const UI = {
           <div class="breadcrumbs" style="margin-bottom:8px">
             <a href="#/collections"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg> Back to Collections</a>
           </div>
-          <h1 class="page-title">${project.visibility === 'private' ? '🔒 ' : ''}${project.name}</h1>
+          <h1 class="page-title">${project.visibility === 'private' ? '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:6px;color:var(--accent-purple)"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>' : ''}${project.name}</h1>
           <p class="page-subtitle">${project.description || 'No description'}</p>
         </div>
         <div style="display:flex;gap:8px">
-          <button class="btn btn-danger btn-sm" onclick="App.deleteProject(${project.id})">🗑 Delete</button>
+          <button class="btn btn-danger btn-sm" onclick="App.deleteProject(${project.id})" style="display:inline-flex;align-items:center;gap:4px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>Delete</button>
         </div>
       </div>
       <div class="model-grid">
@@ -1505,27 +1597,30 @@ const UI = {
           <div>
             ${stlFile ? `
               <div class="glass-panel" style="margin-bottom:24px">
-                <div class="panel-header"><div class="panel-title">🔮 3D Preview</div></div>
+                <div class="panel-header"><div class="panel-title"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:6px"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>3D Studio Preview</div></div>
                 <div class="panel-body no-pad">
                   <div class="viewer-container" id="public-viewer" data-stl-url="${stlFile.url}"></div>
                 </div>
               </div>` : ''}
             <div class="glass-panel">
-              <div class="panel-header"><div class="panel-title">📝 Description</div></div>
+              <div class="panel-header"><div class="panel-title"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:6px"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>Description</div></div>
               <div class="panel-body">${model.description || 'No description'}</div>
             </div>
           </div>
           <div>
             <div class="glass-panel">
-              <div class="panel-header"><div class="panel-title">📁 Files</div></div>
+              <div class="panel-header"><div class="panel-title"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:6px"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>Files</div></div>
               <div class="panel-body no-pad">
                 ${model.files.map(f => `
                   <div class="file-item">
-                    <div style="flex:1">
-                      <div class="file-name">${f.original_name}</div>
-                      <div class="file-meta">${this.formatSize(f.file_size)}</div>
+                    <div style="display:flex;align-items:center;gap:10px;flex:1;min-width:0">
+                      ${this.fileTypeIcon(f.file_type)}
+                      <div style="min-width:0;flex:1">
+                        <div class="file-name" title="${f.original_name}">${f.original_name}</div>
+                        <div class="file-meta">${this.formatSize(f.file_size)}</div>
+                      </div>
                     </div>
-                    <a href="${f.url}" download class="btn btn-ghost" style="padding:6px">📥</a>
+                    <a href="${f.url}" download class="file-action-btn" title="Download"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></a>
                   </div>`).join('')}
               </div>
             </div>
@@ -1541,11 +1636,17 @@ const UI = {
         <div class="panel-header"><div class="panel-title">About GyroidVault</div></div>
         <div class="panel-body">
           <div style="display:flex;gap:24px;align-items:flex-start;margin-bottom:24px;flex-wrap:wrap">
-            <div style="width:80px;height:80px;background:var(--accent-gradient);border-radius:16px;display:flex;align-items:center;justify-content:center;font-size:3rem;box-shadow:0 8px 16px rgba(0,0,0,0.2)">🗄️</div>
+            <div style="display:flex;align-items:center;justify-content:center">
+              <img src="/img/logo-icon.png?v=35" alt="GyroidVault" style="width:84px;height:84px;object-fit:contain;filter:drop-shadow(0 6px 18px rgba(37,99,235,0.4)) drop-shadow(0 2px 6px rgba(56,189,248,0.25))">
+            </div>
             <div style="flex:1">
               <h3 style="margin:0 0 4px 0;font-size:1.4rem;background:var(--accent-gradient);-webkit-background-clip:text;-webkit-text-fill-color:transparent">GyroidVault</h3>
               <p style="margin:0;font-size:.9rem;color:var(--text-secondary)">Self-hosted 3D model management for enthusiasts and professionals.</p>
               <div style="margin-top:12px;display:flex;gap:12px">
+                <a href="https://gyroidvault.com" target="_blank" class="btn btn-secondary btn-xs" style="color:var(--accent-cyan);border-color:rgba(0,212,255,0.3)">
+                  <svg height="14" viewBox="0 0 24 24" width="14" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:6px"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+                  Official Website
+                </a>
                 <a href="https://github.com/TeeCodeDev/GyroidVault" target="_blank" class="btn btn-secondary btn-xs">
                   <svg height="14" viewBox="0 0 16 16" width="14" style="vertical-align:middle;margin-right:6px"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"></path></svg>
                   GitHub Repository
@@ -1566,7 +1667,7 @@ const UI = {
             ${versionInfo.hasUpdate ? `
               <div style="background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.2);padding:16px;border-radius:8px;margin-bottom:20px">
                 <div style="display:flex;justify-content:space-between;align-items:center">
-                  <div style="color:#f59e0b;font-weight:600">🚀 Update available: v${versionInfo.latestVersion}</div>
+                  <div style="color:#f59e0b;font-weight:600;display:flex;align-items:center;gap:6px"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/></svg>Update available: v${versionInfo.latestVersion}</div>
                   <a href="${versionInfo.url}" target="_blank" class="btn btn-primary btn-xs">View on GitHub</a>
                 </div>
               </div>
@@ -1581,10 +1682,12 @@ const UI = {
 
   renderMarkdown(text) {
     if (!text) return '';
-    let escaped = text
+    let escaped = String(text)
       .replace(/&/g, '&amp;')
       .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;');
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
 
     // Fenced code blocks
     escaped = escaped.replace(/```([\s\S]*?)```/g, (m, code) => `<pre><code>${code.trim()}</code></pre>`);
@@ -1610,11 +1713,19 @@ const UI = {
     // Horizontal Rule
     escaped = escaped.replace(/^---$/gim, '<hr>');
 
-    // Images
-    escaped = escaped.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1" loading="lazy">');
+    // Images: enforce safe protocol on src and safe alt text
+    escaped = escaped.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (m, alt, src) => {
+      const cleanSrc = this.safeUrl(src);
+      if (!cleanSrc) return '';
+      return `<img src="${this.escapeHtml(cleanSrc)}" alt="${this.escapeHtml(alt)}" loading="lazy">`;
+    });
 
-    // Links
-    escaped = escaped.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+    // Links: enforce safe protocol on href
+    escaped = escaped.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (m, label, href) => {
+      const cleanHref = this.safeUrl(href);
+      if (!cleanHref) return label;
+      return `<a href="${this.escapeHtml(cleanHref)}" target="_blank" rel="noopener noreferrer">${label}</a>`;
+    });
 
     // Lists
     escaped = escaped.replace(/^\s*[-*+]\s+(.*)$/gim, '<li style="margin-left:20px">$1</li>');
@@ -1655,6 +1766,154 @@ const UI = {
         <div class="upload-progress-footer">
           <span>${this.formatSize(loaded)} / ${this.formatSize(total)} (${speedStr})</span>
           <span>${etaStr}</span>
+        </div>
+      </div>
+    `;
+  },
+
+  whatsNewModal(version = '2.0.0', releaseNotes = []) {
+    const latestNote = releaseNotes && releaseNotes.length ? releaseNotes[0] : null;
+    const changelogHtml = latestNote ? `
+      <div class="markdown-body" style="font-size: 0.875rem; line-height: 1.6; max-height: 380px; overflow-y: auto; padding: 16px; background: var(--bg-primary); border-radius: 10px; border: 1px solid var(--border);">
+        <h3 style="margin-top:0;margin-bottom:12px;color:var(--accent-cyan)">${this.escapeHtml(latestNote.title || 'GyroidVault ' + version)}</h3>
+        <div style="white-space: pre-wrap; font-family: var(--font); color: var(--text-secondary); font-size: 0.82rem;">${this.escapeHtml(latestNote.content || latestNote.rawMarkdown || '')}</div>
+      </div>
+    ` : `
+      <div style="text-align:center;padding:28px 20px;color:var(--text-muted);font-size:0.875rem;background:var(--bg-primary);border-radius:10px;border:1px solid var(--border)">
+        Changelog details are available on <a href="https://github.com/TeeCodeDev/GyroidVault/releases" target="_blank" rel="noopener noreferrer" style="color:var(--accent-cyan);font-weight:600">GitHub Releases</a>.
+      </div>
+    `;
+
+    return `
+      <div class="whats-new-container" style="max-width: 720px; margin: 0 auto">
+        <!-- Hero Header with Official Logo -->
+        <div style="text-align:center;padding:10px 10px 18px;position:relative">
+          <div style="position:relative;margin-bottom:16px;display:inline-block">
+            <img src="/img/logo-icon.png?v=35" alt="GyroidVault" width="94" height="94" style="display:block;margin:0 auto;filter:drop-shadow(0 8px 24px rgba(37,99,235,0.4)) drop-shadow(0 2px 8px rgba(56,189,248,0.3));object-fit:contain">
+          </div>
+
+          <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:10px">
+            <div style="display:inline-flex;align-items:center;gap:6px;background:rgba(37,99,235,0.12);color:#60a5fa;border:1px solid rgba(59,130,246,0.3);padding:3px 12px;border-radius:20px;font-size:0.75rem;font-weight:700;letter-spacing:0.06em;text-transform:uppercase">
+              <span style="width:6px;height:6px;border-radius:50%;background:#38bdf8;box-shadow:0 0 8px #38bdf8"></span>
+              Major Release v${version}
+            </div>
+          </div>
+
+          <h2 style="font-size:1.55rem;font-weight:800;letter-spacing:-0.02em;margin:0 0 8px;color:var(--text-primary)">
+            Welcome to GyroidVault 2.0
+          </h2>
+          <p style="color:var(--text-secondary);font-size:0.88rem;line-height:1.55;max-width:540px;margin:0 auto">
+            Your self-hosted 3D vault and slicing workspace — equipped with Studio 2.0 multi-part assembly, real-time mm dimensions, background scanner, and hardened security.
+          </p>
+        </div>
+
+        <!-- Official Website Showcase Banner -->
+        <div style="background:linear-gradient(135deg, rgba(37,99,235,0.15) 0%, rgba(124,58,237,0.12) 100%);border:1px solid rgba(96,165,250,0.35);border-radius:12px;padding:14px 18px;display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:18px;box-shadow:0 4px 16px rgba(0,0,0,0.2)">
+          <div style="display:flex;align-items:center;gap:12px;min-width:0">
+            <div style="width:40px;height:40px;border-radius:10px;background:linear-gradient(135deg, #2563eb, #7c3aed);display:flex;align-items:center;justify-content:center;color:#fff;flex-shrink:0;box-shadow:0 6px 16px rgba(37,99,235,0.4)">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+            </div>
+            <div style="min-width:0">
+              <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                <span style="font-weight:700;font-size:0.92rem;color:#ffffff">Official Website is Live!</span>
+                <span style="background:rgba(16,185,129,0.2);color:#34d399;border:1px solid rgba(16,185,129,0.35);padding:1px 7px;border-radius:8px;font-size:0.62rem;font-weight:700;text-transform:uppercase">Official</span>
+              </div>
+              <div style="font-size:0.8rem;color:var(--text-secondary);margin-top:2px">
+                Explore the interactive 3D Studio demo, feature overview & Docker setup at <strong style="color:var(--accent-cyan)">gyroidvault.com</strong>
+              </div>
+            </div>
+          </div>
+          <a href="https://gyroidvault.com" target="_blank" rel="noopener noreferrer" class="btn btn-primary btn-sm" style="font-weight:600;white-space:nowrap;padding:7px 14px;border-radius:8px;display:inline-flex;align-items:center;gap:6px;flex-shrink:0">
+            <span>Visit Website</span>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+          </a>
+        </div>
+
+        <!-- Tabs Navigation -->
+        <div style="display:flex;gap:8px;margin-bottom:16px;border-bottom:1px solid var(--border);padding-bottom:10px">
+          <button id="whatsnew-tab-btn-highlights" class="btn btn-secondary btn-sm active" onclick="App.switchWhatsNewTab('highlights')" style="font-weight:600;display:inline-flex;align-items:center;gap:6px">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+            <span>Highlights & Features</span>
+          </button>
+          <button id="whatsnew-tab-btn-changelog" class="btn btn-secondary btn-sm" onclick="App.switchWhatsNewTab('changelog')" style="font-weight:600;display:inline-flex;align-items:center;gap:6px">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+            <span>Full Changelog</span>
+          </button>
+        </div>
+
+        <!-- Highlights Content -->
+        <div id="whatsnew-content-highlights" style="display:block">
+          <!-- 4-Card Bento Grid -->
+          <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(280px, 1fr));gap:12px;margin-bottom:18px">
+            <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:15px;display:flex;gap:12px;align-items:flex-start;box-shadow:0 2px 8px rgba(0,0,0,0.15)">
+              <div style="width:38px;height:38px;border-radius:10px;background:rgba(37,99,235,0.15);color:var(--accent-cyan);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+              </div>
+              <div>
+                <div style="font-weight:700;font-size:0.9rem;color:var(--text-primary);margin-bottom:3px">Studio 2.0 & Multi-Assembly</div>
+                <div style="font-size:0.8rem;color:var(--text-secondary);line-height:1.45">Inspect individual parts or arrange all project STL/3MF files on the virtual build plate with real-time physical mm dimension badges.</div>
+              </div>
+            </div>
+
+            <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:15px;display:flex;gap:12px;align-items:flex-start;box-shadow:0 2px 8px rgba(0,0,0,0.15)">
+              <div style="width:38px;height:38px;border-radius:10px;background:rgba(16,185,129,0.15);color:#10b981;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+              </div>
+              <div>
+                <div style="font-weight:700;font-size:0.9rem;color:var(--text-primary);margin-bottom:3px">Massive Libraries (2TB+) & Scanner</div>
+                <div style="font-size:0.8rem;color:var(--text-secondary);line-height:1.45">Engineered for massive libraries of 2TB+ and 10,000+ models. Indexes directories and identifies duplicates in the background with zero UI freezes.</div>
+              </div>
+            </div>
+
+            <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:15px;display:flex;gap:12px;align-items:flex-start;box-shadow:0 2px 8px rgba(0,0,0,0.15)">
+              <div style="width:38px;height:38px;border-radius:10px;background:rgba(139,92,246,0.15);color:#8b5cf6;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
+              </div>
+              <div>
+                <div style="font-weight:700;font-size:0.9rem;color:var(--text-primary);margin-bottom:3px">Power Batch Editing</div>
+                <div style="font-size:0.8rem;color:var(--text-secondary);line-height:1.45">Multi-select dozens of models across library views to bulk-assign tags, categories, or collections in a single instant action.</div>
+              </div>
+            </div>
+
+            <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:15px;display:flex;gap:12px;align-items:flex-start;box-shadow:0 2px 8px rgba(0,0,0,0.15)">
+              <div style="width:38px;height:38px;border-radius:10px;background:rgba(245,158,11,0.15);color:#f59e0b;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+              </div>
+              <div>
+                <div style="font-weight:700;font-size:0.9rem;color:var(--text-primary);margin-bottom:3px">Local Privacy & Access Control</div>
+                <div style="font-size:0.8rem;color:var(--text-secondary);line-height:1.45">Your models stay 100% private and self-hosted with zero cloud telemetry. Strictly confined to your storage folder with safe, token-protected share links.</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Open Source & Support Section -->
+          <div style="background:linear-gradient(135deg, rgba(245,158,11,0.08), rgba(37,99,235,0.06));border:1px solid rgba(245,158,11,0.25);border-radius:12px;padding:14px 18px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:20px">
+            <div>
+              <div style="font-weight:700;font-size:0.88rem;color:var(--text-primary);display:flex;align-items:center;gap:6px;margin-bottom:3px">
+                <span>Support GyroidVault Development</span>
+              </div>
+              <div style="font-size:0.8rem;color:var(--text-secondary);line-height:1.4">
+                GyroidVault is 100% free and open source. Consider supporting maintenance via Ko-fi!
+              </div>
+            </div>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+              <a href="https://gyroidvault.com" target="_blank" rel="noopener noreferrer" class="btn btn-secondary btn-sm" style="font-weight:600">gyroidvault.com</a>
+              <a href="https://github.com/TeeCodeDev/GyroidVault" target="_blank" rel="noopener noreferrer" class="btn btn-secondary btn-sm" style="font-weight:600">GitHub</a>
+              <a href="https://ko-fi.com/D1D51ZGUNL" target="_blank" rel="noopener noreferrer" class="btn btn-primary btn-sm" style="background:#f59e0b;border-color:#f59e0b;color:#000;font-weight:700">Ko-fi</a>
+            </div>
+          </div>
+        </div>
+
+        <!-- Changelog Content -->
+        <div id="whatsnew-content-changelog" style="display:none;margin-bottom:20px">
+          ${changelogHtml}
+        </div>
+
+        <!-- Dismiss / CTA -->
+        <div>
+          <button class="btn btn-primary btn-md" onclick="App.dismissWhatsNew()" style="width:100%;font-weight:700;padding:11px 20px;font-size:0.92rem;border-radius:8px">
+            Get Started with v${version}
+          </button>
         </div>
       </div>
     `;

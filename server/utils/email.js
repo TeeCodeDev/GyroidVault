@@ -19,12 +19,44 @@ async function getTransporter() {
   });
 }
 
-async function sendResetEmail(email, token, origin) {
+function resolveBaseUrl(originOrReq) {
+  try {
+    // 1. Configured instance URL in system_settings
+    const configured = get('SELECT value FROM system_settings WHERE key="instance_url"')?.value;
+    if (configured && configured.trim().startsWith('http')) {
+      return configured.trim().replace(/\/+$/, '');
+    }
+
+    // 2. Request object or string
+    if (originOrReq) {
+      if (typeof originOrReq === 'string' && originOrReq.startsWith('http')) {
+        const u = new URL(originOrReq);
+        return `${u.protocol}//${u.host}`;
+      }
+      if (typeof originOrReq === 'object' && originOrReq.headers) {
+        const host = originOrReq.headers['x-forwarded-host'] || originOrReq.headers.host;
+        const proto = originOrReq.headers['x-forwarded-proto'] || (originOrReq.secure ? 'https' : 'http');
+        // Validate host syntax (alphanumeric, dots, dashes, optional port)
+        if (host && /^[a-zA-Z0-9.:\-_]+$/.test(host) && !host.includes('/') && !host.includes('@')) {
+          return `${proto}://${host}`;
+        }
+      }
+    }
+  } catch (e) {
+    console.error('Error resolving base URL for email:', e);
+  }
+
+  return 'http://localhost:' + (process.env.PORT || 3000);
+}
+
+async function sendResetEmail(email, token, originOrReq) {
   const transporter = await getTransporter();
   if (!transporter) throw new Error('SMTP not configured');
   
   const from = get('SELECT value FROM system_settings WHERE key="smtp_from"')?.value || 'GyroidVault <noreply@gyroidvault.local>';
-  const resetUrl = `${origin}/#/reset-password?token=${token}`;
+  const baseUrl = resolveBaseUrl(originOrReq);
+  const cleanToken = encodeURIComponent(String(token).replace(/[^a-zA-Z0-9]/g, ''));
+  const resetUrl = `${baseUrl}/#/reset-password?token=${cleanToken}`;
 
   await transporter.sendMail({
     from,
@@ -67,12 +99,14 @@ async function sendTestEmail(email) {
   });
 }
 
-async function sendInviteEmail(email, token, origin) {
+async function sendInviteEmail(email, token, originOrReq) {
   const transporter = await getTransporter();
   if (!transporter) throw new Error('SMTP not configured');
   
   const from = get('SELECT value FROM system_settings WHERE key="smtp_from"')?.value || 'GyroidVault <noreply@gyroidvault.local>';
-  const inviteUrl = `${origin}/#/register?token=${token}`;
+  const baseUrl = resolveBaseUrl(originOrReq);
+  const cleanToken = encodeURIComponent(String(token).replace(/[^a-zA-Z0-9]/g, ''));
+  const inviteUrl = `${baseUrl}/#/register?token=${cleanToken}`;
 
   await transporter.sendMail({
     from,
@@ -92,4 +126,4 @@ async function sendInviteEmail(email, token, origin) {
   });
 }
 
-module.exports = { sendResetEmail, sendTestEmail, sendInviteEmail };
+module.exports = { sendResetEmail, sendTestEmail, sendInviteEmail, resolveBaseUrl };

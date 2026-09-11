@@ -1,5 +1,38 @@
+const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
-const SECRET = process.env.JWT_SECRET || 'printvault-secret-key-2026';
+const { get, run } = require('../database');
+
+let cachedSecret = null;
+
+function getJwtSecret() {
+  if (cachedSecret && !cachedSecret.startsWith('gyroidvault-temp-')) return cachedSecret;
+
+  // 1. Check process.env.JWT_SECRET
+  if (process.env.JWT_SECRET && process.env.JWT_SECRET.trim().length >= 16) {
+    cachedSecret = process.env.JWT_SECRET.trim();
+    return cachedSecret;
+  }
+
+  // 2. Check system_settings in SQLite database
+  try {
+    const row = get("SELECT value FROM system_settings WHERE key = 'jwt_secret'");
+    if (row && row.value && row.value.trim().length >= 32) {
+      cachedSecret = row.value.trim();
+      return cachedSecret;
+    }
+
+    // 3. Generate a secure random 256-bit secret and persist it
+    const newSecret = crypto.randomBytes(32).toString('hex');
+    run("INSERT OR REPLACE INTO system_settings (key, value) VALUES ('jwt_secret', ?)", [newSecret]);
+    cachedSecret = newSecret;
+    console.log('✓ Generated and persisted secure 256-bit JWT secret key.');
+    return cachedSecret;
+  } catch (err) {
+    // Database might not be ready yet during module load
+    if (process.env.JWT_SECRET) return process.env.JWT_SECRET;
+    return 'gyroidvault-temp-' + crypto.randomBytes(16).toString('hex');
+  }
+}
 
 function authenticate(req, res, next) {
   let token = req.cookies.pv_token;
@@ -13,7 +46,8 @@ function authenticate(req, res, next) {
   if (!token) return res.status(401).json({ error: 'Unauthorized' });
 
   try {
-    const decoded = jwt.verify(token, SECRET);
+    const secret = getJwtSecret();
+    const decoded = jwt.verify(token, secret);
     
     // CSRF protection for state-changing methods (skip if using API token)
     if (!isApiToken && ['POST', 'PUT', 'DELETE', 'PATCH'].includes(req.method)) {
@@ -48,4 +82,9 @@ function requireUploader(req, res, next) {
   else res.status(403).json({ error: 'Uploader privileges required' });
 }
 
-module.exports = { authenticate, requireAdmin, requireUploader, SECRET };
+module.exports = {
+  authenticate,
+  requireAdmin,
+  requireUploader,
+  getJwtSecret
+};

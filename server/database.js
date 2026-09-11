@@ -23,9 +23,9 @@ function saveDb(sync = false) {
     try {
       const data = db.export();
       fs.writeFileSync(DB_PATH, Buffer.from(data));
-      console.log('✓ Database synchroon weggeschreven (shutdown).');
+      console.log('✓ Database written synchronously (shutdown).');
     } catch (err) {
-      console.error('CRITICAL: Database wegschrijven mislukt tijdens shutdown:', err);
+      console.error('CRITICAL: Failed to write database during shutdown:', err);
     }
     return;
   }
@@ -42,11 +42,11 @@ function saveDb(sync = false) {
       const data = db.export();
       fs.writeFile(DB_PATH, Buffer.from(data), (err) => {
         isSaving = false;
-        if (err) console.error('CRITICAL: Database asynchroon wegschrijven mislukt:', err);
+        if (err) console.error('CRITICAL: Failed to write database asynchronously:', err);
       });
     } catch (err) {
       isSaving = false;
-      console.error('CRITICAL: Database export mislukt:', err);
+      console.error('CRITICAL: Failed to export database:', err);
     }
   }, 1000); // 1-second debounce
 }
@@ -280,6 +280,12 @@ async function initDatabase() {
       db.run('ALTER TABLE files ADD COLUMN library_path TEXT');
       db.run('CREATE UNIQUE INDEX IF NOT EXISTS idx_files_library_path ON files(library_path)');
     }
+    if (!fCols2.some(c => c.name === 'is_archive_entry')) {
+      db.run('ALTER TABLE files ADD COLUMN is_archive_entry INTEGER DEFAULT 0');
+    }
+    if (!fCols2.some(c => c.name === 'archive_entry_path')) {
+      db.run('ALTER TABLE files ADD COLUMN archive_entry_path TEXT');
+    }
 
     const mCols2 = all("PRAGMA table_info(models)");
     if (!mCols2.some(c => c.name === 'library_path')) {
@@ -292,6 +298,20 @@ async function initDatabase() {
     if (!mCols2.some(c => c.name === 'preview_file_id')) {
       db.run('ALTER TABLE models ADD COLUMN preview_file_id INTEGER');
     }
+
+    // High-performance composite and foreign key indexes for scaling to 1M+ files
+    db.run('CREATE INDEX IF NOT EXISTS idx_files_model_id ON files(model_id)');
+    db.run('CREATE INDEX IF NOT EXISTS idx_files_file_type ON files(file_type)');
+    db.run('CREATE INDEX IF NOT EXISTS idx_model_tags_model_id ON model_tags(model_id)');
+    db.run('CREATE INDEX IF NOT EXISTS idx_project_models_model_id ON project_models(model_id)');
+    db.run('CREATE INDEX IF NOT EXISTS idx_project_models_project_id ON project_models(project_id)');
+    db.run('CREATE INDEX IF NOT EXISTS idx_print_history_model_id ON print_history(model_id)');
+    db.run('CREATE INDEX IF NOT EXISTS idx_models_category_id ON models(category_id)');
+    db.run('CREATE INDEX IF NOT EXISTS idx_models_user_id ON models(user_id)');
+    db.run('CREATE INDEX IF NOT EXISTS idx_models_parent_id ON models(parent_id)');
+    db.run('CREATE INDEX IF NOT EXISTS idx_models_updated_at ON models(updated_at)');
+    db.run('CREATE INDEX IF NOT EXISTS idx_models_created_at ON models(created_at)');
+    db.run('CREATE INDEX IF NOT EXISTS idx_models_name ON models(name)');
   } catch (e) { console.error('Migration failed:', e); }
 
   // ─── Seed Data (One-time only on initial setup) ───────────────────────
@@ -360,12 +380,14 @@ function get(sql, params = []) {
   return results[0] || null;
 }
 
-function run(sql, params = []) {
+function run(sql, params = [], skipSave = false) {
   db.run(sql, params);
   const lastIdResult = all('SELECT last_insert_rowid() as id');
   const lastId = lastIdResult[0]?.id || 0;
   const changes = db.getRowsModified();
-  saveDb();
+  if (!skipSave) {
+    saveDb();
+  }
   return { lastId, changes };
 }
 
