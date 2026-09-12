@@ -1466,7 +1466,7 @@ app.get('/api/projects/:id', authenticate, (req, res) => {
     if (modelIds.length > 0) {
       const placeholders = modelIds.map(() => '?').join(',');
       const stats = get(`
-        SELECT COUNT(id) as total_files, SUM(size) as total_size, GROUP_CONCAT(DISTINCT file_type) as file_types
+        SELECT COUNT(id) as total_files, SUM(file_size) as total_size, GROUP_CONCAT(DISTINCT file_type) as file_types
         FROM files
         WHERE model_id IN (${placeholders})
       `, modelIds);
