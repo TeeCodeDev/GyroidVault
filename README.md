@@ -1,6 +1,6 @@
 # GyroidVault
 
-[![Version](https://img.shields.io/badge/version-2.0.0-blue.svg)](https://github.com/TeeCodeDev/GyroidVault/releases)
+[![Version](https://img.shields.io/badge/version-2.0.1-blue.svg)](https://github.com/TeeCodeDev/GyroidVault/releases)
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-purple.svg)](LICENSE)
 [![Docker](https://img.shields.io/badge/docker-ghcr.io-cyan.svg)](https://github.com/TeeCodeDev/GyroidVault/pkgs/container/gyroidvault)
 [![Website](https://img.shields.io/badge/website-gyroidvault.com-emerald.svg)](https://gyroidvault.com)
