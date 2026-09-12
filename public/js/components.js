@@ -566,7 +566,9 @@ const UI = {
       let metaHtml = '';
       const isPreview = Boolean(f.is_preview || f.id === model.preview_file_id);
       const is3D = f.file_type === 'stl' || f.file_type === '3mf';
+      const isImage = f.file_type === 'image';
       const isGcode = f.file_type === 'gcode' || f.file_type === 'bgcode';
+      const canBePreview = is3D || isImage;
 
       const slicerLinks = {
         'orcaslicer': { name: 'OrcaSlicer', url: `orcaslicer://open?file=${encodeURI(window.location.origin + '/api/files/' + f.id + '/download/model.' + f.file_type)}` },
@@ -581,7 +583,7 @@ const UI = {
           slicerBtnHtml = `
             <div style="display:inline-flex;align-items:stretch">
               <a href="${slicerLinks[pref].url}" class="btn btn-ghost btn-xs" title="Open in ${slicerLinks[pref].name}" style="color:var(--accent-purple);font-weight:600;font-size:0.7rem;border:1px solid var(--accent-purple);border-right:none;padding:3px 8px;border-radius:4px 0 0 4px;line-height:1;white-space:nowrap;display:inline-flex;align-items:center;gap:5px">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
                 OPEN IN ${slicerLinks[pref].name.toUpperCase()}
               </a>
               <div class="dropdown">
@@ -597,7 +599,7 @@ const UI = {
           slicerBtnHtml = `
             <div class="dropdown" style="display:inline-block">
               <button class="btn btn-ghost btn-xs" title="Open in Slicer" style="color:var(--accent-purple);font-weight:600;font-size:0.7rem;border:1px solid var(--accent-purple);padding:3px 8px;border-radius:4px;line-height:1;white-space:nowrap;display:inline-flex;align-items:center;gap:5px">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
                 OPEN IN SLICER
                 <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
               </button>
@@ -610,7 +612,7 @@ const UI = {
         }
       }
 
-      const hasBottomBar = (canEdit && !isPreview && is3D) || is3D;
+      const hasBottomBar = (canEdit && !isPreview && canBePreview) || is3D;
 
       return `
       <div class="file-item-card" style="padding:10px 14px;border-bottom:1px solid var(--border);transition:background var(--transition)">
@@ -621,7 +623,7 @@ const UI = {
             <div style="min-width:0;flex:1">
               <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
                 <span class="file-name" style="font-weight:600;font-size:0.85rem;color:var(--text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%" title="${f.original_name}">${f.original_name}</span>
-                ${isPreview ? `<span class="badge badge-primary badge-xs" style="font-size:0.65rem;padding:2px 6px;background:rgba(0,212,255,0.15);color:var(--accent-cyan);border:1px solid rgba(0,212,255,0.3);display:inline-flex;align-items:center;gap:3px"><svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>Primary</span>` : ''}
+                ${isPreview ? `<span class="badge badge-primary badge-xs" style="font-size:0.65rem;padding:2px 6px;background:rgba(0,212,255,0.15);color:var(--accent-cyan);border:1px solid rgba(0,212,255,0.3);display:inline-flex;align-items:center;gap:3px"><svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>${isImage ? 'Cover Image' : 'Primary 3D'}</span>` : ''}
               </div>
               <div class="file-meta" style="font-size:0.72rem;color:var(--text-muted);display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-top:2px">
                 <span>${this.formatSize(f.file_size)}</span>
@@ -643,10 +645,10 @@ const UI = {
           </div>
         </div>
 
-        <!-- Optional Bottom Action Bar (Slicer / Set Preview) -->
+        <!-- Optional Bottom Action Bar (Slicer / Set Preview / Set Cover) -->
         ${hasBottomBar ? `
         <div style="display:flex;align-items:center;gap:6px;margin-top:8px;padding-top:8px;border-top:1px dashed rgba(255,255,255,0.06);flex-wrap:wrap">
-          ${(canEdit && !isPreview && is3D) ? `<button class="btn btn-ghost btn-xs" style="color:var(--text-secondary);font-size:0.7rem;border:1px solid var(--border);padding:3px 8px;border-radius:4px;display:inline-flex;align-items:center;gap:4px;transition:all var(--transition)" onclick="event.stopPropagation();App.setPreviewFile(${model.id}, ${f.id})" title="Use this file as model 3D preview"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>Set as Preview</button>` : ''}
+          ${(canEdit && !isPreview && canBePreview) ? `<button class="btn btn-ghost btn-xs" style="color:var(--text-secondary);font-size:0.7rem;border:1px solid var(--border);padding:3px 8px;border-radius:4px;display:inline-flex;align-items:center;gap:4px;transition:all var(--transition)" onclick="event.stopPropagation();App.setPreviewFile(${model.id}, ${f.id})" title="${isImage ? 'Set this image as model cover thumbnail' : 'Use this file as model 3D preview'}"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>${isImage ? 'Set as Cover' : 'Set as Preview'}</button>` : ''}
           ${slicerBtnHtml}
         </div>` : ''}
       </div>`;

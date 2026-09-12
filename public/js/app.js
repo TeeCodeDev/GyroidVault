@@ -2069,21 +2069,21 @@ const App = {
 
       this.el.innerHTML = `
         ${UI.modelDetail(model, hasPrinters)}`;
-      // Initialize 3D viewer using chosen preview file or first stl/3mf
+      // Initialize 3D viewer using chosen 3D preview file or first stl/3mf
       const files = model.files || [];
       const cadFiles = files.filter(f => f.file_type === 'stl' || f.file_type === '3mf');
-      const previewFile = (model.preview_file_id && files.find(f => f.id === model.preview_file_id)) ||
+      const previewCadFile = (model.preview_file_id && cadFiles.find(f => f.id === model.preview_file_id)) ||
         cadFiles[0];
 
-      if (previewFile && typeof Viewer !== 'undefined') {
-        const stlUrl = `${previewFile.url || '/uploads/'+previewFile.filename}?t=${Date.now()}`;
+      if (previewCadFile && typeof Viewer !== 'undefined') {
+        const stlUrl = `${previewCadFile.url || '/uploads/'+previewCadFile.filename}?t=${Date.now()}`;
         setTimeout(async () => {
-          const v = Viewer.create(`stl-viewer-${model.id}`, stlUrl, previewFile.file_type, {
+          const v = Viewer.create(`stl-viewer-${model.id}`, stlUrl, previewCadFile.file_type, {
             modelId: model.id,
-            activeFileId: previewFile.id,
+            activeFileId: previewCadFile.id,
             modelFiles: cadFiles
           });
-          if (v && !model.thumbnail_url) {
+          if (v && !model.thumbnail_url && !model.thumbnail) {
             setTimeout(() => Viewer.takeSnapshot(model.id, v.renderer, v.scene, v.camera), 2500);
           }
         }, 100);

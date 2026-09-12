@@ -671,7 +671,17 @@ app.put('/api/models/:id/preview-file', authenticate, (req, res) => {
     if (file.thumbnail) {
       run('UPDATE models SET thumbnail=? WHERE id=?', [file.thumbnail, id]);
     } else if (file.file_type === 'image') {
-      run('UPDATE models SET thumbnail=? WHERE id=?', [file.filename, id]);
+      let thumbName = file.filename;
+      if (file.library_path && fs.existsSync(file.library_path) && !fs.existsSync(path.join(UPLOADS_DIR, thumbName))) {
+        try {
+          const dest = path.join(UPLOADS_DIR, `thumb_${file.id}_${path.basename(file.library_path)}`);
+          fs.copyFileSync(file.library_path, dest);
+          thumbName = path.basename(dest);
+        } catch (e) {
+          console.warn('[preview-file] Could not copy library image to uploads:', e.message);
+        }
+      }
+      run('UPDATE models SET thumbnail=? WHERE id=?', [thumbName, id]);
     } else if (file.file_type === 'stl' || file.file_type === '3mf') {
       run('UPDATE models SET thumbnail=NULL WHERE id=?', [id]);
     }
