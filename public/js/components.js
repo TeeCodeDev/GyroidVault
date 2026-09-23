@@ -186,8 +186,11 @@ const UI = {
     const clickData = encodeURIComponent(JSON.stringify(file));
     const clickHandler = `onclick="App.openBrowseFileModal('${clickData}')" style="cursor:pointer"`;
 
+    const canBrowseManage = App.currentUser?.role === 'admin';
+    const browseCheckboxHtml = canBrowseManage ? `<div class="model-card-checkbox" onclick="event.stopPropagation(); App.toggleBrowseSelection('${itemPath}')"></div>` : '';
+
     return `<div class="model-card ${isSelected ? 'selected' : ''}" data-path="${itemPath}" draggable="true" ondragstart="App.handleDragStart(event, '${itemPath}')" ${clickHandler}>
-      <div class="model-card-checkbox" onclick="event.stopPropagation(); App.toggleBrowseSelection('${itemPath}')"></div>
+      ${browseCheckboxHtml}
       <div class="model-card-thumb">${thumb}<div class="model-card-badges"><span class="badge badge-${file.ext || file.type}">${file.ext || file.type}</span></div></div>
       <div class="model-card-body">
         <div class="model-card-name" title="${file.name}">${file.name}</div>
@@ -219,13 +222,15 @@ const UI = {
     const cat = m.category_name
       ? `<span class="badge badge-category" style="background:${m.category_color}20;color:${m.category_color};border:1px solid ${m.category_color}33">${m.category_name}</span>`
       : '';
-    const canEdit = App.currentUser?.role === 'admin' || (App.currentUser?.role !== 'viewer' && m.user_id === App.currentUser?.id);
+    const canManage = App.currentUser && App.currentUser.role !== 'viewer';
+    const canEdit = App.currentUser?.role === 'admin' || (canManage && m.user_id === App.currentUser?.id);
     const plusBtn = canEdit ? `<button class="btn btn-ghost btn-xs" onclick="event.stopPropagation();App.addToProject(${m.id})" title="Add to project" style="margin-top:-4px;margin-right:-8px;padding:4px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg></button>` : '';
 
     const isSelected = App.selectedModelIds?.includes(m.id);
+    const checkboxHtml = canManage ? `<div class="model-card-checkbox" onclick="App.toggleModelSelection(event, ${m.id})"></div>` : '';
 
     return `<div class="model-card ${isSelected ? 'selected' : ''}" onclick="App.handleModelCardClick(event, ${m.id})" data-model-id="${m.id}">
-      <div class="model-card-checkbox" onclick="App.toggleModelSelection(event, ${m.id})"></div>
+      ${checkboxHtml}
       <div class="model-card-thumb">${thumb}<div class="model-card-badges">${types}</div></div>
       <div class="model-card-body">
         <div style="display:flex;justify-content:space-between;align-items:flex-start">
@@ -1379,6 +1384,15 @@ const UI = {
           <label>Auto-Scan Interval (Hours)</label>
           <input type="number" name="auto_scan_interval" value="${config.auto_scan_interval !== undefined ? config.auto_scan_interval : 24}" min="0" max="168" class="form-input">
           <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;">Set to 0 to disable background scanning. Default is 24.</p>
+        </div>
+        <div class="form-group" style="grid-column: 1 / -1; margin-top: 10px;">
+          <label class="toggle-item" style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;padding:12px;background:var(--bg-secondary);border:1px solid var(--border);border-radius:8px">
+            <div>
+              <div style="font-weight:600;font-size:0.875rem;color:var(--text-primary);margin-bottom:3px">Scan & Index ZIP Archives</div>
+              <div style="font-size:0.8rem;color:var(--text-secondary);line-height:1.4">Deep inspect .zip archive files to index internal 3D models and images without unpacking to disk.</div>
+            </div>
+            <input type="checkbox" name="scan_zip_archives" ${config.scan_zip_archives === 'false' || config.scan_zip_archives === false ? '' : 'checked'} style="width:18px;height:18px;accent-color:var(--accent-primary);cursor:pointer">
+          </label>
         </div>
 
         <div style="grid-column: 1 / -1; margin-top:20px">

@@ -870,6 +870,7 @@ const App = {
   },
 
   toggleModelSelection(e, id) {
+    if (!this.currentUser || this.currentUser.role === 'viewer') return;
     if (e) e.stopPropagation();
     if (e?.shiftKey && this.lastSelectedModelId !== null) {
       this.selectModelRange(this.lastSelectedModelId, id);
@@ -925,6 +926,7 @@ const App = {
   },
 
   selectAll() {
+    if (!this.currentUser || this.currentUser.role === 'viewer') return;
     const cards = document.querySelectorAll('.model-card');
     this.selectedModelIds = Array.from(cards).map(c => Number(c.dataset.modelId));
     this.lastSelectedModelId = this.selectedModelIds.at(-1) || null;
@@ -935,6 +937,10 @@ const App = {
   openBulkDelete() { this.openModal('Bulk Delete', UI.bulkDeleteForm(this.selectedModelIds.length)); },
   async handleBulkDelete(e) {
     e.preventDefault();
+    if (!this.currentUser || this.currentUser.role === 'viewer') {
+      this.toast('You must be logged in as an uploader or admin to delete models', 'error');
+      return;
+    }
     const fd = new FormData(e.target);
     try {
       await API.bulkDeleteModels(this.selectedModelIds, fd.get('delete_disk') === 'on');
@@ -1335,6 +1341,9 @@ const App = {
     const data = Object.fromEntries(fd.entries());
     data.open_registration = fd.has('open_registration') ? 'true' : 'false';
     data.require_login_to_view = fd.has('require_login_to_view') ? 'true' : 'false';
+    if (e.target.querySelector('[name="scan_zip_archives"]')) {
+      data.scan_zip_archives = fd.has('scan_zip_archives') ? 'true' : 'false';
+    }
     try {
       await API.saveSystemSettings(data);
       await this.loadViewMode(); // refresh the cached view mode

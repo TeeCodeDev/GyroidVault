@@ -152,6 +152,13 @@ async function scanLibrary(libraryPath) {
               scanStatus.filesAdded = results.filesAdded;
             }
 
+            // Check if user enabled or disabled deep ZIP inspection (defaults to true)
+            const zipSetting = db.get("SELECT value FROM system_settings WHERE key = 'scan_zip_archives'");
+            const scanZipEnabled = !zipSetting || zipSetting.value === 'true' || zipSetting.value === '1';
+            if (!scanZipEnabled) {
+              continue; // ZIP file itself is indexed, but skip scanning internal entries
+            }
+
             // Safe memory threshold: Avoid buffering archives larger than 300MB into memory to prevent OOM
             const MAX_ZIP_INSPECT_SIZE = 300 * 1024 * 1024;
             if (stat.size > MAX_ZIP_INSPECT_SIZE) {

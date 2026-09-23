@@ -19,7 +19,11 @@ const API = {
         const err = await res.json().catch(() => ({ error: 'Invalid credentials' }));
         throw new Error(err.error || 'Invalid credentials');
       }
-      return null;
+      if (url.includes('/api/auth/me')) {
+        return null;
+      }
+      const err = await res.json().catch(() => ({ error: 'Unauthorized - please log in' }));
+      throw new Error(err.error || 'Unauthorized - please log in');
     }
     if (!res.ok) {
       const err = await res.json().catch(() => ({ error: 'Request failed' }));

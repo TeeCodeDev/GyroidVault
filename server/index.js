@@ -2,7 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
-const { initDatabase, all, get, run, UPLOADS_DIR } = require('./database');
+const { initDatabase, all, get, run, saveDb, UPLOADS_DIR } = require('./database');
 const { upload, getFileType, setUploadsDir } = require('./middleware/upload');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
@@ -51,22 +51,43 @@ function logEvent(level, message) {
 }
 
 // ─── FILE SYNC ──────────────────────────────────────────────────
-// Quick hack to make sure files in DB didn't get manualy deleted from disk
+// Background check to synchronize disk state with DB (handles files deleted externally)
+let syncInProgress = false;
+const SYNC_BATCH_SIZE = 200;
+
+async function checkBatch(files) {
+  const results = await Promise.allSettled(
+    files.map(f => fs.promises.access(f.library_path))
+  );
+  const missing = [];
+  results.forEach((r, i) => {
+    if (r.status === 'rejected') missing.push(files[i]);
+  });
+  return missing;
+}
+
 async function syncLibraryWithDisk() {
+  if (syncInProgress) {
+    console.log('[Sync] Skipped: previous sync still in progress.');
+    return;
+  }
+  syncInProgress = true;
   try {
-    const files = all('SELECT id, library_path, original_name FROM files WHERE library_path IS NOT NULL');
+    // Only check physical files on disk; skip virtual entries inside archives (is_archive_entry = 1)
+    const files = all('SELECT id, library_path, original_name FROM files WHERE library_path IS NOT NULL AND (is_archive_entry IS NULL OR is_archive_entry = 0)');
     let deletedCount = 0;
-    for (const file of files) {
-      await new Promise(setImmediate); // Yield to event loop
-      try {
-        await fs.promises.access(file.library_path);
-      } catch (err) {
+
+    for (let i = 0; i < files.length; i += SYNC_BATCH_SIZE) {
+      const batch = files.slice(i, i + SYNC_BATCH_SIZE);
+      const missing = await checkBatch(batch);
+      for (const file of missing) {
         const msg = `File missing from disk, removing from DB: ${file.original_name}`;
         console.log(`[Sync] ${msg}`);
         logEvent('warning', msg);
-        run('DELETE FROM files WHERE id=?', [file.id]);
+        run('DELETE FROM files WHERE id=?', [file.id], true); // skipSave: batched below
         deletedCount++;
       }
+      await new Promise(setImmediate); // yield to event loop between batches
     }
     
     // Cleanup empty models, otherwise the UI gets cluttered with ghost entries
@@ -76,22 +97,26 @@ async function syncLibraryWithDisk() {
       WHERE f.id IS NULL AND m.library_path IS NOT NULL
     `);
     for (const model of emptyModels) {
-      await new Promise(setImmediate); // Yield to event loop
       const msg = `Model directory empty/missing, removing model: ${model.name}`;
       console.log(`[Sync] ${msg}`);
       logEvent('warning', msg);
-      run('DELETE FROM models WHERE id=?', [model.id]);
+      run('DELETE FROM models WHERE id=?', [model.id], true); // skipSave: batched below
       deletedCount++;
     }
 
-    if (deletedCount > 0) logEvent('info', `Library sync complete. Removed ${deletedCount} stale entries.`);
+    if (deletedCount > 0) {
+      saveDb();
+      logEvent('info', `Library sync complete. Removed ${deletedCount} stale entries.`);
+    }
   } catch (e) {
     console.error('[Sync] Error during library sync:', e);
+  } finally {
+    syncInProgress = false;
   }
 }
 
-// run it every 5 mins
-setInterval(syncLibraryWithDisk, 300000);
+// run it hourly (was every 5 min -- far too frequent for large libraries and caused event-loop starvation)
+setInterval(syncLibraryWithDisk, 3600000);
 // Initial sync after boot
 setTimeout(syncLibraryWithDisk, 10000);
 
@@ -534,21 +559,12 @@ app.get('/api/files/:id/stream', (req, res, next) => {
 app.get('/api/models', (req, res) => {
   try {
     const { search, category, tag, format, user, printed, sort = 'updated', order, project_id, page = 1, limit = 24 } = req.query;
-    let query = `SELECT m.*, c.name as category_name, c.color as category_color, u.username as uploader_name,
-      (SELECT COUNT(*) FROM files WHERE model_id=m.id) as file_count,
-      (SELECT COUNT(*) FROM print_history WHERE model_id=m.id) as print_count,
-      (SELECT GROUP_CONCAT(DISTINCT file_type) FROM files WHERE model_id=m.id) as file_types,
-      COALESCE(
-        (SELECT filename FROM files WHERE id=m.preview_file_id AND file_type IN ('stl','3mf')),
-        (SELECT filename FROM files WHERE model_id=m.id AND file_type='stl' ORDER BY uploaded_at DESC LIMIT 1)
-      ) as stl_file,
-      COALESCE(
-        (SELECT library_path FROM files WHERE id=m.preview_file_id AND file_type IN ('stl','3mf')),
-        (SELECT library_path FROM files WHERE model_id=m.id AND file_type='stl' ORDER BY uploaded_at DESC LIMIT 1)
-      ) as stl_library_path,
-      (SELECT filename FROM files WHERE model_id=m.id AND file_type='3mf' ORDER BY uploaded_at DESC LIMIT 1) as mf_file,
-      (SELECT library_path FROM files WHERE model_id=m.id AND file_type='3mf' ORDER BY uploaded_at DESC LIMIT 1) as mf_library_path
-      FROM models m 
+    const needsFileCountSort = sort === 'files';
+    const needsPrintCountSort = sort === 'prints';
+    let query = `SELECT m.*, c.name as category_name, c.color as category_color, u.username as uploader_name
+      ${needsFileCountSort ? ',(SELECT COUNT(*) FROM files WHERE model_id=m.id) as file_count' : ''}
+      ${needsPrintCountSort ? ',(SELECT COUNT(*) FROM print_history WHERE model_id=m.id) as print_count' : ''}
+      FROM models m
       LEFT JOIN categories c ON m.category_id=c.id
       LEFT JOIN users u ON m.user_id=u.id`;
     
@@ -592,9 +608,15 @@ app.get('/api/models', (req, res) => {
     const rawModels = all(query, params);
     const modelIds = rawModels.map(m => m.id);
 
-    // High-performance batched tag and project fetching for all models on current page
+    // High-performance batched tag, project, file stats, and preview fetching for current page
     const tagsByModel = {};
     const projectsByModel = {};
+    const fileStatsByModel = {};
+    const printCountByModel = {};
+    const stlByModel = {};
+    const mfByModel = {};
+    const previewFileById = {};
+
     if (modelIds.length) {
       const placeholders = modelIds.map(() => '?').join(',');
       const allTags = all(`SELECT mt.model_id, t.id, t.name FROM tags t JOIN model_tags mt ON mt.tag_id=t.id WHERE mt.model_id IN (${placeholders})`, modelIds);
@@ -608,26 +630,59 @@ app.get('/api/models', (req, res) => {
         if (!projectsByModel[p.model_id]) projectsByModel[p.model_id] = [];
         projectsByModel[p.model_id].push({ id: p.id, name: p.name, visibility: p.visibility });
       });
+
+      const fileCounts = all(`SELECT model_id, COUNT(*) as file_count, GROUP_CONCAT(DISTINCT file_type) as file_types FROM files WHERE model_id IN (${placeholders}) GROUP BY model_id`, modelIds);
+      fileCounts.forEach(r => { fileStatsByModel[r.model_id] = r; });
+
+      const printCounts = all(`SELECT model_id, COUNT(*) as print_count FROM print_history WHERE model_id IN (${placeholders}) GROUP BY model_id`, modelIds);
+      printCounts.forEach(r => { printCountByModel[r.model_id] = r.print_count; });
+
+      // Most-recent stl/3mf per model, in one pass (newest-first)
+      const previewCandidates = all(`SELECT id, model_id, filename, library_path, file_type, uploaded_at FROM files WHERE model_id IN (${placeholders}) AND file_type IN ('stl','3mf') ORDER BY uploaded_at DESC`, modelIds);
+      previewCandidates.forEach(f => {
+        if (f.file_type === 'stl' && !stlByModel[f.model_id]) stlByModel[f.model_id] = f;
+        if (f.file_type === '3mf' && !mfByModel[f.model_id]) mfByModel[f.model_id] = f;
+        previewFileById[f.id] = f;
+      });
+
+      // Handle any explicit preview_file_id not already fetched
+      const previewIds = [...new Set(rawModels.map(m => m.preview_file_id).filter(id => id != null && !previewFileById[id]))];
+      if (previewIds.length) {
+        const pPlaceholders = previewIds.map(() => '?').join(',');
+        const extraPreview = all(`SELECT id, filename, library_path, file_type FROM files WHERE id IN (${pPlaceholders}) AND file_type IN ('stl','3mf')`, previewIds);
+        extraPreview.forEach(f => { previewFileById[f.id] = f; });
+      }
     }
 
     const models = rawModels.map(m => {
+      const preview = m.preview_file_id != null ? previewFileById[m.preview_file_id] : null;
+      const stlFallback = stlByModel[m.id];
+      const stl_file_name = preview ? preview.filename : (stlFallback ? stlFallback.filename : null);
+      const stl_file_libpath = preview ? preview.library_path : (stlFallback ? stlFallback.library_path : null);
+      const mfEntry = mfByModel[m.id];
+
       let stl_url = null;
-      if (m.stl_file) {
-        stl_url = getFileUrl({ filename: m.stl_file, library_path: m.stl_library_path });
-      } else if (m.mf_file) {
-        stl_url = getFileUrl({ filename: m.mf_file, library_path: m.mf_library_path });
+      if (stl_file_name) {
+        stl_url = getFileUrl({ filename: stl_file_name, library_path: stl_file_libpath });
+      } else if (mfEntry) {
+        stl_url = getFileUrl({ filename: mfEntry.filename, library_path: mfEntry.library_path });
       }
       
       let thumb_url = getThumbUrl(m.thumbnail, m.library_path);
+
+      const fstats = fileStatsByModel[m.id];
+      const print_count = printCountByModel[m.id] || 0;
 
       return {
         ...m,
         thumbnail: thumb_url,
         stl_file: stl_url,
-        file_types: m.file_types ? [...new Set(m.file_types.split(','))] : [],
+        file_count: fstats ? fstats.file_count : 0,
+        file_types: fstats && fstats.file_types ? [...new Set(fstats.file_types.split(','))] : [],
+        print_count,
         tags: tagsByModel[m.id] || [],
         projects: projectsByModel[m.id] || [],
-        has_printed: m.print_count > 0,
+        has_printed: print_count > 0,
       };
     });
 
