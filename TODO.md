@@ -2,122 +2,69 @@
 
 ---
 
-## 🚀 Prioriteit: Release v1.6.0 Takenlijst (Volgende Sessie)
+## 🎯 Volgende Sessie: Prioriteit Focuspunten (In 1x aanpakken)
 
-### 1. ⚡ Schaalbaarheid voor 1M+ Bestanden & Scanner/UI Deadlock Fix
-- [ ] **Database Composite Indexes:** Toevoegen van indexen op `files(model_id, file_type)`, `model_tags(model_id)`, `project_models(model_id)` en `models(created_at, updated_at)` om queries bij 650k+ STL's tot 1000x sneller te maken.
-- [ ] **Debounced Scanner Database Exports:** Tijdens actieve achtergrondscans niet meer per bestand `saveDb()` (SQLite export) aanroepen, maar gebufferd in batches (om de 5.000 bestanden / 30 seconden) en bij voltooiing.
-- [ ] **Asynchrone Event-Loop Yields:** Micro-pauzes (`setImmediate`) inbouwen in de scanner zodat WebUI HTTP-verzoeken altijd binnen milliseconden worden afgehandeld en de interface nooit vastloopt.
-- [ ] **Batch Tag & File Fetching:** De `/api/models` query optimaliseren zodat alle tags voor de 24 modellen op de pagina in één `IN (...)` query worden opgehaald i.p.v. 24 aparte queries.
+### 🎨 Deel 1: UI/UX Verfijningen (Laatste 10% aansluiten)
+*Alle CSS en Javascript-handlers staan al voor 90% klaar; alleen de HTML templates moeten worden aangesloten.*
+- [ ] **Snelkeuze Formaat-Pills in Toolbar:** Directe filterknoppen (`[ All ]` `[ STL ]` `[ 3MF ]` `[ STEP ]` `[ GCODE ]` `[ ZIP ]`) toevoegen aan `UI.toolbar` in `public/js/components.js`. De logica `App.setFormatFilter` en CSS `.format-pill` zijn al aanwezig.
+- [ ] **Live Bibliotheek Teller in Toolbar:** `#library-summary-stats` toevoegen aan `UI.toolbar` zodat de actuele teller (`X models • Y GB`) rechtsboven in de balk direct zichtbaar is.
+- [ ] **Hover Quick-Actions op Modelkaarten:** De actieknoppen (3D Preview `👁️`, Collectie `📁`, Download `📥`) toevoegen aan `UI.modelCard` in `public/js/components.js`. De overlay `.model-card-hover-actions` is al gestyled in `public/css/style.css` en `App.handleModelCardClick` vangt de kliks al op.
+- [ ] **Collectie-badges op Modeldetail:** Klikbare collectie-badges toevoegen aan de header van de modeldetailpagina (`UI.modelDetail`) naast de categorie en tags.
 
-### 2. 🗂️ Collections / Projecten Uitbreiding
-- [ ] **Hernoemen / Bewerken van Collecties:** Backend `PUT /api/projects/:id` toevoegen en "Edit Collection" modal in de UI bouwen.
-- [ ] **Multi-Select Checkboxes:** "Add to Collection" venster ombouwen van single-dropdown naar een checkbox-lijst met zoekfilter en automatische pre-check van huidige collecties.
-- [ ] **Sync Endpoint:** `PUT /api/models/:id/projects` toevoegen om meerdere collecties tegelijk toe te wijzen of te verwijderen.
-- [ ] **Collectie Badges op Model:** Op de modeldetailpagina klikbare badges tonen van alle collecties waar het model in zit.
+### 🏗️ Deel 2: Codebase Architectuur & Refactoring (Modularisatie)
+*Structurele opschoning om `server/index.js` (~2.800 regels) en de frontend ontkoppeld en onderhoudbaar te maken.*
+- [ ] **Backend Modulariseren in Express Routers:**
+  - `server/routes/auth.js` (login, registratie, sessies, profiel, API keys)
+  - `server/routes/models.js` (model CRUD, queries, uploads, versies)
+  - `server/routes/files.js` (downloads, slicer links, streams, previews)
+  - `server/routes/projects.js` & `server/routes/tags.js` (collecties, labels, categorieën)
+  - `server/routes/settings.js` & status (systeeminstellingen, SMTP, printer config, scan status)
+  - `server/index.js` afslanken tot een schone bootstrap entrypoint (app setup, middleware, poort luisteren).
+- [ ] **Frontend Opsplitsen in Logische Modules:**
+  - De monolithische `public/js/app.js` en `components.js` opsplitsen in behapbare modules (bijv. viewer, models, collections, settings) zodat wijzigingen gerichter en veiliger worden.
+- [ ] **Centrale Configuratie & Validatie:**
+  - `server/config.js` introduceren voor nette validatie van omgevingsvariabelen (`PORT`, `LIBRARY_PATH`, `DATA_DIR`) bij het opstarten.
 
-### 3. 🛡️ Dubbele Modelnamen & 409 Conflict
-- [ ] **409 Conflict Response:** 500 server crash op `library_path` of naam-collisie vervangen door een nette `409 Conflict` statuscode.
-- [ ] **Smart Name Suggestion:** Automatisch een unieke alternatieve naam genereren (`"Modelnaam (2)"`, `"Modelnaam (3)"`).
-- [ ] **UI Waarschuwing:** In het modelformulier een duidelijke melding tonen met een **"Gebruik suggestie: [Naam (2)]"** 1-klik knop.
+---
 
-### 4. 📦 ZIP-archief Ondersteuning (Patreon / Printables bundels)
-- [ ] **In-place ZIP Indexering:** Scanner en uploads `.zip` bestanden laten herkennen en de interne STL-, 3MF- en afbeeldingsbestanden indexeren (met `adm-zip`) zonder dubbele schijfruimte te verbruiken.
-- [ ] **On-Demand File Streaming:** `GET /api/files/:id/stream` toevoegen om bestanden direct vanuit het ZIP-archief naar de 3D-viewer of slicer te streamen.
-- [ ] **ZIP Badge & Weergave:** Duidelijke ZIP-badge op modelkaarten en in het bestandenoverzicht.
-
-### 5. 🎨 UI/UX Verfijning & Rustig Design
-- [ ] **Snelkeuze Formaat-Pills:** Bovenaan het raster directe filterknoppen: `[ All ]` `[ STL ]` `[ 3MF ]` `[ STEP ]` `[ GCODE ]` `[ ZIP ]`.
-- [ ] **Live Bibliotheek Teller:** Rechtsboven in de filterbalk het actuele aantal modellen en totale bibliotheekgrootte tonen (`X models • Y GB`).
-- [ ] **Subtiele Scan Indicator:** Als de achtergrondscanner draait, een rustige statusregel linksonderin de navigatie tonen (`Scanning... 1.090 / 47.865`) met een dunne voortgangsbalk.
-- [ ] **Hover Quick-Actions:** Subtiele hover overlay op modelkaarten voor snelle 3D-preview (`👁️`), toevoegen aan collectie (`📁`) en download (`📥`).
-- [ ] **Moderne Toast Notificaties:** Vloeiende feedbackberichten rechtsonder bij acties.
+## 🌐 Community Issues (Backlog)
+- [ ] **[Issue #6](https://github.com/TeeCodeDev/GyroidVault/issues/6):** Support 3MF Colors in 3D Viewer (kleurweergave voor multi-color 3MF bestanden in Three.js).
+- [ ] **[Issue #5](https://github.com/TeeCodeDev/GyroidVault/issues/5):** Scanmethod (verbeteringen aan folder- en bibliotheekdetectie).
 
 ---
 
 ## 🛠️ Toekomstige Brainstorm & Functies
-*Veel 3D-bestandsbeheerders stoppen bij het downloaden van de bestanden. GyroidVault kan de brug slaan naar de daadwerkelijke creatie.*
-
-- [ ] **Visueel Assemblagebord (Kanban-stijl)**
-  - Deel een project (Collectie) op in kolommen/statusfases: *Nog te printen*, *Bezig met printen*, *Geprint*, en *Gemonteerd*.
-  - Ideaal voor complexe projecten die uit tientallen losse STL-onderdelen bestaan.
-- [ ] **BOM (Bill of Materials) & Hardware Checklist**
-  - Voeg een lijst toe van benodigde niet-geprinte hardware per project (bijv. *"12x M3 10mm boutjes"*, *"4x 608 lagers"*, *"6x2mm magneten"*).
-  - Vink af wat je al in huis hebt of al hebt gemonteerd.
-- [ ] **Stap-voor-stap Montagehandleiding**
-  - Mogelijkheid om foto's, links en Markdown-instructies toe te voegen aan een collectie, zodat je in GyroidVault direct kunt zien hoe je het project in elkaar zet.
+- [ ] **Visueel Assemblagebord (Kanban-stijl):** Deel een collectie op in kolommen (*Nog te printen*, *Bezig*, *Geprint*, *Gemonteerd*).
+- [ ] **BOM (Bill of Materials) & Hardware Checklist:** Boutjes, moertjes, lagers en magneten per project afvinken.
+- [ ] **Stap-voor-stap Montagehandleiding:** Foto's en Markdown instructies koppelen aan een collectie.
+- [ ] **Filament- & Voorraadbeheer (Filament Rack):** Visueel rollenoverzicht met gewicht/kleur en optionele Spoolman-integratie.
+- [ ] **Live Printer Monitor & Dashboard:** Webcam-streams, temperatuurgrafieken en kostenstatistieken via Moonraker/Bambu.
 
 ---
 
-## 🧵 2. Filament- & Voorraadbeheer (Fysieke Integratie)
-*Koppel je digitale modellen en printlogs direct aan je fysieke voorraad filament.*
+## ✅ Reeds Afgerond (Changelog)
 
-- [ ] **Visueel Filament Rek (Filament Rack)**
-  - Een prachtig vormgegeven dashboard dat je fysieke rollen filament toont als realistische rollen met hun echte kleur (hex-code), merk, materiaal (PLA, PETG, TPU) en resterend gewicht.
-  - Optionele integratie met de populaire **Spoolman** API, of een eenvoudige, snelle ingebouwde database.
-- [ ] **Automatische Verbruiksregistratie**
-  - Selecteer bij het loggen van een print de gebruikte rol filament. GyroidVault trekt automatisch het aantal verbruikte grammen (berekend uit de G-code of handmatig ingevoerd) af van het resterende gewicht van de rol.
+### v2.2.0 (Recent)
+- [x] **Snelkeuze Formaat-Pills & Klikbare Badges:** Formaat-filterknoppen (All, STL, 3MF, STEP, G-Code, OBJ) en live bibliotheekteller in de toolbar + klikbare formaat-badges op modelkaarten.
+- [x] **Bulk Categorie Toewijzing:** Multi-select *Category* knop toegevoegd aan de zwevende actiebalk in zowel *All Models* als *Folder Explorer* (Browse).
+- [x] **ZIP Archief Toggle Fix (#70):** Ontbrekende .toggle-switch span toegevoegd aan *Scan & Index ZIP Archives* in General Settings, inclusief directe auto-save met toast-bevestiging en bescherming van Security-toggles.
+- [x] **Modulaire Backend Architectuur:** server/index.js opgesplitst in Express routers (server/routes/*), services, middleware, utils en server/config.js, plus /healthz healthcheck endpoint.
 
----
+### v2.1.1
+- [x] **1000x Snellere All Models Queries (#67):** Gecorreleerde subqueries verwijderd uit `/api/models`; paginate-then-hydrate patroon (<80ms op 25k+ modellen).
+- [x] **Disk Sync Batching & I/O Fix (#67):** Concurrency guard, batching per 200 bestanden en 1x per uur draaien i.p.v. elke 5 minuten.
+- [x] **ZIP Archief Scan Loop Fix (#69):** Virtuele archief-paden (`is_archive_entry = 1`) worden niet meer onterecht door disk-sync gewist.
+- [x] **ZIP Scan Instelling (#69):** Toggle in Settings > General Settings om diepe archiefinspectie aan of uit te zetten.
+- [x] **Onbevoegde Model Verwijderingen Fix (#69):** Selectie-checkboxes verborgen voor niet-ingelogden; 401 Unauthorized geeft een echte error.
+- [x] **3D Viewer Fullscreen Glitch (#66):** Footer verborgen in fullscreen en canvas styling vergrendeld.
 
-## 🌐 3. Slimme Integraties & Automatische Metadata
-*Bespaar tijd bij het importeren en taggen van nieuwe modellen door handmatig werk te automatiseren.*
-
-- [ ] **1-Klik Printables / Thingiverse Metadata Importer**
-  - Plak de URL van een Printables- of Thingiverse-pagina en GyroidVault haalt automatisch de titel, beschrijving, licentie, tags en de originele coverfoto's op.
-- [ ] **Automatische Scanner Regels (Smart Folder Rules)**
-  - Stel slimme regels in voor de automatische folder watcher. Bijvoorbeeld: *"Als de mapnaam 'TPU' bevat, voeg dan automatisch de tag 'TPU' toe en markeer als flexibel."*
-  - Genereer automatisch collecties gebaseerd op de mappenstructuur op de schijf.
-
----
-
-## 👁️ 4. Geavanceerde 3D & Slicer Previews
-*Krijg een beter beeld van de schaal en details van een model voordat je je slicer opent.*
-
-- [ ] **Referentie-objecten in de 3D Viewer (Scale Reference)**
-  - Voeg een dropdown toe aan de 3D-viewer om een bekend alledaags object (zoals een AA-batterij, een blikje cola, een smartphone of een 3D-banaan) direct naast het model te renderen. Dit geeft direct een gevoel van de ware grootte.
-- [ ] **2D Bouwplaat Planner (Print Plate Canvas)**
-  - Een minimalistisch 2D-canvas dat je printerbed representeert (bijv. 256x256mm voor Bambu Lab). Sleep thumbnails van STL's op de plaat om te kijken of ze samen in één printrun passen, en sla dit op als een geplande "Print Job".
-
----
-
-## 📊 5. Dashboard & Printer Monitoring
-*Maak van GyroidVault het centrale zenuwcentrum van je 3D-print-setup.*
-
-- [ ] **Live Printer Monitor Card**
-  - Toon de live webcam-stream (MJPEG/WebRTC), temperatuurgrafiek en voortgangsbalk van actieve Klipper (Moonraker) of Bambu Lab printers direct op het GyroidVault-dashboard.
-- [ ] **Printstatistieken & Kostenanalyse**
-  - Interactieve grafieken (bijvoorbeeld met Chart.js) die laten zien hoeveel gram filament je per maand verbruikt, het succespercentage van je prints, en een schatting van de totale stroom- en materiaalkosten.
-
----
-
-## 🏗️ 6. Codebase Architectuur & Technische Kwaliteit (Refactoring)
-*Structurele verbeteringen onder de motorkap om schaalbaarheid, overzicht en samenwerking met externe contributors optimaal te houden.*
-
-- [ ] **Backend Modulariseren (Routes & Controllers)**
-  - Splits de monolithische `server/index.js` (~2.600 regels) op in modulaire Express routers:
-    - `server/routes/auth.js` (authenticatie, sessies, wachtwoorden)
-    - `server/routes/models.js` (CRUD, bewerkingen, queries)
-    - `server/routes/files.js` (downloads, uploads, streams)
-    - `server/routes/tags.js` & `server/routes/projects.js`
-    - `server/routes/settings.js` & status
-  - `server/index.js` blijft licht en overzichtelijk (alleen server initialisatie, middleware mounten en poort luisteren).
-  - Verkleint kans op merge-conflicten bij PR's aanzienlijk.
-
-- [ ] **Frontend Opsplitsen in Modules (`app.js` & `components.js`)**
-  - Splits `public/js/app.js` en `public/js/components.js` op in logische ES modules of deelbestanden (bijv. `components/model-card.js`, `components/upload-modal.js`, `components/filter-bar.js`).
-  - Maakt UI-aanpassingen gerichter en voorkomt dat één wijziging per ongeluk andere schermen beïnvloedt.
-
-- [ ] **Geautomatiseerde Smoke & Integratietests (CI Pipeline)**
-  - Toevoegen van een lichte testsuite (bijv. met Vitest of Jest + Supertest).
-  - Kernzaken afdekken: login/sessie, aanmaken/ophalen van modellen, validatie van ongeldige uploads.
-  - Koppelen aan GitHub Actions zodat PR's van contributors automatisch getest worden vóór het mergen.
-
-- [ ] **Database Schema Migratiesysteem (SQLite Versioning)**
-  - Een gestructureerd migratiesysteem (bijv. `migrations/001_initial.sql`, `migrations/002_add_indexes.sql`).
-  - Zorgt voor betrouwbare en geautomatiseerde upgrades van de SQLite-database tussen releases zonder handmatige ad-hoc runtime queries.
-
-- [ ] **Centrale Config & Environment Validatie**
-  - Eén centraal configuratiebestand (`server/config.js`) dat alle omgevingsvariabelen (`PORT`, `DATA_DIR`, `LOG_LEVEL`, etc.) valideert bij het opstarten.
-  - Geeft direct duidelijke, vriendelijke foutmeldingen in de logs bij verkeerde configuraties in Docker of Unraid.
-
+### v2.1.0 & v2.0
+- [x] **STEP/STP 3D Viewer (#62):** OpenCASCADE / WebAssembly worker rendering in de 3D viewer.
+- [x] **Bambu Studio Integratie (#61):** On-the-fly 3MF packaging voor `bambustudio://` deep-linking.
+- [x] **Fusion 360 (.f3d) Thumbnails (#60):** Automatische thumbnail extractie uit F3D CAD bestanden.
+- [x] **Multi-Select Checkboxes (#64):** "Add to Collection" venster met zoekfilter en checkboxes.
+- [x] **Database Composite Indexes:** Indexen op alle foreign keys en sorteerkolommen in SQLite.
+- [x] **Scanner Event-Loop Yields:** Micro-pauzes (`setImmediate`) in de folder watcher.
+- [x] **Collecties Bewerken & Sync:** `PUT /api/projects/:id` en `PUT /api/models/:id/projects`.
+- [x] **409 Conflict & Smart Name Suggestion:** HTTP 409 met 1-klik alternatieve naamknop.
+- [x] **In-place ZIP Streaming:** Bestanden streamen direct vanuit ZIP naar slicer/viewer.

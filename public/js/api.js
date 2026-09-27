@@ -86,6 +86,7 @@ const API = {
   bulkMoveItems(paths, target) { return this.request('/api/browse/bulk-move', { method: 'POST', body: JSON.stringify({ paths, target }) }); },
   bulkDeleteItems(paths) { return this.request('/api/browse/bulk-delete', { method: 'POST', body: JSON.stringify({ paths }) }); },
   bulkTagItems(paths, tags) { return this.request('/api/browse/bulk-tag', { method: 'POST', body: JSON.stringify({ paths, tags }) }); },
+  bulkCategoryItems(paths, category_id) { return this.request('/api/browse/bulk-category', { method: 'POST', body: JSON.stringify({ paths, category_id }) }); },
 
   // Models
   getModels(params = {}) {

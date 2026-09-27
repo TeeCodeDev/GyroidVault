@@ -983,17 +983,36 @@ const App = {
     } catch(e) { this.toast(e.message, 'error'); }
   },
 
-  openBulkMove() { this.openModal('Move to Category', UI.bulkMoveForm(this.cache.categories)); },
+  async openBulkMove() {
+    if (!this.currentUser || this.currentUser.role === 'viewer') {
+      this.toast('You must be logged in as an uploader or admin to modify models', 'error');
+      return;
+    }
+    if (!this.selectedModelIds?.length) return;
+    try {
+      if (!this.cache.categories || this.cache.categories.length === 0) {
+        this.cache.categories = await API.getCategories();
+      }
+    } catch (e) {}
+    this.openModal('Assign Category', UI.bulkMoveForm(this.cache.categories || [], this.selectedModelIds.length));
+  },
   async handleBulkMove(e) {
     e.preventDefault();
+    if (!this.currentUser || this.currentUser.role === 'viewer') {
+      this.toast('You must be logged in as an uploader or admin to modify models', 'error');
+      return;
+    }
     const fd = new FormData(e.target);
-    const catId = fd.get('category_id') || null;
+    const catVal = fd.get('category_id');
+    const catId = catVal ? Number(catVal) : null;
+    const count = this.selectedModelIds.length;
     try {
       await API.bulkUpdateModels(this.selectedModelIds, { category_id: catId });
-      this.toast(`Updated category on ${this.selectedModelIds.length} models`);
+      this.toast(`Updated category on ${count} model${count > 1 ? 's' : ''}`);
       this.clearSelection();
       this.closeModal();
       this.cache.categories = await API.getCategories().catch(() => this.cache.categories);
+      this.renderSidebarCategories();
       this.route();
     } catch(e) { this.toast(e.message, 'error'); }
   },
@@ -1127,6 +1146,41 @@ const App = {
       // Tagging might not immediately reflect in folder view without a backend rescan or re-fetch, but re-render is safe
       this.renderBrowse(this.currentBrowsePath);
     } catch(err) { this.toast(err.message, 'error'); }
+  },
+
+  async openBulkBrowseCategory() {
+    if (!this.currentUser || this.currentUser.role === 'viewer') {
+      this.toast('You must be logged in as an uploader or admin to modify models', 'error');
+      return;
+    }
+    if (!this.selectedBrowsePaths?.length) return;
+    try {
+      if (!this.cache.categories || this.cache.categories.length === 0) {
+        this.cache.categories = await API.getCategories();
+      }
+    } catch(e) {}
+    this.openModal('Assign Category', UI.bulkBrowseCategoryForm(this.cache.categories || [], this.selectedBrowsePaths.length));
+  },
+
+  async handleBulkBrowseCategorySubmit(e) {
+    e.preventDefault();
+    if (!this.currentUser || this.currentUser.role === 'viewer') {
+      this.toast('You must be logged in as an uploader or admin to modify models', 'error');
+      return;
+    }
+    const fd = new FormData(e.target);
+    const catVal = fd.get('category_id');
+    const catId = catVal ? Number(catVal) : null;
+    const count = this.selectedBrowsePaths.length;
+    try {
+      await API.bulkCategoryItems(this.selectedBrowsePaths, catId);
+      this.toast(`Updated category on ${count} item${count > 1 ? 's' : ''}`);
+      this.clearBrowseSelection();
+      this.closeModal();
+      this.cache.categories = await API.getCategories().catch(() => this.cache.categories);
+      this.renderSidebarCategories();
+      this.renderBrowse(this.currentBrowsePath);
+    } catch(err) { this.toast(err.message || 'Failed to update category', 'error'); }
   },
 
   handleSearch(val) {
@@ -1335,12 +1389,25 @@ const App = {
     } catch(e) { this.toast(e.message, 'error'); }
   },
   
+  async handleToggleSystemSetting(key, isChecked, label) {
+    try {
+      await API.saveSystemSettings({ [key]: isChecked ? 'true' : 'false' });
+      this.toast(`${label} ${isChecked ? 'enabled' : 'disabled'}`);
+    } catch (e) {
+      this.toast(e.message || 'Failed to update setting', 'error');
+    }
+  },
+
   async handleSaveSystemSettings(e) {
     e.preventDefault();
     const fd = new FormData(e.target);
     const data = Object.fromEntries(fd.entries());
-    data.open_registration = fd.has('open_registration') ? 'true' : 'false';
-    data.require_login_to_view = fd.has('require_login_to_view') ? 'true' : 'false';
+    if (e.target.querySelector('[name="open_registration"]')) {
+      data.open_registration = fd.has('open_registration') ? 'true' : 'false';
+    }
+    if (e.target.querySelector('[name="require_login_to_view"]')) {
+      data.require_login_to_view = fd.has('require_login_to_view') ? 'true' : 'false';
+    }
     if (e.target.querySelector('[name="scan_zip_archives"]')) {
       data.scan_zip_archives = fd.has('scan_zip_archives') ? 'true' : 'false';
     }

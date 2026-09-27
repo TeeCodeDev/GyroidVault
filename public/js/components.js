@@ -215,6 +215,7 @@ const UI = {
     }
     const types = (m.file_types || []).filter(t => t !== 'image').map(t =>
       `<span class="badge badge-${t}">${t}</span>`
+      `<span class="badge badge-${t}" style="cursor:pointer" onclick="event.stopPropagation();App.setFormatFilter('${t.toLowerCase()}')" title="Filter by ${t.toUpperCase()}">${t}</span>`
     ).join('');
     const printed = m.has_printed
       ? '<span class="badge badge-printed">✓ Printed</span>'
@@ -252,6 +253,7 @@ const UI = {
         <div class="bulk-count">${count} items selected</div>
         <div class="bulk-actions">
           <button class="btn btn-secondary btn-sm" onclick="App.openBulkTag()" style="display:inline-flex;align-items:center;gap:4px"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>Tag</button>
+          <button class="btn btn-secondary btn-sm" onclick="App.openBulkMove()" style="display:inline-flex;align-items:center;gap:4px"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>Category</button>
           <button class="btn btn-secondary btn-sm" onclick="App.openBulkAddToCollection()" style="display:inline-flex;align-items:center;gap:4px"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/></svg>Collection</button>
           <button class="btn btn-danger btn-sm" onclick="App.openBulkDelete()" style="display:inline-flex;align-items:center;gap:4px"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>Delete</button>
           <button class="btn btn-ghost btn-sm" onclick="App.clearSelection()">✕ Clear</button>
@@ -267,6 +269,7 @@ const UI = {
           <button class="btn btn-secondary btn-sm" onclick="App.toggleBrowseSelectAll()">${isAllSelected ? '✕ Deselect All' : '✓ Select All'}</button>
           <button class="btn btn-secondary btn-sm" onclick="App.openBulkBrowseMove()" style="display:inline-flex;align-items:center;gap:4px"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>Move</button>
           <button class="btn btn-secondary btn-sm" onclick="App.openBulkBrowseTag()" style="display:inline-flex;align-items:center;gap:4px"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>Tag</button>
+          <button class="btn btn-secondary btn-sm" onclick="App.openBulkBrowseCategory()" style="display:inline-flex;align-items:center;gap:4px"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>Category</button>
           <button class="btn btn-danger btn-sm" onclick="App.openBulkBrowseDelete()" style="display:inline-flex;align-items:center;gap:4px"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>Delete</button>
           <button class="btn btn-ghost btn-sm" onclick="App.clearBrowseSelection()">✕ Clear</button>
         </div>
@@ -293,20 +296,60 @@ const UI = {
       </form>`;
   },
 
-  bulkMoveForm(categories = []) {
+  bulkMoveForm(categories = [], count = 0) {
+    if (!categories || categories.length === 0) {
+      return `
+        <div style="text-align:center;padding:24px 10px;color:var(--text-muted)">
+          <div style="font-size:1.5rem;margin-bottom:8px">📁</div>
+          <p style="font-size:.9rem;margin-bottom:14px">No categories found in the system.</p>
+          <button type="button" class="btn btn-secondary btn-sm" onclick="App.closeModal()">Close</button>
+        </div>`;
+    }
     const options = categories.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
     return `
       <form onsubmit="App.handleBulkMove(event)">
+        <div style="margin-bottom:16px;color:var(--text-secondary);font-size:0.9rem">
+          Select a category to assign to the <strong>${count || App.selectedModelIds?.length || 0} selected models</strong>:
+        </div>
         <div class="form-group">
-          <label class="form-label">Select Category</label>
+          <label class="form-label">Category</label>
           <select class="form-select" name="category_id">
-            <option value="">(None)</option>
+            <option value="">(None / Remove Category)</option>
             ${options}
           </select>
         </div>
-        <div class="form-actions">
+        <div class="form-actions" style="margin-top:20px">
           <button type="button" class="btn btn-secondary" onclick="App.closeModal()">Cancel</button>
-          <button type="submit" class="btn btn-primary">Move Models</button>
+          <button type="submit" class="btn btn-primary">Assign Category</button>
+        </div>
+      </form>`;
+  },
+
+  bulkBrowseCategoryForm(categories = [], count = 0) {
+    if (!categories || categories.length === 0) {
+      return `
+        <div style="text-align:center;padding:24px 10px;color:var(--text-muted)">
+          <div style="font-size:1.5rem;margin-bottom:8px">📁</div>
+          <p style="font-size:.9rem;margin-bottom:14px">No categories found in the system.</p>
+          <button type="button" class="btn btn-secondary btn-sm" onclick="App.closeModal()">Close</button>
+        </div>`;
+    }
+    const options = categories.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+    return `
+      <form onsubmit="App.handleBulkBrowseCategorySubmit(event)">
+        <div style="margin-bottom:16px;color:var(--text-secondary);font-size:0.9rem">
+          Select a category to assign to models within the <strong>${count || App.selectedBrowsePaths?.length || 0} selected items</strong>:
+        </div>
+        <div class="form-group">
+          <label class="form-label">Category</label>
+          <select class="form-select" name="category_id">
+            <option value="">(None / Remove Category)</option>
+            ${options}
+          </select>
+        </div>
+        <div class="form-actions" style="margin-top:20px">
+          <button type="button" class="btn btn-secondary" onclick="App.closeModal()">Cancel</button>
+          <button type="submit" class="btn btn-primary">Assign Category</button>
         </div>
       </form>`;
   },
@@ -1031,10 +1074,22 @@ const UI = {
   },
 
   // ── Toolbar ──
-  toolbar(categories = [], tags = [], users = []) {
+  toolbar(categories = [], tags = [], users = [], activeFormat = 'all') {
     const catOpts = categories.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
     const tagOpts = tags.map(t => `<option value="${t.id}">${t.name}</option>`).join('');
     const userOpts = users.map(u => `<option value="${u.id}">${u.username}</option>`).join('');
+    const formats = [
+      { id: 'all', label: 'All' },
+      { id: 'stl', label: 'STL' },
+      { id: '3mf', label: '3MF' },
+      { id: 'step', label: 'STEP' },
+      { id: 'gcode', label: 'G-Code' },
+      { id: 'obj', label: 'OBJ' }
+    ];
+    const formatPills = formats.map(f =>
+      `<button type="button" id="pill-format-${f.id}" class="format-pill ${activeFormat === f.id ? 'active' : ''}" onclick="App.setFormatFilter('${f.id}', this)">${f.label}</button>`
+    ).join('');
+
     return `
       <div class="toolbar">
         <div class="search-box">
@@ -1082,6 +1137,13 @@ const UI = {
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
           Scan Library
         </button>
+        <div class="format-filter-bar" style="width:100%;display:flex;align-items:center;justify-content:space-between;gap:8px;padding-top:10px;border-top:1px solid var(--border);flex-wrap:wrap">
+          <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+            <span style="font-size:0.75rem;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em;margin-right:2px">Format:</span>
+            ${formatPills}
+          </div>
+          <div id="library-summary-stats" style="font-size:0.8rem;color:var(--text-muted);font-weight:500;margin-left:auto"></div>
+        </div>
       </div>`;
   },
 
@@ -1386,12 +1448,13 @@ const UI = {
           <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;">Set to 0 to disable background scanning. Default is 24.</p>
         </div>
         <div class="form-group" style="grid-column: 1 / -1; margin-top: 10px;">
-          <label class="toggle-item" style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;padding:12px;background:var(--bg-secondary);border:1px solid var(--border);border-radius:8px">
+          <label class="toggle-item">
             <div>
-              <div style="font-weight:600;font-size:0.875rem;color:var(--text-primary);margin-bottom:3px">Scan & Index ZIP Archives</div>
-              <div style="font-size:0.8rem;color:var(--text-secondary);line-height:1.4">Deep inspect .zip archive files to index internal 3D models and images without unpacking to disk.</div>
+              <div style="font-weight:600;font-size:0.95rem;color:var(--text-primary)">Scan & Index ZIP Archives</div>
+              <div style="font-size:0.75rem;color:var(--text-muted);margin-top:2px">Deep inspect .zip archive files to index internal 3D models and images without unpacking to disk.</div>
             </div>
-            <input type="checkbox" name="scan_zip_archives" ${config.scan_zip_archives === 'false' || config.scan_zip_archives === false ? '' : 'checked'} style="width:18px;height:18px;accent-color:var(--accent-primary);cursor:pointer">
+            <input type="checkbox" name="scan_zip_archives" value="true" ${config.scan_zip_archives === 'false' || config.scan_zip_archives === false ? '' : 'checked'} onchange="App.handleToggleSystemSetting('scan_zip_archives', this.checked, 'ZIP archive scanning')">
+            <span class="toggle-switch"></span>
           </label>
         </div>
 
@@ -1411,7 +1474,7 @@ const UI = {
               <div style="font-weight:600;font-size:0.95rem;color:var(--text-primary)">Enable Open Registration</div>
               <div style="font-size:0.75rem;color:var(--text-muted);margin-top:2px">Allows anyone to register an account without needing an invite code.</div>
             </div>
-            <input type="checkbox" name="open_registration" value="true" ${config.open_registration === 'true' ? 'checked' : ''}>
+            <input type="checkbox" name="open_registration" value="true" ${config.open_registration === 'true' ? 'checked' : ''} onchange="App.handleToggleSystemSetting('open_registration', this.checked, 'Open registration')">
             <span class="toggle-switch"></span>
           </label>
 
@@ -1420,7 +1483,7 @@ const UI = {
               <div style="font-weight:600;font-size:0.95rem;color:var(--text-primary)">Private Instance Mode</div>
               <div style="font-size:0.75rem;color:var(--text-muted);margin-top:2px">Forces all guests to log in before viewing any models or library files.</div>
             </div>
-            <input type="checkbox" name="require_login_to_view" value="true" ${config.require_login_to_view === 'true' ? 'checked' : ''}>
+            <input type="checkbox" name="require_login_to_view" value="true" ${config.require_login_to_view === 'true' ? 'checked' : ''} onchange="App.handleToggleSystemSetting('require_login_to_view', this.checked, 'Private instance mode')">
             <span class="toggle-switch"></span>
           </label>
         </div>

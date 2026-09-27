@@ -13,3 +13,4 @@ This maintenance release brings massive speed improvements for large libraries, 
 - **Unauthorized Bulk Delete Fix (#69):** Prevented unauthenticated visitors or viewers from seeing selection checkboxes or triggering bulk delete dialogs. Fixed `API.request` so HTTP 401 Unauthorized responses properly reject with an error instead of falsely reporting success.
 - **3D Viewer Fullscreen Glitch (#66):** Fixed layout jumping and footer visibility issues when entering/leaving fullscreen 3D studio mode.
 - **Docker Image Version Display (#66, #69):** Resolved version discrepancy in Docker builds so the application properly reports the running version and eliminates false update banners.
+
