@@ -5,7 +5,10 @@ const db = require('../database');
 const { parseGcodeMetadata } = require('./gcode');
 const AdmZip = require('adm-zip');
 
-const SUPPORTED_EXTENSIONS = ['.stl', '.gcode', '.bgcode', '.3mf', '.step', '.stp', '.f3d', '.scad', '.obj', '.pdf', '.txt', '.md', '.zip', '.7z', '.rar'];
+// Extensions that actually represent 3D models, CAD files, G-code, or model archives (#78)
+const MODEL_TRIGGER_EXTENSIONS = ['.stl', '.gcode', '.bgcode', '.3mf', '.step', '.stp', '.f3d', '.scad', '.obj', '.zip', '.7z', '.rar'];
+const DOCUMENT_EXTENSIONS = ['.pdf', '.txt', '.md'];
+const SUPPORTED_EXTENSIONS = [...MODEL_TRIGGER_EXTENSIONS, ...DOCUMENT_EXTENSIONS];
 const IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.webp', '.gif'];
 
 function getFileType(filename) {
@@ -23,7 +26,85 @@ function getFileType(filename) {
   return 'other';
 }
 
-// ── Scanner State & Lock Management ──────────────────────────────────────────
+/**
+ * Recognizes generic subfolder names commonly found inside downloaded 3D model folders
+ * (e.g. "stl files", "files", "Version 1", "Version 2", "supported", "parts") so they
+ * are grouped under their parent model folder instead of becoming standalone models (#78).
+ */
+function isModelInternalSubfolder(folderName) {
+  if (!folderName) return false;
+  const normalized = folderName.trim().toLowerCase();
+  const exactMatches = new Set([
+    'files', 'file', 'stl', 'stls', 'stl files', 'stl_files', 'stl-files',
+    '3mf', '3mfs', '3mf files', '3mf_files', '3mf-files',
+    'step', 'steps', 'step files', 'step_files', 'step-files', 'stp',
+    'obj', 'objs', 'obj files', 'gcode', 'gcodes', 'gcode files',
+    'f3d', 'scad', 'cad', 'cad files',
+    'model', 'models', 'part', 'parts', 'pieces', 'components', 'plates',
+    'print files', 'print_files', 'print-files', 'printable', 'printables',
+    'supported', 'unsupported', 'presupported', 'pre-supported', 'pre_supported',
+    'hollow', 'hollowed', 'solid', 'chitubox', 'lychee', 'bambu', 'orcaslicer',
+    'images', 'image', 'img', 'imgs', 'pictures', 'photos', 'renders', 'render',
+    'preview', 'previews', 'thumb', 'thumbs', 'thumbnails',
+    'doc', 'docs', 'documentation', 'license', 'licenses', 'readme', 'info'
+  ]);
+  if (exactMatches.has(normalized)) return true;
+  if (/^(version|ver|rev|v|mk|mark|release|rel|update|part|plate)\s*[\d._-]+(\b.*)?$/i.test(normalized)) return true;
+  if (/^(stl|3mf|step|stp|obj|gcode|cad|supported|unsupported|presupported)\b/i.test(normalized)) return true;
+  return false;
+}
+
+async function directoryContainsModelFiles(dirPath, maxDepth = 3) {
+  if (maxDepth < 0) return false;
+  let entries;
+  try {
+    entries = await fsPromises.readdir(dirPath, { withFileTypes: true });
+  } catch (e) {
+    return false;
+  }
+  for (const entry of entries) {
+    if (!entry.isDirectory()) {
+      const ext = path.extname(entry.name).toLowerCase();
+      if (MODEL_TRIGGER_EXTENSIONS.includes(ext)) return true;
+    }
+  }
+  for (const entry of entries) {
+    if (entry.isDirectory()) {
+      if (await directoryContainsModelFiles(path.join(dirPath, entry.name), maxDepth - 1)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+async function collectAllFilesInModelDir(rootModelPath) {
+  const collected = [];
+  async function gather(dirPath) {
+    let entries;
+    try {
+      entries = await fsPromises.readdir(dirPath, { withFileTypes: true });
+    } catch (e) {
+      return;
+    }
+    for (const entry of entries) {
+      const fullPath = path.join(dirPath, entry.name);
+      if (entry.isDirectory()) {
+        await gather(fullPath);
+      } else {
+        collected.push({
+          filename: entry.name,
+          filePath: fullPath,
+          relName: path.relative(rootModelPath, fullPath).replace(/\\/g, '/')
+        });
+      }
+    }
+  }
+  await gather(rootModelPath);
+  return collected;
+}
+
+// ?? Scanner State & Lock Management ??????????????????????????????????????????
 let isScanning = false;
 let shouldCancel = false;
 let scanStatus = {
@@ -88,6 +169,193 @@ async function scanLibrary(libraryPath) {
 
   const results = { modelsAdded: 0, filesAdded: 0, skipped: 0 };
   let processedSinceSave = 0;
+  const resolvedLibraryRoot = path.resolve(libraryPath);
+
+  // If deep ZIP scanning is disabled, purge any leftover virtual archive entries (#78)
+  const initialZipSetting = db.get("SELECT value FROM system_settings WHERE key = 'scan_zip_archives'");
+  const initialScanZipEnabled = !initialZipSetting || initialZipSetting.value === 'true' || initialZipSetting.value === '1';
+  if (!initialScanZipEnabled) {
+    db.run('DELETE FROM files WHERE is_archive_entry = 1', [], true);
+  }
+
+  async function indexModelFile(model, fileObj) {
+    const { filename, filePath, relName } = fileObj;
+    const displayName = relName || filename;
+    const ext = path.extname(filename).toLowerCase();
+
+    if (ext === '.zip') {
+      try {
+        const existingZip = db.get('SELECT id, model_id FROM files WHERE library_path = ?', [filePath]);
+        const stat = await fsPromises.stat(filePath);
+
+        if (!existingZip) {
+          db.run('INSERT INTO files (model_id, filename, original_name, file_type, file_size, library_path, is_archive_entry) VALUES (?, ?, ?, ?, ?, ?, ?)',
+            [model.id, filename, displayName, 'zip', stat.size, filePath, 0], true);
+          results.filesAdded++;
+          processedSinceSave++;
+          scanStatus.filesAdded = results.filesAdded;
+        } else if (existingZip.model_id !== model.id) {
+          db.run('UPDATE files SET model_id = ?, original_name = ?, file_size = ? WHERE id = ?', [model.id, displayName, stat.size, existingZip.id], true);
+          results.filesAdded++;
+          processedSinceSave++;
+          scanStatus.filesAdded = results.filesAdded;
+        }
+
+        // Check if user enabled or disabled deep ZIP inspection (defaults to true)
+        const zipSetting = db.get("SELECT value FROM system_settings WHERE key = 'scan_zip_archives'");
+        const scanZipEnabled = !zipSetting || zipSetting.value === 'true' || zipSetting.value === '1';
+        if (!scanZipEnabled) {
+          return; // ZIP file itself is indexed, but skip scanning internal entries
+        }
+
+        // Safe memory threshold: Avoid buffering archives larger than 300MB into memory to prevent OOM
+        const MAX_ZIP_INSPECT_SIZE = 300 * 1024 * 1024;
+        if (stat.size > MAX_ZIP_INSPECT_SIZE) {
+          console.log(`[Scanner] Archive ${filename} exceeds 300MB (${(stat.size / (1024 * 1024)).toFixed(0)}MB). Skipping in-memory entry inspection for stability.`);
+          return;
+        }
+
+        // Inspect internal files in ZIP archive without full disk extraction
+        const zip = new AdmZip(filePath);
+        const entries = zip.getEntries();
+        for (const entry of entries) {
+          if (shouldCancel) return;
+          if (entry.isDirectory) continue;
+          const entryExt = path.extname(entry.entryName).toLowerCase();
+          if (SUPPORTED_EXTENSIONS.includes(entryExt) || IMAGE_EXTENSIONS.includes(entryExt)) {
+            const entryVirtualPath = filePath + '::' + entry.entryName;
+            const existingEntry = db.get('SELECT id, model_id, thumbnail FROM files WHERE library_path = ?', [entryVirtualPath]);
+            if (!existingEntry) {
+              const entryFt = getFileType(entry.name);
+              let entryThumb = null;
+
+              if (entryFt === 'image' && !model.thumbnail) {
+                try {
+                  const { UPLOADS_DIR } = require('../database');
+                  const thumbFilename = `thumb_${Date.now()}_${path.basename(entry.entryName)}`;
+                  const outPath = path.join(UPLOADS_DIR, thumbFilename);
+                  const { getZipEntryBuffer } = require('./modelHelpers');
+                  fs.writeFileSync(outPath, getZipEntryBuffer(entry));
+                  entryThumb = thumbFilename;
+                  db.run('UPDATE models SET thumbnail = ? WHERE id = ?', [thumbFilename, model.id], true);
+                  model.thumbnail = thumbFilename;
+                } catch (e) {}
+              }
+
+              db.run('INSERT INTO files (model_id, filename, original_name, file_type, file_size, library_path, is_archive_entry, archive_entry_path, thumbnail) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                [model.id, entry.name, entry.entryName, entryFt, entry.header.size, entryVirtualPath, 1, entry.entryName, entryThumb], true);
+              results.filesAdded++;
+              processedSinceSave++;
+              scanStatus.filesAdded = results.filesAdded;
+            } else if (existingEntry.model_id !== model.id) {
+              db.run('UPDATE files SET model_id = ? WHERE id = ?', [model.id, existingEntry.id], true);
+              if (existingEntry.thumbnail && !model.thumbnail) {
+                db.run('UPDATE models SET thumbnail = ? WHERE id = ?', [existingEntry.thumbnail, model.id], true);
+                model.thumbnail = existingEntry.thumbnail;
+              }
+              results.filesAdded++;
+              processedSinceSave++;
+              scanStatus.filesAdded = results.filesAdded;
+            } else {
+              results.skipped++;
+              scanStatus.skipped = results.skipped;
+            }
+          }
+        }
+      } catch (zipErr) {
+        console.warn(`[Scanner] Could not inspect ZIP archive ${filename}:`, zipErr.message);
+      }
+    } else if (SUPPORTED_EXTENSIONS.includes(ext) || IMAGE_EXTENSIONS.includes(ext)) {
+      let stat;
+      try {
+        stat = await fsPromises.stat(filePath);
+      } catch (e) { return; }
+
+      const ft = getFileType(filename);
+      const existingFile = db.get('SELECT id, model_id, thumbnail FROM files WHERE library_path = ?', [filePath]);
+      const thumbRelValue = displayName;
+
+      if (!existingFile) {
+        let metadata = null;
+        let fileThumbnail = null;
+
+        if (ft === 'gcode') {
+          const meta = parseGcodeMetadata(filePath);
+          if (meta) metadata = JSON.stringify(meta);
+
+          const { extractGcodeThumbnail } = require('./gcode');
+          const { UPLOADS_DIR } = require('../database');
+          const thumb = extractGcodeThumbnail(filePath, UPLOADS_DIR);
+          if (thumb) {
+            fileThumbnail = thumb;
+            if (!model.thumbnail) {
+              db.run('UPDATE models SET thumbnail = ? WHERE id = ?', [thumb, model.id], true);
+              model.thumbnail = thumb;
+            }
+          }
+        } else if (ft === '3mf') {
+          const { extract3mfThumbnail } = require('./3mf');
+          const { UPLOADS_DIR } = require('../database');
+          const thumb = extract3mfThumbnail(filePath, UPLOADS_DIR);
+          if (thumb) {
+            fileThumbnail = thumb;
+            if (!model.thumbnail) {
+              db.run('UPDATE models SET thumbnail = ? WHERE id = ?', [thumb, model.id], true);
+              model.thumbnail = thumb;
+            }
+          }
+        } else if (ft === 'f3d') {
+          const { extractF3dThumbnail } = require('./f3d');
+          const { UPLOADS_DIR } = require('../database');
+          const thumb = extractF3dThumbnail(filePath, UPLOADS_DIR);
+          if (thumb) {
+            fileThumbnail = thumb;
+            if (!model.thumbnail) {
+              db.run('UPDATE models SET thumbnail = ? WHERE id = ?', [thumb, model.id], true);
+              model.thumbnail = thumb;
+            }
+          }
+        }
+
+        if (ft === 'image') {
+          fileThumbnail = thumbRelValue;
+          if (!model.thumbnail) {
+            db.run('UPDATE models SET thumbnail = ? WHERE id = ?', [thumbRelValue, model.id], true);
+            model.thumbnail = thumbRelValue;
+          }
+        }
+
+        db.run('INSERT INTO files (model_id, filename, original_name, file_type, file_size, metadata, library_path, thumbnail) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+          [model.id, filename, displayName, ft, stat.size, metadata, filePath, fileThumbnail], true);
+        results.filesAdded++;
+        processedSinceSave++;
+        scanStatus.filesAdded = results.filesAdded;
+      } else if (existingFile.model_id !== model.id) {
+        db.run('UPDATE files SET model_id = ?, original_name = ?, file_size = ? WHERE id = ?', [model.id, displayName, stat.size, existingFile.id], true);
+        const thumbToRestore = existingFile.thumbnail || (ft === 'image' ? thumbRelValue : null);
+        if (thumbToRestore && !model.thumbnail) {
+          db.run('UPDATE models SET thumbnail = ? WHERE id = ?', [thumbToRestore, model.id], true);
+          model.thumbnail = thumbToRestore;
+        }
+        results.filesAdded++;
+        processedSinceSave++;
+        scanStatus.filesAdded = results.filesAdded;
+      } else {
+        if (ft === 'image' && !model.thumbnail) {
+          db.run('UPDATE models SET thumbnail = ? WHERE id = ?', [thumbRelValue, model.id], true);
+          model.thumbnail = thumbRelValue;
+        }
+        results.skipped++;
+        scanStatus.skipped = results.skipped;
+      }
+    }
+
+    if (processedSinceSave >= 1000) {
+      db.saveDb();
+      processedSinceSave = 0;
+      await new Promise(setImmediate);
+    }
+  }
 
   async function walk(currentPath) {
     if (shouldCancel) {
@@ -95,7 +363,6 @@ async function scanLibrary(libraryPath) {
       return;
     }
 
-    // Yield to the event loop so the server stays completely responsive during massive scans
     await new Promise(setImmediate);
 
     let items;
@@ -105,22 +372,38 @@ async function scanLibrary(libraryPath) {
       console.warn(`[Scanner] Could not read directory: ${currentPath}`);
       return;
     }
-    
+
     scanStatus.foldersScanned++;
     scanStatus.currentFolder = path.basename(currentPath) || currentPath;
 
-    // Check if this directory contains any supported 3D/archive files
-    const has3DFiles = items.some(item => {
+    const resolvedCurrent = path.resolve(currentPath);
+    const isLibraryRoot = resolvedCurrent === resolvedLibraryRoot;
+
+    // 1. Check if this directory directly contains any 3D/archive files (not just .txt/.pdf/.md docs)
+    const hasDirectModelFiles = items.some(item => {
       if (item.isDirectory()) return false;
       const ext = path.extname(item.name).toLowerCase();
-      return SUPPORTED_EXTENSIONS.includes(ext);
+      return MODEL_TRIGGER_EXTENSIONS.includes(ext);
     });
 
-    if (has3DFiles) {
-      const modelPath = path.resolve(currentPath);
+    // 2. Check if this directory (when not library root) contains generic model-internal subfolders
+    // like "stl files", "Version 1", "Version 2", "files", "supported", etc. with 3D files (#78)
+    let hasInternalModelSubfolders = false;
+    if (!isLibraryRoot && !hasDirectModelFiles) {
+      for (const item of items) {
+        if (item.isDirectory() && isModelInternalSubfolder(item.name)) {
+          if (await directoryContainsModelFiles(path.join(currentPath, item.name), 3)) {
+            hasInternalModelSubfolders = true;
+            break;
+          }
+        }
+      }
+    }
+
+    if (!isLibraryRoot && (hasDirectModelFiles || hasInternalModelSubfolders)) {
+      const modelPath = resolvedCurrent;
       const modelName = path.basename(currentPath);
 
-      // Check if model already exists
       let model = db.get('SELECT id, thumbnail FROM models WHERE library_path = ?', [modelPath]);
       if (!model) {
         const r = db.run('INSERT INTO models (name, library_path) VALUES (?, ?)', [modelName, modelPath], true);
@@ -130,192 +413,57 @@ async function scanLibrary(libraryPath) {
         scanStatus.modelsAdded = results.modelsAdded;
       }
 
-      // Add files from this directory
+      // Consolidate and remove any previously created child models under this model folder (e.g. "stl files", "Version 1") (#78)
+      const childPrefix = modelPath + path.sep;
+      const childModels = db.all('SELECT id, thumbnail FROM models WHERE id != ? AND library_path LIKE ?', [model.id, childPrefix + '%']);
+      for (const child of childModels) {
+        if (child.thumbnail && !model.thumbnail) {
+          db.run('UPDATE models SET thumbnail = ? WHERE id = ?', [child.thumbnail, model.id], true);
+          model.thumbnail = child.thumbnail;
+        }
+        db.run('UPDATE files SET model_id = ? WHERE model_id = ?', [model.id, child.id], true);
+        db.run('DELETE FROM model_tags WHERE model_id = ?', [child.id], true);
+        db.run('DELETE FROM project_models WHERE model_id = ?', [child.id], true);
+        db.run('DELETE FROM print_history WHERE model_id = ?', [child.id], true);
+        db.run('DELETE FROM shares WHERE model_id = ?', [child.id], true);
+        db.run('DELETE FROM models WHERE id = ?', [child.id], true);
+      }
+
+      // Collect and index all files in this model directory and its internal subdirectories
+      const allModelFiles = await collectAllFilesInModelDir(modelPath);
+      for (const fileObj of allModelFiles) {
+        if (shouldCancel) return;
+        await indexModelFile(model, fileObj);
+      }
+
+      // Do NOT walk subdirectories as separate models since this directory is already a model (#78)
+      return;
+    }
+
+    // If loose 3D files exist directly at the root of LIBRARY_PATH, index only the direct files
+    if (isLibraryRoot && hasDirectModelFiles) {
+      const modelPath = resolvedCurrent;
+      const modelName = path.basename(currentPath);
+      let model = db.get('SELECT id, thumbnail FROM models WHERE library_path = ?', [modelPath]);
+      if (!model) {
+        const r = db.run('INSERT INTO models (name, library_path) VALUES (?, ?)', [modelName, modelPath], true);
+        model = { id: r.lastId, thumbnail: null };
+        results.modelsAdded++;
+        processedSinceSave++;
+        scanStatus.modelsAdded = results.modelsAdded;
+      }
       for (const item of items) {
         if (shouldCancel) return;
         if (item.isDirectory()) continue;
-        const filename = item.name;
-        const filePath = path.join(modelPath, filename);
-        const ext = path.extname(filename).toLowerCase();
-
-        if (ext === '.zip') {
-          // In-place ZIP Archive inspection
-          try {
-            const existingZip = db.get('SELECT id, model_id FROM files WHERE library_path = ?', [filePath]);
-            const stat = await fsPromises.stat(filePath);
-
-            if (!existingZip) {
-              db.run('INSERT INTO files (model_id, filename, original_name, file_type, file_size, library_path, is_archive_entry) VALUES (?, ?, ?, ?, ?, ?, ?)',
-                [model.id, filename, filename, 'zip', stat.size, filePath, 0], true);
-              results.filesAdded++;
-              processedSinceSave++;
-              scanStatus.filesAdded = results.filesAdded;
-            } else if (existingZip.model_id !== model.id) {
-              db.run('UPDATE files SET model_id = ?, file_size = ? WHERE id = ?', [model.id, stat.size, existingZip.id], true);
-              results.filesAdded++;
-              processedSinceSave++;
-              scanStatus.filesAdded = results.filesAdded;
-            }
-
-            // Check if user enabled or disabled deep ZIP inspection (defaults to true)
-            const zipSetting = db.get("SELECT value FROM system_settings WHERE key = 'scan_zip_archives'");
-            const scanZipEnabled = !zipSetting || zipSetting.value === 'true' || zipSetting.value === '1';
-            if (!scanZipEnabled) {
-              continue; // ZIP file itself is indexed, but skip scanning internal entries
-            }
-
-            // Safe memory threshold: Avoid buffering archives larger than 300MB into memory to prevent OOM
-            const MAX_ZIP_INSPECT_SIZE = 300 * 1024 * 1024;
-            if (stat.size > MAX_ZIP_INSPECT_SIZE) {
-              console.log(`[Scanner] Archive ${filename} exceeds 300MB (${(stat.size / (1024 * 1024)).toFixed(0)}MB). Skipping in-memory entry inspection for stability.`);
-              continue;
-            }
-
-            // Inspect internal files in ZIP archive without full disk extraction
-            const zip = new AdmZip(filePath);
-            const entries = zip.getEntries();
-            for (const entry of entries) {
-              if (shouldCancel) return;
-              if (entry.isDirectory) continue;
-              const entryExt = path.extname(entry.entryName).toLowerCase();
-              if (SUPPORTED_EXTENSIONS.includes(entryExt) || IMAGE_EXTENSIONS.includes(entryExt)) {
-                const entryVirtualPath = filePath + '::' + entry.entryName;
-                const existingEntry = db.get('SELECT id, model_id, thumbnail FROM files WHERE library_path = ?', [entryVirtualPath]);
-                if (!existingEntry) {
-                  const entryFt = getFileType(entry.name);
-                  let entryThumb = null;
-
-                  // If it's an image inside the ZIP and model has no thumbnail, extract it as model thumbnail
-                  if (entryFt === 'image' && !model.thumbnail) {
-                    try {
-                      const { UPLOADS_DIR } = require('../database');
-                      const thumbFilename = `thumb_${Date.now()}_${path.basename(entry.entryName)}`;
-                      const outPath = path.join(UPLOADS_DIR, thumbFilename);
-                      const { getZipEntryBuffer } = require('./modelHelpers');
-                      fs.writeFileSync(outPath, getZipEntryBuffer(entry));
-                      entryThumb = thumbFilename;
-                      db.run('UPDATE models SET thumbnail = ? WHERE id = ?', [thumbFilename, model.id], true);
-                      model.thumbnail = thumbFilename;
-                    } catch (e) {}
-                  }
-
-                  db.run('INSERT INTO files (model_id, filename, original_name, file_type, file_size, library_path, is_archive_entry, archive_entry_path, thumbnail) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-                    [model.id, entry.name, entry.entryName, entryFt, entry.header.size, entryVirtualPath, 1, entry.entryName, entryThumb], true);
-                  results.filesAdded++;
-                  processedSinceSave++;
-                  scanStatus.filesAdded = results.filesAdded;
-                } else if (existingEntry.model_id !== model.id) {
-                  db.run('UPDATE files SET model_id = ? WHERE id = ?', [model.id, existingEntry.id], true);
-                  if (existingEntry.thumbnail && !model.thumbnail) {
-                    db.run('UPDATE models SET thumbnail = ? WHERE id = ?', [existingEntry.thumbnail, model.id], true);
-                    model.thumbnail = existingEntry.thumbnail;
-                  }
-                  results.filesAdded++;
-                  processedSinceSave++;
-                  scanStatus.filesAdded = results.filesAdded;
-                } else {
-                  results.skipped++;
-                  scanStatus.skipped = results.skipped;
-                }
-              }
-            }
-          } catch (zipErr) {
-            console.warn(`[Scanner] Could not inspect ZIP archive ${filename}:`, zipErr.message);
-          }
-        } else if (SUPPORTED_EXTENSIONS.includes(ext) || IMAGE_EXTENSIONS.includes(ext)) {
-          let stat;
-          try {
-            stat = await fsPromises.stat(filePath);
-          } catch(e) { continue; }
-
-          const ft = getFileType(filename);
-          const existingFile = db.get('SELECT id, model_id, thumbnail FROM files WHERE library_path = ?', [filePath]);
-          
-          if (!existingFile) {
-            let metadata = null;
-            let fileThumbnail = null;
-            
-            if (ft === 'gcode') {
-              const meta = parseGcodeMetadata(filePath);
-              if (meta) metadata = JSON.stringify(meta);
-              
-              const { extractGcodeThumbnail } = require('./gcode');
-              const { UPLOADS_DIR } = require('../database');
-              const thumb = extractGcodeThumbnail(filePath, UPLOADS_DIR);
-              if (thumb) {
-                fileThumbnail = thumb;
-                if (!model.thumbnail) {
-                  db.run('UPDATE models SET thumbnail = ? WHERE id = ?', [thumb, model.id], true);
-                  model.thumbnail = thumb;
-                }
-              }
-            } else if (ft === '3mf') {
-              const { extract3mfThumbnail } = require('./3mf');
-              const { UPLOADS_DIR } = require('../database');
-              const thumb = extract3mfThumbnail(filePath, UPLOADS_DIR);
-              if (thumb) {
-                fileThumbnail = thumb;
-                if (!model.thumbnail) {
-                  db.run('UPDATE models SET thumbnail = ? WHERE id = ?', [thumb, model.id], true);
-                  model.thumbnail = thumb;
-                }
-              }
-            } else if (ft === 'f3d') {
-              const { extractF3dThumbnail } = require('./f3d');
-              const { UPLOADS_DIR } = require('../database');
-              const thumb = extractF3dThumbnail(filePath, UPLOADS_DIR);
-              if (thumb) {
-                fileThumbnail = thumb;
-                if (!model.thumbnail) {
-                  db.run('UPDATE models SET thumbnail = ? WHERE id = ?', [thumb, model.id], true);
-                  model.thumbnail = thumb;
-                }
-              }
-            }
-
-            if (ft === 'image') {
-              fileThumbnail = filename;
-              if (!model.thumbnail) {
-                db.run('UPDATE models SET thumbnail = ? WHERE id = ?', [filename, model.id], true);
-                model.thumbnail = filename;
-              }
-            }
-
-            db.run('INSERT INTO files (model_id, filename, original_name, file_type, file_size, metadata, library_path, thumbnail) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-              [model.id, filename, filename, ft, stat.size, metadata, filePath, fileThumbnail], true);
-            results.filesAdded++;
-            processedSinceSave++;
-            scanStatus.filesAdded = results.filesAdded;
-          } else if (existingFile.model_id !== model.id) {
-            db.run('UPDATE files SET model_id = ?, file_size = ? WHERE id = ?', [model.id, stat.size, existingFile.id], true);
-            const thumbToRestore = existingFile.thumbnail || (ft === 'image' ? filename : null);
-            if (thumbToRestore && !model.thumbnail) {
-              db.run('UPDATE models SET thumbnail = ? WHERE id = ?', [thumbToRestore, model.id], true);
-              model.thumbnail = thumbToRestore;
-            }
-            results.filesAdded++;
-            processedSinceSave++;
-            scanStatus.filesAdded = results.filesAdded;
-          } else {
-            if (ft === 'image' && !model.thumbnail) {
-              db.run('UPDATE models SET thumbnail = ? WHERE id = ?', [filename, model.id], true);
-              model.thumbnail = filename;
-            }
-            results.skipped++;
-            scanStatus.skipped = results.skipped;
-          }
-        }
-
-        // Throttle database persistence to disk every 1000 items to avoid freezing CPU
-        if (processedSinceSave >= 1000) {
-          db.saveDb();
-          processedSinceSave = 0;
-          await new Promise(setImmediate);
-        }
+        await indexModelFile(model, {
+          filename: item.name,
+          filePath: path.join(modelPath, item.name),
+          relName: item.name
+        });
       }
     }
 
-    // Always continue walking subdirectories asynchronously
+    // Continue walking subdirectories for category / organizational folders
     for (const item of items) {
       if (shouldCancel) return;
       if (item.isDirectory()) {
@@ -327,9 +475,29 @@ async function scanLibrary(libraryPath) {
   try {
     console.log(`[Scanner] Start library scan: ${libraryPath}`);
     await walk(libraryPath);
+
+    // Clean up any scanner-created models that only contain documents/images and zero 3D/archive files (#78)
+    const docOnlyModels = db.all(`
+      SELECT m.id FROM models m
+      WHERE m.library_path IS NOT NULL
+        AND NOT EXISTS (
+          SELECT 1 FROM files f
+          WHERE f.model_id = m.id
+            AND f.file_type NOT IN ('document', 'image', 'other')
+        )
+    `);
+    for (const dm of docOnlyModels) {
+      db.run('DELETE FROM files WHERE model_id = ?', [dm.id], true);
+      db.run('DELETE FROM model_tags WHERE model_id = ?', [dm.id], true);
+      db.run('DELETE FROM project_models WHERE model_id = ?', [dm.id], true);
+      db.run('DELETE FROM print_history WHERE model_id = ?', [dm.id], true);
+      db.run('DELETE FROM shares WHERE model_id = ?', [dm.id], true);
+      db.run('DELETE FROM models WHERE id = ?', [dm.id], true);
+    }
+
     db.saveDb(); // Final save upon scan completion
     console.log(`[Scanner] Scan complete. Models: ${results.modelsAdded}, Files: ${results.filesAdded}, Skipped: ${results.skipped}`);
-    
+
     scanStatus.lastCompleted = new Date().toISOString();
     scanStatus.lastResults = { ...results, foldersScanned: scanStatus.foldersScanned };
     return results;
@@ -357,12 +525,15 @@ function startScanAsync(libraryPath) {
   return { alreadyRunning: false, status: getScanStatus() };
 }
 
-module.exports = { 
-  scanLibrary, 
-  startScanAsync, 
-  getScanStatus, 
-  cancelScan, 
-  getFileType, 
-  SUPPORTED_EXTENSIONS, 
-  IMAGE_EXTENSIONS 
+module.exports = {
+  scanLibrary,
+  startScanAsync,
+  getScanStatus,
+  cancelScan,
+  getFileType,
+  isModelInternalSubfolder,
+  MODEL_TRIGGER_EXTENSIONS,
+  DOCUMENT_EXTENSIONS,
+  SUPPORTED_EXTENSIONS,
+  IMAGE_EXTENSIONS
 };

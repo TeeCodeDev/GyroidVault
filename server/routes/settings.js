@@ -41,6 +41,11 @@ router.post('/settings/system', authenticate, (req, res) => {
     if (config.auto_scan_interval !== undefined) {
       setupBackgroundScanner();
     }
+
+    // If deep ZIP scanning was disabled, purge any previously indexed virtual archive entries (#78)
+    if (config.scan_zip_archives !== undefined && String(config.scan_zip_archives) !== 'true' && String(config.scan_zip_archives) !== '1') {
+      run('DELETE FROM files WHERE is_archive_entry = 1');
+    }
     
     res.json({ success: true });
   } catch (e) {

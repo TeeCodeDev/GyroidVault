@@ -83,7 +83,12 @@
 
 ## ✅ Reeds Afgerond (Changelog)
 
-### v2.2.1 (Recent)
+### v2.2.2 (Recent)
+- [x] **Modeldetail Knoppenbalk & Gast-rechten (#80):** `.detail-header` flex-layout en `btn-secondary` stijl zodat `Download All (.zip)` op één lijn past zonder `Delete` buiten beeld te duwen, dubbele ZIP-knop verwijderd en verborgen voor niet-ingelogde gasten.
+- [x] **Welcome Popup Fix & Ko-fi Sidebar Kaart (#79):** Versie-check (`2.0.0` / `2.0.2`) en `localhost`-override opgelost zodat de *Welcome to GyroidVault* popup nooit meer bij elke refresh terugkomt, plus Ko-fi supportkaart toegevoegd linksonder boven het gebruikersprofiel.
+- [x] **Scanner Submappen (`stl files` / `Version X`) & Uitgeschakelde ZIP-scan Opschoning (#78):** Mappen met alléén documenten (`.txt`/`.pdf`/`.md`) worden niet meer als losse modellen aangemaakt, generieke model-submappen (`stl files`, `Version 1`, `Version 2`, `files`, `supported`, etc.) worden samengevoegd onder hun bovenliggende modelmap, en bij uitgeschakelde ZIP-scanning worden `is_archive_entry = 1` items direct gewist.
+
+### v2.2.1
 - [x] **Uitgebreide Zoekfunctie & Klikbare Taxonomie (#73):** Zoeken op tags, categorieën en collecties in zowel *All Models* als *Folder Explorer*, plus klikbare categorie- en tag-badges op modelkaarten en detailpagina.
 - [x] **Database Foreign Keys & Scanner Zelfherstel (#74):** Fix voor `sql.js` `db.export()` waarbij `PRAGMA foreign_keys` werd gereset, automatische opschoning van wees-bestanden (`files`) bij opstarten/sync, herstel van mappen met `0 files` en ondersteuning voor `.7z`/`.rar` archieven.
 - [x] **Printables ZIP64 Data Descriptor Streaming Fix (#77):** Fallback decompressor met CRC32-verificatie toegevoegd voor streaming ZIP-archieven met Bit 3 + 64-bit ZIP64 Data Descriptors zodat 3D previews en downloads van Printables-archieven foutloos werken.

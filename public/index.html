@@ -57,7 +57,7 @@
   <meta name="description" content="GyroidVault — Self-hosted 3D model management for 3D printing">
   <title>GyroidVault</title>
   <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/css/style.css?v=40">
+  <link rel="stylesheet" href="/css/style.css?v=52">
   
   <!-- Core 3D Engine (Local) -->
   <script src="/js/vendor/three.min.js"></script>
@@ -136,6 +136,18 @@
         <!-- 3D Printers Live Monitoring -->
         <div id="nav-printers-widget" class="sidebar-printers-section"></div>
 
+        <!-- Support on Ko-fi -->
+        <a href="https://ko-fi.com/D1D51ZGUNL" target="_blank" rel="noopener noreferrer" class="sidebar-kofi-card" title="Support GyroidVault on Ko-fi">
+          <div class="sidebar-kofi-icon">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/></svg>
+          </div>
+          <div class="sidebar-kofi-meta">
+            <div class="sidebar-kofi-title">Support on Ko-fi</div>
+            <div class="sidebar-kofi-sub">Buy the dev a coffee</div>
+          </div>
+          <svg class="sidebar-kofi-arrow" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+        </a>
+
         <!-- User Profile & Quick Actions -->
         <div class="sidebar-user-card" id="nav-user-section">
           <div class="sidebar-user-profile" onclick="App.handleUserProfileClick()" id="sidebar-profile-trigger">
@@ -195,7 +207,7 @@
       <footer class="app-footer">
         <div class="footer-content">
           <div class="footer-left">
-            GyroidVault <span id="app-version">v2.2.1</span>
+            GyroidVault <span id="app-version">v2.2.2</span>
           </div>
           <div class="footer-right">
             <button onclick="App.openWhatsNew()" class="footer-link" style="background:none;border:none;cursor:pointer;font-family:inherit;font-size:inherit;padding:0">
@@ -209,10 +221,6 @@
             <a href="https://github.com/TeeCodeDev/GyroidVault" target="_blank" rel="noopener noreferrer" class="footer-link">
               <svg height="14" viewBox="0 0 16 16" width="14" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"></path></svg>
               <span>GitHub</span>
-            </a>
-            <a href="https://ko-fi.com/D1D51ZGUNL" target="_blank" rel="noopener noreferrer" class="footer-link">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/></svg>
-              <span>Support</span>
             </a>
           </div>
         </div>
@@ -235,9 +243,9 @@
   <div class="toast-container" id="toast-container"></div>
 
   <!-- Scripts -->
-  <script src="/js/api.js?v=47"></script>
-  <script src="/js/components.js?v=47"></script>
-  <script src="/js/app.js?v=47"></script>
-  <script src="/js/viewer.js?v=47"></script>
+  <script src="/js/api.js?v=52"></script>
+  <script src="/js/components.js?v=52"></script>
+  <script src="/js/app.js?v=52"></script>
+  <script src="/js/viewer.js?v=52"></script>
 </body>
 </html>

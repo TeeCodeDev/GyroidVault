@@ -223,6 +223,9 @@ router.get('/:id/download', (req, res) => {
         return res.status(403).json({ error: 'Invalid or expired share link' });
       }
     } else {
+      if (!req.user) {
+        return res.status(401).json({ error: 'Authentication required to download model archives' });
+      }
       const privateProjects = all('SELECT p.id, p.user_id FROM projects p JOIN project_models pm ON p.id=pm.project_id WHERE pm.model_id=? AND p.visibility="private"', [id]);
       const publicProjects = all('SELECT p.id FROM projects p JOIN project_models pm ON p.id=pm.project_id WHERE pm.model_id=? AND p.visibility="public"', [id]);
       if (privateProjects.length > 0 && publicProjects.length === 0) {
@@ -740,8 +743,8 @@ router.post('/:id/files', authenticate, upload.array('files', 20), (req, res) =>
 
       uploaded.push({ id: r.lastId, model_id: id, filename: path.basename(finalDest), original_name: file.originalname, file_type: ft, file_size: file.size, metadata, library_path: finalDest, thumbnail: fileThumbnail });
 
-      // Inspect internal files in uploaded ZIP archive without full disk extraction
-      if (ft === 'zip') {
+      // Inspect internal files in uploaded ZIP archive without full disk extraction (when enabled, #78)
+      if (ft === 'zip' && getSettingBool('scan_zip_archives', true)) {
         try {
           const AdmZip = require('adm-zip');
           const zip = new AdmZip(finalDest);

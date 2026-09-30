@@ -225,6 +225,50 @@ async function runStaticAndUiChecks() {
     assert(missingHandlers.size === 0, `Missing App handlers: ${[...missingHandlers].join(', ')}`);
   });
 
+  await check('WhatsNew popup only triggers once and Detail Header CSS does not overflow button row (Issues #79 & #80 guard)', () => {
+    let openedCount = 0;
+    const origOpen = App.openWhatsNew;
+    App.openWhatsNew = function () {
+      openedCount++;
+      sandbox.localStorage.setItem('gv_last_seen_version', this.WHATS_NEW_VERSION || '2.0.2');
+    };
+    const origSetTimeout = sandbox.setTimeout;
+    sandbox.setTimeout = (fn) => { fn(); return 1; };
+
+    // Legacy '2.0.0' seen value should be recognized and NOT trigger popup
+    sandbox.localStorage.setItem('gv_last_seen_version', '2.0.0');
+    App.checkWhatsNew();
+    assert(openedCount === 0, 'Expected checkWhatsNew not to open when gv_last_seen_version is 2.0.0 (Issue #79)');
+    assert(sandbox.localStorage.getItem('gv_last_seen_version') === App.WHATS_NEW_VERSION, 'Expected 2.0.0 to upgrade to WHATS_NEW_VERSION');
+
+    // Fresh user: triggers once, then subsequent refreshes never trigger again
+    sandbox.localStorage.removeItem('gv_last_seen_version');
+    App.checkWhatsNew();
+    assert(openedCount === 1, 'Expected checkWhatsNew to open once for fresh user');
+    App.checkWhatsNew();
+    assert(openedCount === 1, 'Expected checkWhatsNew NOT to open on second refresh (Issue #79)');
+
+    sandbox.setTimeout = origSetTimeout;
+    App.openWhatsNew = origOpen;
+
+    // Guest vs Logged-in Download All (.zip) & no duplicate ZIP button check
+    const savedUser = App.currentUser;
+    App.currentUser = null;
+    const guestDetailHtml = UI.modelDetail(mockModel, false);
+    assert(!guestDetailHtml.includes('Download All (.zip)'), 'Guest user should NOT see Download All (.zip) button');
+    assert(!guestDetailHtml.includes('+ Log Print'), 'Guest user should NOT see + Log Print button');
+
+    App.currentUser = savedUser;
+    const authDetailHtml = UI.modelDetail(mockModel, false);
+    const dlMatches = authDetailHtml.split('/api/models/1/download');
+    assert(dlMatches.length - 1 === 1, `Expected exactly 1 model ZIP download button for logged-in user, found ${dlMatches.length - 1}`);
+
+        // Issue #80 CSS check
+    const cssContent = fs.readFileSync(path.join(ROOT_DIR, 'public/css/style.css'), 'utf8');
+    assert(!cssContent.includes('.detail-header{display:grid;grid-template-columns:minmax(0, 1fr) var(--detail-sidebar-width)'), 'Expected .detail-header not to constrain actions to --detail-sidebar-width (Issue #80)');
+    assert(cssContent.includes('.detail-actions .btn{white-space:nowrap'), 'Expected .detail-actions .btn to have white-space:nowrap (Issue #80)');
+  });
+
   await check('Format filter resets when changing categories or navigating without format param (Issue #76 guard)', () => {
     const appSrc = fs.readFileSync(path.join(ROOT_DIR, 'public/js/app.js'), 'utf8');
     assert(appSrc.includes("const activeFormat = params.format || 'all';"), 'renderModels must reset activeFormat to "all" when params.format is omitted');
@@ -763,6 +807,40 @@ async function runE2ETests() {
       assert(zStream.status === 200, `Expected 200 streaming Printables ZIP64 entry (Issue #77), got ${zStream.status}`);
       const zText = await zStream.text();
       assert(zText.includes('solid clip'), 'Streamed Printables ZIP64 STL did not match original');
+
+      // 5. Subfolders named "stl files" / "Version 1" / "Version 2" & doc-only folders + disabled ZIP scan cleanup (Issue #78 guard)
+      await apiReq('/api/settings/system', {
+        method: 'POST',
+        session: adminSession,
+        body: { scan_zip_archives: 'false' }
+      });
+
+      const standRoot = path.join(tmpLibDir, 'Blue Curved Stand');
+      fs.mkdirSync(path.join(standRoot, 'Version 1', 'stl files'), { recursive: true });
+      fs.mkdirSync(path.join(standRoot, 'Version 2', 'stl files'), { recursive: true });
+      fs.writeFileSync(path.join(standRoot, 'Version 1', 'stl files', 'stand_v1.stl'), stlContent, 'utf8');
+      fs.writeFileSync(path.join(standRoot, 'Version 2', 'readme.txt'), 'Print instructions', 'utf8');
+      fs.writeFileSync(path.join(standRoot, 'Version 2', 'changelog.pdf'), '%PDF-1.4', 'utf8');
+      fs.writeFileSync(path.join(standRoot, 'Version 2', 'stl files', 'stand_v2.stl'), stlContent, 'utf8');
+
+      const docsOnlyDir = path.join(tmpLibDir, 'Random Notes Folder');
+      fs.mkdirSync(docsOnlyDir, { recursive: true });
+      fs.writeFileSync(path.join(docsOnlyDir, 'notes.txt'), 'Just text notes, no 3D files', 'utf8');
+
+      await runScanAndWait();
+
+      const allScannedRes = await apiReq('/api/models?limit=100', { session: adminSession });
+      const allScannedModels = allScannedRes.data.models || [];
+      const bogusSubfolderModel = allScannedModels.find(m => ['stl files', 'Version 1', 'Version 2', 'Random Notes Folder'].includes(m.name));
+      assert(!bogusSubfolderModel, `Expected no standalone model named "${bogusSubfolderModel?.name}" (Issue #78)`);
+
+      const standModel = allScannedModels.find(m => m.name === 'Blue Curved Stand');
+      assert(standModel, 'Expected parent folder "Blue Curved Stand" to be indexed as a single model (Issue #78)');
+      assert(standModel.file_count === 4, `Expected "Blue Curved Stand" to have all 4 files from its Version/stl subfolders, got ${standModel.file_count}`);
+
+      const pDetailAfterDisable = await apiReq(`/api/models/${pModel.id}`, { session: adminSession });
+      const remainingArchiveEntries = (pDetailAfterDisable.data.files || []).filter(f => f.is_archive_entry === 1);
+      assert(remainingArchiveEntries.length === 0, `Expected 0 virtual archive entries after disabling scan_zip_archives, got ${remainingArchiveEntries.length} (Issue #78)`);
     });
 
     await check('Authorized Admin CAN delete models (single & bulk)', async () => {

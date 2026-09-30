@@ -792,8 +792,8 @@ const UI = {
           <div class="detail-meta">${cat} ${printed}</div>
         </div>
         <div class="detail-actions">
-          ${(model.files && model.files.length > 0) ? `
-          <a href="/api/models/${model.id}/download" class="btn btn-primary btn-sm" download title="Download all files as .zip" style="display:inline-flex;align-items:center;gap:5px;text-decoration:none">
+          ${(App.currentUser && model.files && model.files.length > 0) ? `
+          <a href="/api/models/${model.id}/download" class="btn btn-secondary btn-sm" download title="Download all files as .zip" style="display:inline-flex;align-items:center;gap:5px;text-decoration:none;white-space:nowrap">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
             Download All (.zip)
           </a>` : ''}
@@ -847,7 +847,7 @@ const UI = {
           <div class="glass-panel">
             <div class="panel-header">
               <div class="panel-title"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:6px"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>Print History</div>
-              <button class="btn btn-secondary btn-sm" onclick="App.showLogPrint(${model.id})">+ Log Print</button>
+              ${canEdit ? `<button class="btn btn-secondary btn-sm" onclick="App.showLogPrint(${model.id})">+ Log Print</button>` : ''}
             </div>
             <div class="panel-body">
               <div class="print-history-list">
@@ -870,7 +870,6 @@ const UI = {
                   </div>` : ''}
                 </div>
                 <div style="padding:12px 16px;display:flex;gap:8px;align-items:center">
-                  ${(model.files && model.files.length > 1) ? `<a href="/api/models/${model.id}/download" class="btn btn-secondary btn-xs" download style="display:inline-flex;align-items:center;gap:4px;text-decoration:none" title="Download all files as .zip"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>ZIP</a>` : ''}
                   ${canEdit ? `<button class="btn btn-primary btn-xs" onclick="App.showUploadFiles(${model.id})" style="display:inline-flex;align-items:center;gap:4px"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>Upload</button>` : ''}
                 </div>
               </div>

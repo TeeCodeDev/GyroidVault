@@ -93,27 +93,31 @@ const App = {
     this.checkWhatsNew();
   },
 
+  WHATS_NEW_VERSION: '2.0.2',
+
   checkWhatsNew() {
-    const CURRENT_VERSION = '2.0.2';
-    const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
     const seenVersion = localStorage.getItem('gv_last_seen_version');
-    
-    // During local testing on localhost, always show on page load so it can be tested repeatedly
-    // In production (Unraid/Docker/live), only show once until dismissed
-    if (isLocalhost || seenVersion !== CURRENT_VERSION) {
-      setTimeout(() => {
-        this.openWhatsNew();
-      }, 500);
+    // Recognize both '2.0.0' (saved by previous versions) and current WHATS_NEW_VERSION so it never repeats on refresh (#79)
+    if (seenVersion === '2.0.0' || seenVersion === this.WHATS_NEW_VERSION) {
+      if (seenVersion !== this.WHATS_NEW_VERSION) {
+        localStorage.setItem('gv_last_seen_version', this.WHATS_NEW_VERSION);
+      }
+      return;
     }
+    localStorage.setItem('gv_last_seen_version', this.WHATS_NEW_VERSION);
+    setTimeout(() => {
+      this.openWhatsNew();
+    }, 500);
   },
 
   async openWhatsNew() {
+    localStorage.setItem('gv_last_seen_version', this.WHATS_NEW_VERSION || '2.0.2');
     try {
       const res = await API.getReleaseNotes().catch(() => ({ notes: [] }));
       this.cachedReleaseNotes = res.notes || [];
-      this.openModal('Welcome to GyroidVault 2.0', UI.whatsNewModal('2.0.0', this.cachedReleaseNotes), 'modal-lg');
+      this.openModal('Welcome to GyroidVault 2.0', UI.whatsNewModal('2.2.1', this.cachedReleaseNotes), 'modal-lg');
     } catch (e) {
-      this.openModal('Welcome to GyroidVault 2.0', UI.whatsNewModal('2.0.0', []), 'modal-lg');
+      this.openModal('Welcome to GyroidVault 2.0', UI.whatsNewModal('2.2.1', []), 'modal-lg');
     }
   },
 
@@ -152,10 +156,7 @@ const App = {
   },
 
   dismissWhatsNew() {
-    const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-    if (!isLocalhost) {
-      localStorage.setItem('gv_last_seen_version', '2.0.0');
-    }
+    localStorage.setItem('gv_last_seen_version', this.WHATS_NEW_VERSION || '2.0.2');
     this.closeModal();
   },
 
