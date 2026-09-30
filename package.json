@@ -1,9 +1,10 @@
 {
   "name": "gyroid-vault",
-  "version": "2.2.0",
+  "version": "2.2.1",
   "description": "GyroidVault — Self-hosted 3D model management for 3D printing",
   "main": "server/index.js",
   "scripts": {
+    "test": "node tests/release-check.js",
     "start": "node server/index.js",
     "dev": "node --watch server/index.js",
     "seed:demo": "node scripts/seed-demo-data.js",

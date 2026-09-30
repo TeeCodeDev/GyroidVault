@@ -32,7 +32,8 @@ function extract3mfThumbnail(filePath, uploadsDir) {
       return null; // No thumbnail found in 3MF
     }
 
-    const imgData = thumbnailEntry.getData(); // Buffer of the image
+    const { getZipEntryBuffer } = require('./modelHelpers');
+      const imgData = getZipEntryBuffer(thumbnailEntry); // Buffer of the image
 
     if (!imgData || imgData.length === 0) return null;
 

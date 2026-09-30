@@ -575,13 +575,16 @@ const App = {
 
   // ─── Models List ──────────────────────────────────────────────────────
   async renderModels(params = {}) {
-    // check if we should show folder view instead
-    if (this.libraryViewMode === 'folder') {
+    // check if we should show folder view instead (only when no search/category/tag/format filter is active)
+    const hasActiveFilter = !!(params.search || params.category || params.tag || (params.format && params.format !== 'all') || params.user || params.printed || params.project_id);
+    if (this.libraryViewMode === 'folder' && !hasActiveFilter) {
       return this.renderBrowse(params.path || '');
     }
 
-    const activeFormat = params.format || this.currentFormatFilter || 'all';
+    // Reset format filter when navigating to a new category or route without format param (Issue #76)
+    const activeFormat = params.format || 'all';
     this.currentFormatFilter = activeFormat;
+    this.lastCategoryFilter = params.category || '';
     const toolbar = UI.toolbar(this.cache.categories, this.cache.tags, this.cache.users, activeFormat);
     this.el.innerHTML = `
       <div class="page-header">
@@ -591,7 +594,12 @@ const App = {
       <div id="models-grid"><div class="model-grid">${'<div class="model-card"><div class="model-card-thumb"><div class="skeleton" style="width:100%;height:100%"></div></div><div class="model-card-body"><div class="skeleton" style="width:70%;height:18px;margin-bottom:8px"></div><div class="skeleton" style="width:40%;height:14px"></div></div></div>'.repeat(6)}</div></div>`;
 
     // Restore filter values
-    if (params.search) document.getElementById('search-input').value = params.search;
+    if (params.search) {
+      const sInput = document.getElementById('search-input');
+      if (sInput) sInput.value = params.search;
+      const topInput = document.getElementById('topbar-search-input');
+      if (topInput && topInput.value !== params.search) topInput.value = params.search;
+    }
     if (params.category) document.getElementById('filter-category').value = params.category;
     if (params.tag) document.getElementById('filter-tag').value = params.tag;
     if (params.user) document.getElementById('filter-user').value = params.user;
@@ -1198,6 +1206,12 @@ const App = {
     const sort = document.getElementById('filter-sort')?.value;
     const limit = document.getElementById('filter-limit')?.value;
 
+    // Reset format filter when switching categories in the toolbar dropdown (Issue #76)
+    if ((category || '') !== (this.lastCategoryFilter || '')) {
+      this.currentFormatFilter = 'all';
+    }
+    this.lastCategoryFilter = category || '';
+
     if (search) params.set('search', search);
     if (category) params.set('category', category);
     if (tag) params.set('tag', tag);
@@ -1208,7 +1222,8 @@ const App = {
     if (limit && limit !== '24') params.set('limit', limit);
     params.set('page', '1');
 
-    if (this.libraryViewMode === 'folder') {
+    const hasActiveFilter = !!(search || category || tag || (this.currentFormatFilter && this.currentFormatFilter !== 'all') || user || printed);
+    if (this.libraryViewMode === 'folder' && !hasActiveFilter) {
       this.renderBrowse(this.currentBrowsePath);
     } else {
       window.location.hash = `/models?${params.toString()}`;

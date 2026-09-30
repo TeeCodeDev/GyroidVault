@@ -79,6 +79,7 @@ app.use((req, res, next) => {
     req.path.startsWith('/api/auth/') ||
     req.path === '/api/system/public-config' ||
     req.path.startsWith('/api/shares/') ||
+    (req.query && req.query.share && (req.path.startsWith('/api/files/') || /^\/api\/models\/\d+\/download$/.test(req.path))) ||
     req.path === '/api/system/updates' ||
     req.path === '/api/system/release-notes' ||
     req.path.startsWith('/js/') ||

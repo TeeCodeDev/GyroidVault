@@ -220,7 +220,7 @@ const UI = {
       ? '<span class="badge badge-printed">✓ Printed</span>'
       : '<span class="badge badge-not-printed">Not printed</span>';
     const cat = m.category_name
-      ? `<span class="badge badge-category" style="background:${m.category_color}20;color:${m.category_color};border:1px solid ${m.category_color}33">${m.category_name}</span>`
+      ? `<span class="badge badge-category" style="background:${m.category_color}20;color:${m.category_color};border:1px solid ${m.category_color}33;cursor:pointer" onclick="event.stopPropagation();App.navigate('/models?category=${m.category_id}')" title="Filter by category: ${this.escapeHtml(m.category_name)}">${m.category_name}</span>`
       : '';
     const canManage = App.currentUser && App.currentUser.role !== 'viewer';
     const canEdit = App.currentUser?.role === 'admin' || (canManage && m.user_id === App.currentUser?.id);
@@ -492,7 +492,7 @@ const UI = {
     const cat = model.category_name
       ? `<span class="badge badge-category" style="background:${model.category_color}20;color:${model.category_color};border:1px solid ${model.category_color}33">${model.category_name}</span>`
       : '';
-    const tags = (model.tags || []).map(t => `<span class="badge badge-tag">${t.name}</span>`).join('');
+    const tags = (model.tags || []).map(t => `<span class="badge badge-tag" style="cursor:pointer" onclick="App.navigate('/models?tag=${t.id}')" title="Filter by tag: ${this.escapeHtml(t.name)}">${t.name}</span>`).join('');
     const printed = model.has_printed
       ? '<span class="badge badge-printed">✓ Printed</span>'
       : '<span class="badge badge-not-printed">Not printed</span>';
@@ -792,6 +792,11 @@ const UI = {
           <div class="detail-meta">${cat} ${printed}</div>
         </div>
         <div class="detail-actions">
+          ${(model.files && model.files.length > 0) ? `
+          <a href="/api/models/${model.id}/download" class="btn btn-primary btn-sm" download title="Download all files as .zip" style="display:inline-flex;align-items:center;gap:5px;text-decoration:none">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Download All (.zip)
+          </a>` : ''}
           ${canEdit ? `
           <button class="btn btn-secondary btn-sm" onclick="App.showShareModal(${model.id})" title="Share Model">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
@@ -864,7 +869,8 @@ const UI = {
                     Documentation (${model.files?.filter(f => f.file_type === 'document').length || 0})
                   </div>` : ''}
                 </div>
-                <div style="padding:12px 16px">
+                <div style="padding:12px 16px;display:flex;gap:8px;align-items:center">
+                  ${(model.files && model.files.length > 1) ? `<a href="/api/models/${model.id}/download" class="btn btn-secondary btn-xs" download style="display:inline-flex;align-items:center;gap:4px;text-decoration:none" title="Download all files as .zip"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>ZIP</a>` : ''}
                   ${canEdit ? `<button class="btn btn-primary btn-xs" onclick="App.showUploadFiles(${model.id})" style="display:inline-flex;align-items:center;gap:4px"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>Upload</button>` : ''}
                 </div>
               </div>
@@ -1093,7 +1099,7 @@ const UI = {
       <div class="toolbar">
         <div class="search-box">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-          <input type="text" placeholder="Search models..." id="search-input" oninput="App.handleSearch(this.value)">
+          <input type="text" placeholder="Search models, tags, categories..." id="search-input" oninput="App.handleSearch(this.value)">
         </div>
         <select class="filter-select" id="filter-category" onchange="App.handleFilter()">
           <option value="">All Categories</option>${catOpts}
@@ -1726,7 +1732,7 @@ const UI = {
           </div>
           <div>
             <div class="glass-panel">
-              <div class="panel-header"><div class="panel-title"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:6px"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>Files</div></div>
+              <div class="panel-header" style="display:flex;justify-content:space-between;align-items:center"><div class="panel-title"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:6px"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>Files</div>${(model.files && model.files.length > 0) ? `<a href="/api/models/${model.id}/download${model.share_slug ? '?share=' + encodeURIComponent(model.share_slug) : ''}" class="btn btn-primary btn-xs" download style="display:inline-flex;align-items:center;gap:4px;text-decoration:none"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Download All (.zip)</a>` : ''}</div>
               <div class="panel-body no-pad">
                 ${model.files.map(f => `
                   <div class="file-item">

@@ -5,7 +5,7 @@ const db = require('../database');
 const { parseGcodeMetadata } = require('./gcode');
 const AdmZip = require('adm-zip');
 
-const SUPPORTED_EXTENSIONS = ['.stl', '.gcode', '.bgcode', '.3mf', '.step', '.stp', '.f3d', '.scad', '.obj', '.pdf', '.txt', '.md', '.zip'];
+const SUPPORTED_EXTENSIONS = ['.stl', '.gcode', '.bgcode', '.3mf', '.step', '.stp', '.f3d', '.scad', '.obj', '.pdf', '.txt', '.md', '.zip', '.7z', '.rar'];
 const IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.webp', '.gif'];
 
 function getFileType(filename) {
@@ -17,7 +17,7 @@ function getFileType(filename) {
   if (ext === '.f3d') return 'f3d';
   if (ext === '.scad') return 'scad';
   if (ext === '.obj') return 'obj';
-  if (ext === '.zip') return 'zip';
+  if (ext === '.zip' || ext === '.7z' || ext === '.rar') return 'zip';
   if (ext === '.pdf' || ext === '.txt' || ext === '.md') return 'document';
   if (IMAGE_EXTENSIONS.includes(ext)) return 'image';
   return 'other';
@@ -141,12 +141,17 @@ async function scanLibrary(libraryPath) {
         if (ext === '.zip') {
           // In-place ZIP Archive inspection
           try {
-            const existingZip = db.get('SELECT id FROM files WHERE library_path = ?', [filePath]);
+            const existingZip = db.get('SELECT id, model_id FROM files WHERE library_path = ?', [filePath]);
             const stat = await fsPromises.stat(filePath);
 
             if (!existingZip) {
               db.run('INSERT INTO files (model_id, filename, original_name, file_type, file_size, library_path, is_archive_entry) VALUES (?, ?, ?, ?, ?, ?, ?)',
                 [model.id, filename, filename, 'zip', stat.size, filePath, 0], true);
+              results.filesAdded++;
+              processedSinceSave++;
+              scanStatus.filesAdded = results.filesAdded;
+            } else if (existingZip.model_id !== model.id) {
+              db.run('UPDATE files SET model_id = ?, file_size = ? WHERE id = ?', [model.id, stat.size, existingZip.id], true);
               results.filesAdded++;
               processedSinceSave++;
               scanStatus.filesAdded = results.filesAdded;
@@ -175,7 +180,7 @@ async function scanLibrary(libraryPath) {
               const entryExt = path.extname(entry.entryName).toLowerCase();
               if (SUPPORTED_EXTENSIONS.includes(entryExt) || IMAGE_EXTENSIONS.includes(entryExt)) {
                 const entryVirtualPath = filePath + '::' + entry.entryName;
-                const existingEntry = db.get('SELECT id FROM files WHERE library_path = ?', [entryVirtualPath]);
+                const existingEntry = db.get('SELECT id, model_id, thumbnail FROM files WHERE library_path = ?', [entryVirtualPath]);
                 if (!existingEntry) {
                   const entryFt = getFileType(entry.name);
                   let entryThumb = null;
@@ -186,7 +191,8 @@ async function scanLibrary(libraryPath) {
                       const { UPLOADS_DIR } = require('../database');
                       const thumbFilename = `thumb_${Date.now()}_${path.basename(entry.entryName)}`;
                       const outPath = path.join(UPLOADS_DIR, thumbFilename);
-                      fs.writeFileSync(outPath, entry.getData());
+                      const { getZipEntryBuffer } = require('./modelHelpers');
+                      fs.writeFileSync(outPath, getZipEntryBuffer(entry));
                       entryThumb = thumbFilename;
                       db.run('UPDATE models SET thumbnail = ? WHERE id = ?', [thumbFilename, model.id], true);
                       model.thumbnail = thumbFilename;
@@ -195,6 +201,15 @@ async function scanLibrary(libraryPath) {
 
                   db.run('INSERT INTO files (model_id, filename, original_name, file_type, file_size, library_path, is_archive_entry, archive_entry_path, thumbnail) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
                     [model.id, entry.name, entry.entryName, entryFt, entry.header.size, entryVirtualPath, 1, entry.entryName, entryThumb], true);
+                  results.filesAdded++;
+                  processedSinceSave++;
+                  scanStatus.filesAdded = results.filesAdded;
+                } else if (existingEntry.model_id !== model.id) {
+                  db.run('UPDATE files SET model_id = ? WHERE id = ?', [model.id, existingEntry.id], true);
+                  if (existingEntry.thumbnail && !model.thumbnail) {
+                    db.run('UPDATE models SET thumbnail = ? WHERE id = ?', [existingEntry.thumbnail, model.id], true);
+                    model.thumbnail = existingEntry.thumbnail;
+                  }
                   results.filesAdded++;
                   processedSinceSave++;
                   scanStatus.filesAdded = results.filesAdded;
@@ -214,7 +229,7 @@ async function scanLibrary(libraryPath) {
           } catch(e) { continue; }
 
           const ft = getFileType(filename);
-          const existingFile = db.get('SELECT id FROM files WHERE library_path = ?', [filePath]);
+          const existingFile = db.get('SELECT id, model_id, thumbnail FROM files WHERE library_path = ?', [filePath]);
           
           if (!existingFile) {
             let metadata = null;
@@ -271,7 +286,21 @@ async function scanLibrary(libraryPath) {
             results.filesAdded++;
             processedSinceSave++;
             scanStatus.filesAdded = results.filesAdded;
+          } else if (existingFile.model_id !== model.id) {
+            db.run('UPDATE files SET model_id = ?, file_size = ? WHERE id = ?', [model.id, stat.size, existingFile.id], true);
+            const thumbToRestore = existingFile.thumbnail || (ft === 'image' ? filename : null);
+            if (thumbToRestore && !model.thumbnail) {
+              db.run('UPDATE models SET thumbnail = ? WHERE id = ?', [thumbToRestore, model.id], true);
+              model.thumbnail = thumbToRestore;
+            }
+            results.filesAdded++;
+            processedSinceSave++;
+            scanStatus.filesAdded = results.filesAdded;
           } else {
+            if (ft === 'image' && !model.thumbnail) {
+              db.run('UPDATE models SET thumbnail = ? WHERE id = ?', [filename, model.id], true);
+              model.thumbnail = filename;
+            }
             results.skipped++;
             scanStatus.skipped = results.skipped;
           }

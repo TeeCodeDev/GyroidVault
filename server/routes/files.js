@@ -9,7 +9,7 @@ const { authenticate } = require('../middleware/auth');
 const { heavyLimiter } = require('../middleware/rateLimit');
 const { upload, getFileType } = require('../middleware/upload');
 const { validatePathConfinement } = require('../middleware/security');
-const { getSettingBool } = require('../utils/modelHelpers');
+const { getSettingBool, getZipEntryBuffer } = require('../utils/modelHelpers');
 
 // ─── GET /api/files/:id/stream ────────────────────────────────────────────────
 router.get('/:id/stream', (req, res, next) => {
@@ -66,7 +66,7 @@ router.get('/:id/stream', (req, res, next) => {
 
         res.setHeader('Content-Type', contentType);
         res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(file.filename)}"`);
-        return res.send(entry.getData());
+        return res.send(getZipEntryBuffer(entry));
       }
 
       if (file.library_path && fs.existsSync(file.library_path)) {
@@ -119,6 +119,20 @@ router.get('/:id/download/:filename?', heavyLimiter, (req, res, next) => {
         }
       }
 
+      if (file.is_archive_entry && file.library_path && file.library_path.includes('::')) {
+        const [zipPath, entryPath] = file.library_path.split('::');
+        const confinedZip = validatePathConfinement(LIBRARY_PATH, path.relative(LIBRARY_PATH, zipPath));
+        if (!confinedZip || !fs.existsSync(confinedZip)) return res.status(404).json({ error: 'Archive file not found' });
+        const AdmZip = require('adm-zip');
+        const zip = new AdmZip(confinedZip);
+        const entry = zip.getEntry(entryPath);
+        if (!entry) return res.status(404).json({ error: 'File not found in archive' });
+        const data = getZipEntryBuffer(entry);
+        res.setHeader('Content-Type', 'application/octet-stream');
+        res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(file.filename)}"`);
+        return res.send(data);
+      }
+
       const p = file.library_path || path.join(UPLOADS_DIR, file.filename);
       if (!fs.existsSync(p)) return res.status(404).json({ error: 'File not found on disk' });
 
@@ -168,22 +182,41 @@ router.get('/:id/3mf/:filename?', heavyLimiter, (req, res) => {
         return res.status(415).json({ error: 'Only STL and 3MF files can be served as 3MF' });
       }
 
-      const p = file.library_path || path.join(UPLOADS_DIR, file.filename);
-      if (!fs.existsSync(p)) return res.status(404).json({ error: 'File not found on disk' });
-
-      const baseDir = file.library_path ? LIBRARY_PATH : UPLOADS_DIR;
-      const confined = validatePathConfinement(baseDir, path.relative(baseDir, p));
-      if (!confined) return res.status(403).json({ error: 'Access denied' });
-
       const name = String(file.original_name || file.filename).replace(/\.[^.]+$/, '').replace(/[/\\?%*:|"<>]/g, '_');
-      res.setHeader('Content-Type', 'model/3mf');
-      if (file.file_type === '3mf') return res.download(confined, `${name}.3mf`);
+      let rawBuffer = null;
 
-      if (fs.statSync(confined).size > 300 * 1024 * 1024) {
-        return res.status(413).json({ error: 'File too large to convert to 3MF' });
+      if (file.is_archive_entry && file.library_path && file.library_path.includes('::')) {
+        const [zipPath, entryPath] = file.library_path.split('::');
+        const confinedZip = validatePathConfinement(LIBRARY_PATH, path.relative(LIBRARY_PATH, zipPath));
+        if (!confinedZip || !fs.existsSync(confinedZip)) return res.status(404).json({ error: 'Archive file not found' });
+        const AdmZip = require('adm-zip');
+        const zip = new AdmZip(confinedZip);
+        const entry = zip.getEntry(entryPath);
+        if (!entry) return res.status(404).json({ error: 'File not found in archive' });
+        rawBuffer = getZipEntryBuffer(entry);
+        res.setHeader('Content-Type', 'model/3mf');
+        if (file.file_type === '3mf') {
+          res.setHeader('Content-Disposition', `attachment; filename="${name}.3mf"`);
+          return res.send(rawBuffer);
+        }
+      } else {
+        const p = file.library_path || path.join(UPLOADS_DIR, file.filename);
+        if (!fs.existsSync(p)) return res.status(404).json({ error: 'File not found on disk' });
+
+        const baseDir = file.library_path ? LIBRARY_PATH : UPLOADS_DIR;
+        const confined = validatePathConfinement(baseDir, path.relative(baseDir, p));
+        if (!confined) return res.status(403).json({ error: 'Access denied' });
+
+        res.setHeader('Content-Type', 'model/3mf');
+        if (file.file_type === '3mf') return res.download(confined, `${name}.3mf`);
+
+        if (fs.statSync(confined).size > 300 * 1024 * 1024) {
+          return res.status(413).json({ error: 'File too large to convert to 3MF' });
+        }
+        rawBuffer = fs.readFileSync(confined);
       }
 
-      const mesh = stlToMesh(fs.readFileSync(confined));
+      const mesh = stlToMesh(rawBuffer);
       if (!mesh.tris.length) return res.status(422).json({ error: 'No triangles found in STL' });
 
       const buffer = meshTo3mf(mesh);

@@ -47,6 +47,9 @@ async function syncLibraryWithDisk() {
       await new Promise(resolve => setImmediate(resolve)); // yield to event loop
     }
     
+    // Cleanup any orphaned file rows whose model no longer exists (#74)
+    run('DELETE FROM files WHERE model_id NOT IN (SELECT id FROM models)', [], true);
+
     // Cleanup empty models to prevent ghost entries
     const emptyModels = all(`
       SELECT m.id, m.name FROM models m 

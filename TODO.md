@@ -83,7 +83,15 @@
 
 ## ✅ Reeds Afgerond (Changelog)
 
-### v2.2.0 (Recent)
+### v2.2.1 (Recent)
+- [x] **Uitgebreide Zoekfunctie & Klikbare Taxonomie (#73):** Zoeken op tags, categorieën en collecties in zowel *All Models* als *Folder Explorer*, plus klikbare categorie- en tag-badges op modelkaarten en detailpagina.
+- [x] **Database Foreign Keys & Scanner Zelfherstel (#74):** Fix voor `sql.js` `db.export()` waarbij `PRAGMA foreign_keys` werd gereset, automatische opschoning van wees-bestanden (`files`) bij opstarten/sync, herstel van mappen met `0 files` en ondersteuning voor `.7z`/`.rar` archieven.
+- [x] **Printables ZIP64 Data Descriptor Streaming Fix (#77):** Fallback decompressor met CRC32-verificatie toegevoegd voor streaming ZIP-archieven met Bit 3 + 64-bit ZIP64 Data Descriptors zodat 3D previews en downloads van Printables-archieven foutloos werken.
+- [x] **Download All (.zip) op Modeldetail (#75):** Nieuwe `GET /api/models/:id/download` endpoint en *Download All (.zip)* knop op de modeldetailpagina en publieke deellinks.
+- [x] **Automatische Reset van Formaat-Filter (#76):** Het formaat-filter springt automatisch terug naar *All* bij het wisselen van categorie via de sidebar of toolbar.
+- [x] **Geautomatiseerde Pre-Release Testsuite (`npm test`):** 22 integratie-, RBAC/security-, template- en UI-handlertests in `tests/release-check.js` gekoppeld aan GitHub Actions (`docker-publish.yml`).
+
+### v2.2.0
 - [x] **Snelkeuze Formaat-Pills & Klikbare Badges:** Formaat-filterknoppen (All, STL, 3MF, STEP, G-Code, OBJ) en live bibliotheekteller in de toolbar + klikbare formaat-badges op modelkaarten.
 - [x] **Bulk Categorie Toewijzing:** Multi-select *Category* knop toegevoegd aan de zwevende actiebalk in zowel *All Models* als *Folder Explorer* (Browse).
 - [x] **ZIP Archief Toggle Fix (#70):** Ontbrekende .toggle-switch span toegevoegd aan *Scan & Index ZIP Archives* in General Settings, inclusief directe auto-save met toast-bevestiging en bescherming van Security-toggles.

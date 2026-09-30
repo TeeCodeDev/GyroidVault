@@ -2,9 +2,7 @@ const initSqlJs = require('sql.js');
 const path = require('path');
 const fs = require('fs');
 
-const DATA_DIR = path.join(__dirname, '..', 'data');
-const DB_PATH = path.join(DATA_DIR, 'gyroidvault.db');
-const UPLOADS_DIR = path.join(DATA_DIR, 'uploads');
+const { DATA_DIR, DB_PATH, UPLOADS_DIR } = require('./config');
 
 // Ensure directories exist
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -22,6 +20,7 @@ function saveDb(sync = false) {
   if (sync) {
     try {
       const data = db.export();
+      db.run('PRAGMA foreign_keys = ON');
       fs.writeFileSync(DB_PATH, Buffer.from(data));
       console.log('✓ Database written synchronously (shutdown).');
     } catch (err) {
@@ -40,6 +39,7 @@ function saveDb(sync = false) {
     isSaving = true;
     try {
       const data = db.export();
+      db.run('PRAGMA foreign_keys = ON');
       fs.writeFile(DB_PATH, Buffer.from(data), (err) => {
         isSaving = false;
         if (err) console.error('CRITICAL: Failed to write database asynchronously:', err);
@@ -315,6 +315,13 @@ async function initDatabase() {
     db.run('CREATE INDEX IF NOT EXISTS idx_files_file_size ON files(file_size)');
     db.run('CREATE INDEX IF NOT EXISTS idx_files_thumbnail ON files(thumbnail)');
     db.run('CREATE INDEX IF NOT EXISTS idx_models_name ON models(name)');
+
+    // Self-heal any orphaned rows created when sql.js db.export() reset PRAGMA foreign_keys (#74)
+    db.run('DELETE FROM files WHERE model_id NOT IN (SELECT id FROM models)');
+    db.run('DELETE FROM model_tags WHERE model_id NOT IN (SELECT id FROM models) OR tag_id NOT IN (SELECT id FROM tags)');
+    db.run('DELETE FROM project_models WHERE model_id NOT IN (SELECT id FROM models) OR project_id NOT IN (SELECT id FROM projects)');
+    db.run('DELETE FROM print_history WHERE model_id NOT IN (SELECT id FROM models)');
+    db.run('DELETE FROM shares WHERE model_id NOT IN (SELECT id FROM models)');
   } catch (e) { console.error('Migration failed:', e); }
 
   // ─── Seed Data (One-time only on initial setup) ───────────────────────

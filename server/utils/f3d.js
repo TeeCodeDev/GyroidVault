@@ -31,7 +31,8 @@ function extractF3dThumbnail(filePath, uploadsDir) {
       return null; // No preview image embedded in the F3D
     }
 
-    const imgData = thumbnailEntry.getData(); // Buffer of the image
+    const { getZipEntryBuffer } = require('./modelHelpers');
+      const imgData = getZipEntryBuffer(thumbnailEntry); // Buffer of the image
 
     if (!imgData || imgData.length === 0) return null;
 

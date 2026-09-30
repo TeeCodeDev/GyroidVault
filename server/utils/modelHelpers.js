@@ -1,3 +1,4 @@
+const zlib = require('zlib');
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
@@ -75,6 +76,12 @@ function deleteModelInternal(id, deleteDisk = false) {
       }
     } catch (err) {}
   }
+  // Explicitly remove child records in addition to FK cascade (#74)
+  run('DELETE FROM files WHERE model_id=?', [id], true);
+  run('DELETE FROM model_tags WHERE model_id=?', [id], true);
+  run('DELETE FROM project_models WHERE model_id=?', [id], true);
+  run('DELETE FROM print_history WHERE model_id=?', [id], true);
+  run('DELETE FROM shares WHERE model_id=?', [id], true);
   run('DELETE FROM models WHERE id=?', [id]);
   return true;
 }
@@ -112,7 +119,38 @@ function hashFileStream(filePath) {
   });
 }
 
+
+/**
+ * Safely extracts an AdmZip entry buffer, falling back to raw zlib inflate + central directory
+ * CRC32 check when streaming ZIP64 data descriptors cause ADM-ZIP DESCRIPTOR_FAULTY (#77).
+ */
+function getZipEntryBuffer(entry) {
+  try {
+    return entry.getData();
+  } catch (err) {
+    const compressed = entry.getCompressedData();
+    const method = entry.header ? entry.header.method : 8;
+    let out;
+    if (method === 0) {
+      out = Buffer.from(compressed);
+    } else if (method === 8) {
+      out = zlib.inflateRawSync(compressed);
+    } else {
+      throw err;
+    }
+    if (entry.header && entry.header.crc && typeof zlib.crc32 === 'function') {
+      const actualCrc = zlib.crc32(out) >>> 0;
+      const expectedCrc = entry.header.crc >>> 0;
+      if (actualCrc !== expectedCrc) {
+        throw new Error('ZIP entry CRC32 mismatch');
+      }
+    }
+    return out;
+  }
+}
+
 module.exports = {
+  getZipEntryBuffer,
   getFileUrl,
   getThumbUrl,
   deleteModelInternal,

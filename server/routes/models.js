@@ -8,7 +8,7 @@ const { LIBRARY_PATH, UPLOADS_DIR } = require('../config');
 const { authenticate, requireUploader } = require('../middleware/auth');
 const { upload, getFileType } = require('../middleware/upload');
 const { validatePathConfinement, safeUrl } = require('../middleware/security');
-const { getFileUrl, getThumbUrl, deleteModelInternal } = require('../utils/modelHelpers');
+const { getFileUrl, getThumbUrl, deleteModelInternal, getZipEntryBuffer } = require('../utils/modelHelpers');
 
 // ─── GET /api/models ──────────────────────────────────────────────────────────
 router.get('/', (req, res) => {
@@ -30,7 +30,17 @@ router.get('/', (req, res) => {
       conds.push("m.parent_id IS NULL");
     }
 
-    if (search) { conds.push("(m.name LIKE ? OR m.description LIKE ?)"); params.push(`%${search}%`, `%${search}%`); }
+    if (search) {
+      const s = `%${search}%`;
+      conds.push(`(
+        m.name LIKE ?
+        OR m.description LIKE ?
+        OR m.category_id IN (SELECT id FROM categories WHERE name LIKE ?)
+        OR m.id IN (SELECT mt.model_id FROM model_tags mt JOIN tags t ON mt.tag_id = t.id WHERE t.name LIKE ?)
+        OR m.id IN (SELECT pm.model_id FROM project_models pm JOIN projects p ON pm.project_id = p.id WHERE p.name LIKE ?)
+      )`);
+      params.push(s, s, s, s, s);
+    }
     if (category) { conds.push("m.category_id=?"); params.push(Number(category)); }
     if (tag) { conds.push("m.id IN (SELECT model_id FROM model_tags WHERE tag_id=?)"); params.push(Number(tag)); }
     if (format && format !== 'all') {
@@ -199,6 +209,89 @@ router.get('/:id', (req, res) => {
 });
 
 // ─── PUT /api/models/:id/preview-file ─────────────────────────────────────────
+// ??? GET /api/models/:id/download (Issue #75) ?????????????????????????????????
+router.get('/:id/download', (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const model = get('SELECT * FROM models WHERE id=?', [id]);
+    if (!model) return res.status(404).json({ error: 'Model not found' });
+
+    const shareSlug = req.query.share;
+    if (shareSlug) {
+      const share = get("SELECT * FROM shares WHERE id=? AND (expires_at IS NULL OR expires_at > datetime('now'))", [shareSlug]);
+      if (!share || share.model_id !== id) {
+        return res.status(403).json({ error: 'Invalid or expired share link' });
+      }
+    } else {
+      const privateProjects = all('SELECT p.id, p.user_id FROM projects p JOIN project_models pm ON p.id=pm.project_id WHERE pm.model_id=? AND p.visibility="private"', [id]);
+      const publicProjects = all('SELECT p.id FROM projects p JOIN project_models pm ON p.id=pm.project_id WHERE pm.model_id=? AND p.visibility="public"', [id]);
+      if (privateProjects.length > 0 && publicProjects.length === 0) {
+        if (!req.user || (req.user.role !== 'admin' && !privateProjects.some(p => p.user_id === req.user.id) && model.user_id !== req.user.id)) {
+          return res.status(403).json({ error: 'Access denied to private model' });
+        }
+      }
+    }
+
+    const files = all('SELECT * FROM files WHERE model_id=? ORDER BY uploaded_at ASC', [id]);
+    if (!files.length) return res.status(400).json({ error: 'No files in this model to download' });
+
+    const AdmZip = require('adm-zip');
+    const zip = new AdmZip();
+    const physicalZipPaths = new Set(
+      files.filter(f => !f.is_archive_entry && f.file_type === 'zip' && f.library_path).map(f => f.library_path)
+    );
+
+    let addedCount = 0;
+    for (const file of files) {
+      if (file.is_archive_entry && file.library_path && file.library_path.includes('::')) {
+        const [zipPath, entryPath] = file.library_path.split('::');
+        if (physicalZipPaths.has(zipPath)) continue;
+        const confinedZip = validatePathConfinement(LIBRARY_PATH, path.relative(LIBRARY_PATH, zipPath));
+        if (confinedZip && fs.existsSync(confinedZip)) {
+          try {
+            const srcZip = new AdmZip(confinedZip);
+            const entry = srcZip.getEntry(entryPath);
+            if (entry) {
+              const entryName = (file.archive_entry_path || file.original_name || file.filename).replace(/^[/\\]+/, '');
+              zip.addFile(entryName, getZipEntryBuffer(entry));
+              addedCount++;
+            }
+          } catch (e) {}
+        }
+        continue;
+      }
+
+      let filePath = null;
+      if (file.library_path && fs.existsSync(file.library_path)) {
+        filePath = validatePathConfinement(LIBRARY_PATH, path.relative(LIBRARY_PATH, file.library_path));
+      } else if (file.filename) {
+        const upCandidate = path.join(UPLOADS_DIR, file.filename);
+        if (fs.existsSync(upCandidate)) {
+          filePath = validatePathConfinement(UPLOADS_DIR, path.relative(UPLOADS_DIR, upCandidate));
+        }
+      }
+      if (filePath) {
+        zip.addLocalFile(filePath, '', file.original_name || file.filename);
+        addedCount++;
+      }
+    }
+
+    if (addedCount === 0) {
+      return res.status(404).json({ error: 'No physical files found on disk for this model' });
+    }
+
+    const zipBuffer = zip.toBuffer();
+    const safeName = (model.name || 'model').replace(/[/\\?%*:|"<>]/g, '_');
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(safeName)}.zip"`);
+    res.setHeader('Content-Length', zipBuffer.length);
+    res.send(zipBuffer);
+  } catch (e) {
+    console.error('Error creating model zip:', e);
+    res.status(500).json({ error: 'Failed to create model zip' });
+  }
+});
+
 router.put('/:id/preview-file', authenticate, (req, res) => {
   try {
     const id = Number(req.params.id);
@@ -375,8 +468,10 @@ router.post('/', authenticate, requireUploader, (req, res) => {
       for (const t of tags) {
         let tagId = t;
         if (typeof t === 'string') {
-          run('INSERT OR IGNORE INTO tags (name) VALUES (?)', [t]);
-          tagId = get('SELECT id FROM tags WHERE name=?', [t]).id;
+          const cleanTag = t.startsWith('NEW:') ? t.substring(4).trim() : t.trim();
+          if (!cleanTag) continue;
+          run('INSERT OR IGNORE INTO tags (name) VALUES (?)', [cleanTag]);
+          tagId = get('SELECT id FROM tags WHERE name=?', [cleanTag]).id;
         }
         run('INSERT OR IGNORE INTO model_tags (model_id,tag_id) VALUES (?,?)', [r.lastId, tagId]); 
       }
@@ -415,9 +510,11 @@ router.put('/:id', authenticate, (req, res) => {
         for (const t of tags) {
           let tagId = t;
           if (typeof t === 'string') {
-            run('INSERT OR IGNORE INTO tags (name) VALUES (?)', [t]);
-            tagId = get('SELECT id FROM tags WHERE name=?', [t]).id;
-          }
+          const cleanTag = t.startsWith('NEW:') ? t.substring(4).trim() : t.trim();
+          if (!cleanTag) continue;
+          run('INSERT OR IGNORE INTO tags (name) VALUES (?)', [cleanTag]);
+          tagId = get('SELECT id FROM tags WHERE name=?', [cleanTag]).id;
+        }
           run('INSERT OR IGNORE INTO model_tags (model_id,tag_id) VALUES (?,?)', [id, tagId]);
         }
       }
@@ -476,12 +573,18 @@ router.post('/bulk-update', authenticate, (req, res) => {
       }
 
       if (add_tags && Array.isArray(add_tags)) {
-        for (const t of add_tags) {
+        for (const rawTag of add_tags) {
+          if (!rawTag) continue;
+          const t = typeof rawTag === 'string' ? (rawTag.startsWith('NEW:') ? rawTag.substring(4).trim() : rawTag.trim()) : rawTag;
           if (!t) continue;
-          run('INSERT OR IGNORE INTO tags (name) VALUES (?)', [t]);
-          const tagRow = get('SELECT id FROM tags WHERE name=?', [t]);
-          if (tagRow) {
-            run('INSERT OR IGNORE INTO model_tags (model_id,tag_id) VALUES (?,?)', [id, tagRow.id]);
+          if (typeof t === 'number') {
+            run('INSERT OR IGNORE INTO model_tags (model_id,tag_id) VALUES (?,?)', [id, t]);
+          } else {
+            run('INSERT OR IGNORE INTO tags (name) VALUES (?)', [t]);
+            const tagRow = get('SELECT id FROM tags WHERE name=?', [t]);
+            if (tagRow) {
+              run('INSERT OR IGNORE INTO model_tags (model_id,tag_id) VALUES (?,?)', [id, tagRow.id]);
+            }
           }
         }
       }
@@ -502,8 +605,10 @@ router.post('/bulk-update', authenticate, (req, res) => {
           for (const t of tags) {
             let tagId = t;
             if (typeof t === 'string') {
-              run('INSERT OR IGNORE INTO tags (name) VALUES (?)', [t]);
-              const tagRow = get('SELECT id FROM tags WHERE name=?', [t]);
+              const cleanTag = t.startsWith('NEW:') ? t.substring(4).trim() : t.trim();
+              if (!cleanTag) continue;
+              run('INSERT OR IGNORE INTO tags (name) VALUES (?)', [cleanTag]);
+              const tagRow = get('SELECT id FROM tags WHERE name=?', [cleanTag]);
               tagId = tagRow ? tagRow.id : null;
             }
             if (tagId) {
@@ -654,7 +759,7 @@ router.post('/:id/files', authenticate, upload.array('files', 20), (req, res) =>
                 try {
                   const thumbFilename = `thumb_${Date.now()}_${path.basename(entry.entryName)}`;
                   const outPath = path.join(UPLOADS_DIR, thumbFilename);
-                  fs.writeFileSync(outPath, entry.getData());
+                  fs.writeFileSync(outPath, getZipEntryBuffer(entry));
                   entryThumb = thumbFilename;
                   run('UPDATE models SET thumbnail=? WHERE id=?', [thumbFilename, id]);
                   model.thumbnail = thumbFilename;

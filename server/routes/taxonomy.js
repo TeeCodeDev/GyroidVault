@@ -151,10 +151,14 @@ router.get('/shares/:slug', (req, res) => {
     if (!share) return res.status(404).json({ error: 'Share not found or expired' });
     
     const model = get('SELECT m.*,c.name as category_name,c.color as category_color FROM models m LEFT JOIN categories c ON m.category_id=c.id WHERE m.id=?', [share.model_id]);
-    model.files = all('SELECT * FROM files WHERE model_id=? ORDER BY uploaded_at DESC', [model.id]).map(f => ({
-      ...f,
-      url: getFileUrl(f)
-    }));
+    model.share_slug = req.params.slug;
+    model.files = all('SELECT * FROM files WHERE model_id=? ORDER BY uploaded_at DESC', [model.id]).map(f => {
+      const base = getFileUrl(f);
+      return {
+        ...f,
+        url: base + (base.includes('?') ? '&' : '?') + 'share=' + encodeURIComponent(req.params.slug)
+      };
+    });
     res.json(model);
   } catch (e) {
     console.error(e);

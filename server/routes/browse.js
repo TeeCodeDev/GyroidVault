@@ -415,6 +415,17 @@ router.get('/search', authenticate, (req, res) => {
     const thumbMap = new Map();
     for (const row of dbThumbs) thumbMap.set(row.library_path, row.thumbnail);
 
+    const matchingModels = all(`
+      SELECT library_path FROM models m
+      WHERE library_path IS NOT NULL AND (
+        LOWER(m.name) LIKE ?
+        OR LOWER(m.description) LIKE ?
+        OR m.category_id IN (SELECT id FROM categories WHERE LOWER(name) LIKE ?)
+        OR m.id IN (SELECT mt.model_id FROM model_tags mt JOIN tags t ON mt.tag_id = t.id WHERE LOWER(t.name) LIKE ?)
+      )
+    `, [`%${q}%`, `%${q}%`, `%${q}%`, `%${q}%`]);
+    const matchingModelPaths = new Set(matchingModels.map(r => r.library_path));
+
     const dbFilesList = all('SELECT id, model_id, library_path, metadata, thumbnail FROM files WHERE library_path IS NOT NULL');
     const dbFileMap = new Map();
     for (const row of dbFilesList) dbFileMap.set(row.library_path, row);
@@ -436,7 +447,7 @@ router.get('/search', authenticate, (req, res) => {
         const childFull = path.join(dir, item.name);
         
         if (item.isDirectory()) {
-          if (item.name.toLowerCase().includes(q)) {
+          if (item.name.toLowerCase().includes(q) || matchingModelPaths.has(childFull)) {
             let itemCount = 0;
             try { itemCount = fs.readdirSync(childFull).filter(f => !f.startsWith('.')).length; } catch(e){}
             let folderThumbs = [];
