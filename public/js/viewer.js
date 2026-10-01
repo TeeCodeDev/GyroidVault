@@ -29,14 +29,15 @@ const Viewer = {
         return;
       }
       let settled = false;
+      let timer = null;
       const finish = (fn, arg) => {
         if (settled) return;
         settled = true;
-        clearTimeout(timer);
+        if (timer) clearTimeout(timer);
         worker.terminate();
         fn(arg);
       };
-      const timer = setTimeout(
+      timer = setTimeout(
         () => finish(reject, new Error('STEP import timed out — the file may be too complex to display')),
         120000
       );
@@ -660,6 +661,7 @@ const Viewer = {
     };
 
     // Render Part(s) Function
+    let viewer = null;
     const renderPartSelection = async (selection) => {
       // Clean previous object
       if (targetObject) {
@@ -869,7 +871,7 @@ const Viewer = {
           controls.target.copy(modelCenter);
           controls.update();
 
-          if (typeof viewer !== 'undefined') viewer.targetObject = targetObject;
+          if (viewer) viewer.targetObject = targetObject;
         }
         setStatus(null);
       } catch (err) {
@@ -890,7 +892,7 @@ const Viewer = {
     const initialLoad = renderPartSelection(activePartVal || 'all');
 
     // Animation loop
-    const viewer = { renderer, controls, animId: null, resizeObserver: null, onKeyDown, ready: initialLoad };
+    viewer = { renderer, controls, animId: null, resizeObserver: null, onKeyDown, ready: initialLoad };
     window.addEventListener('error', (e) => {
       const msg = e.message || (e.error && e.error.message);
       if (msg && (msg.includes('signalUnknownCredential') || msg.includes('webauthnInterceptor'))) {

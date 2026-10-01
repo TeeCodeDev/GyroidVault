@@ -1,6 +1,6 @@
 {
   "name": "gyroid-vault",
-  "version": "2.2.2",
+  "version": "2.2.3",
   "description": "GyroidVault — Self-hosted 3D model management for 3D printing",
   "main": "server/index.js",
   "scripts": {
@@ -42,5 +42,8 @@
     "nodemailer": "^8.0.7",
     "occt-import-js": "^0.0.23",
     "sql.js": "^1.11.0"
+  },
+  "devDependencies": {
+    "acorn": "^8.18.0"
   }
 }

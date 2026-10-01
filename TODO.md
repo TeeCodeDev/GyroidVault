@@ -83,7 +83,12 @@
 
 ## ✅ Reeds Afgerond (Changelog)
 
-### v2.2.2 (Recent)
+### v2.2.3 (Recent)
+- [x] **ZIP Upload Missing Import Fix (#81):** `getSettingBool` geïmporteerd in `server/routes/models.js` zodat het uploaden van `.zip` bestanden (en het scannen van interne archief-bestanden) zonder runtime `ReferenceError` verloopt.
+- [x] **Permanente Statische AST Scope Scanner in Testsuite:** Nieuwe AST scope checker (`tests/ast-scope-checker.js`) toegevoegd aan `tests/release-check.js` (`npm test`) die met `acorn` alle server- en frontendbestanden analyseert op ontbrekende imports, typefouten en niet-gedeclareerde identifiers.
+- [x] **Multi-Formaat Upload Matrix & Slicer Upload Tests in CI:** E2E testmatrix toegevoegd aan `npm test` die het uploaden van `.stl`, `.zip` (met interne bestandsinspectie), `.3mf`, `.gcode`, `.step`, afbeeldingen en directe slicer-uploads (`/api/upload-slicer`) verifieert.
+
+### v2.2.2
 - [x] **Modeldetail Knoppenbalk & Gast-rechten (#80):** `.detail-header` flex-layout en `btn-secondary` stijl zodat `Download All (.zip)` op één lijn past zonder `Delete` buiten beeld te duwen, dubbele ZIP-knop verwijderd en verborgen voor niet-ingelogde gasten.
 - [x] **Welcome Popup Fix & Ko-fi Sidebar Kaart (#79):** Versie-check (`2.0.0` / `2.0.2`) en `localhost`-override opgelost zodat de *Welcome to GyroidVault* popup nooit meer bij elke refresh terugkomt, plus Ko-fi supportkaart toegevoegd linksonder boven het gebruikersprofiel.
 - [x] **Scanner Submappen (`stl files` / `Version X`) & Uitgeschakelde ZIP-scan Opschoning (#78):** Mappen met alléén documenten (`.txt`/`.pdf`/`.md`) worden niet meer als losse modellen aangemaakt, generieke model-submappen (`stl files`, `Version 1`, `Version 2`, `files`, `supported`, etc.) worden samengevoegd onder hun bovenliggende modelmap, en bij uitgeschakelde ZIP-scanning worden `is_archive_entry = 1` items direct gewist.

@@ -8,7 +8,7 @@ const { LIBRARY_PATH, UPLOADS_DIR } = require('../config');
 const { authenticate, requireUploader } = require('../middleware/auth');
 const { upload, getFileType } = require('../middleware/upload');
 const { validatePathConfinement, safeUrl } = require('../middleware/security');
-const { getFileUrl, getThumbUrl, deleteModelInternal, getZipEntryBuffer } = require('../utils/modelHelpers');
+const { getFileUrl, getThumbUrl, deleteModelInternal, getZipEntryBuffer, getSettingBool } = require('../utils/modelHelpers');
 
 // ─── GET /api/models ──────────────────────────────────────────────────────────
 router.get('/', (req, res) => {
