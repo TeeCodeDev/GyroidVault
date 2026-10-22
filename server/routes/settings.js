@@ -2,22 +2,91 @@ const express = require('express');
 const router = express.Router();
 const path = require('path');
 const fs = require('fs');
+const AdmZip = require('adm-zip');
 
-const { get, all, run } = require('../database');
-const { LIBRARY_PATH, UPLOADS_DIR } = require('../config');
+const { get, all, run, saveDb } = require('../database');
+const { DB_PATH, LIBRARY_PATH, UPLOADS_DIR } = require('../config');
 const { authenticate } = require('../middleware/auth');
 const { getSettingBool, hashFileStream } = require('../utils/modelHelpers');
 const { getBlockedIPs, unblockIP } = require('../middleware/rateLimit');
-const { setupBackgroundScanner } = require('../services/backgroundTasks');
+const { syncLibraryWithDisk, setupBackgroundScanner, setupBackgroundSync } = require('../services/backgroundTasks');
 const logger = require('../utils/logger');
 
 // ─── PUBLIC CONFIG ──────────────────────────────────────────────────────────
 router.get('/system/public-config', (req, res) => {
   const userCount = get('SELECT COUNT(*) as count FROM users').count;
+  const oidcRow = get('SELECT value FROM system_settings WHERE key = "oidc_enabled"');
+  const oidcLabelRow = get('SELECT value FROM system_settings WHERE key = "oidc_button_label"');
+  const defaultLandingRow = get('SELECT value FROM system_settings WHERE key = "default_landing_page"');
+  const defaultThemeRow = get('SELECT value FROM system_settings WHERE key = "default_theme"');
+  const defaultAccentRow = get('SELECT value FROM system_settings WHERE key = "default_accent"');
+
+  const moduleToggles = [
+    'enable_categories',
+    'enable_collections',
+    'enable_tags',
+    'enable_favorites',
+    'enable_browse',
+    'enable_stats',
+    'enable_format_pills',
+    'enable_print_history',
+    'enable_sharing',
+    'enable_printers'
+  ];
+  const featureFlags = {};
+  for (const flag of moduleToggles) {
+    const row = get('SELECT value FROM system_settings WHERE key = ?', [flag]);
+    featureFlags[flag] = row ? (row.value === 'true' || row.value === '1') : true;
+  }
+
   res.json({
     open_registration: getSettingBool('open_registration') || userCount === 0,
-    require_login_to_view: getSettingBool('require_login_to_view')
+    require_login_to_view: getSettingBool('require_login_to_view'),
+    oidc_enabled: oidcRow ? (oidcRow.value === 'true' || oidcRow.value === '1') : false,
+    oidc_button_label: (oidcLabelRow && oidcLabelRow.value) ? oidcLabelRow.value : 'Single Sign-On',
+    default_landing_page: defaultLandingRow ? defaultLandingRow.value : 'dashboard',
+    default_theme: defaultThemeRow ? defaultThemeRow.value : 'glass',
+    default_accent: defaultAccentRow ? defaultAccentRow.value : 'blue',
+    ...featureFlags
   });
+});
+
+// ─── 1-CLICK DATABASE & THUMBNAIL BACKUP ────────────────────────────────────
+router.get('/system/backup', authenticate, (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
+  try {
+    // 1. Force flush current SQLite memory state synchronously to disk
+    saveDb(true);
+
+    const zip = new AdmZip();
+
+    // 2. Add SQLite database
+    if (fs.existsSync(DB_PATH)) {
+      zip.addLocalFile(DB_PATH, '', 'gyroidvault.db');
+    }
+
+    // 3. Add uploads/thumbnails directory if it exists and has content
+    if (fs.existsSync(UPLOADS_DIR)) {
+      const files = fs.readdirSync(UPLOADS_DIR);
+      if (files.length > 0) {
+        zip.addLocalFolder(UPLOADS_DIR, 'uploads');
+      }
+    }
+
+    const dateStr = new Date().toISOString().slice(0, 10);
+    const filename = `gyroidvault-backup-${dateStr}.zip`;
+    const zipBuffer = zip.toBuffer();
+
+    logger.info(`[Backup] Admin user "${req.user.username}" generated backup archive (${zipBuffer.length} bytes)`);
+
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Length', zipBuffer.length);
+    res.send(zipBuffer);
+  } catch (err) {
+    logger.error(`[Backup] Failed to generate backup: ${err.message}`);
+    res.status(500).json({ error: 'Failed to generate backup archive' });
+  }
 });
 
 // ─── SYSTEM SETTINGS ────────────────────────────────────────────────────────
@@ -25,7 +94,17 @@ router.get('/settings/system', authenticate, (req, res) => {
   if (req.user.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
   const settings = all('SELECT * FROM system_settings WHERE key NOT LIKE "smtp_%"');
   const config = {};
-  settings.forEach(s => config[s.key] = s.value);
+  settings.forEach(s => {
+    if (s.key === 'oidc_client_secret') {
+      config[s.key] = s.value ? '••••••••' : '';
+      config.oidc_has_secret = Boolean(s.value);
+    } else {
+      config[s.key] = s.value;
+    }
+  });
+  if (config.auto_sync_interval === undefined) {
+    config.auto_sync_interval = process.env.SYNC_INTERVAL_HOURS !== undefined ? String(process.env.SYNC_INTERVAL_HOURS) : '1';
+  }
   res.json(config);
 });
 
@@ -34,12 +113,20 @@ router.post('/settings/system', authenticate, (req, res) => {
   try {
     const config = req.body;
     for (const [key, value] of Object.entries(config)) {
+      if (key === 'oidc_client_secret' && (value === '••••••••' || value === '')) {
+        continue;
+      }
       run('INSERT OR REPLACE INTO system_settings (key, value) VALUES (?, ?)', [key, String(value)]);
     }
     
     // Refresh background scanner if interval changed
     if (config.auto_scan_interval !== undefined) {
       setupBackgroundScanner();
+    }
+
+    // Refresh background sync if interval changed
+    if (config.auto_sync_interval !== undefined) {
+      setupBackgroundSync();
     }
 
     // If deep ZIP scanning was disabled, purge any previously indexed virtual archive entries (#78)
@@ -271,6 +358,16 @@ router.post('/library/scan/cancel', authenticate, (req, res) => {
   }
 });
 
+router.post('/library/sync', authenticate, async (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
+  try {
+    await syncLibraryWithDisk();
+    res.json({ success: true, message: 'Library synchronized with disk' });
+  } catch (e) {
+    res.status(500).json({ error: e.message || 'Failed to synchronize library' });
+  }
+});
+
 // ─── UPDATES & RELEASE NOTES ────────────────────────────────────────────────
 let lastUpdateCheck = { time: 0, data: null };
 
@@ -385,6 +482,24 @@ router.get('/stats', (req, res) => {
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: 'Failed to fetch stats' });
+  }
+});
+
+
+// ─── OIDC SETTINGS TEST (Discussion #65) ──────────────────────────────────
+router.post('/settings/oidc/test', authenticate, async (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
+  try {
+    const { issuer_url } = req.body;
+    const url = issuer_url || get('SELECT value FROM system_settings WHERE key = "oidc_issuer_url"')?.value;
+    if (!url) return res.status(400).json({ error: 'OIDC Issuer URL is required' });
+
+    const oidc = require('../utils/oidc');
+    const endpoints = await oidc.discoverOidcEndpoints(url, true);
+    res.json({ success: true, endpoints });
+  } catch (err) {
+    console.error('OIDC Discovery test failed:', err);
+    res.status(400).json({ error: err.message || 'Failed to discover OIDC endpoints' });
   }
 });
 

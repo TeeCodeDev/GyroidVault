@@ -60,10 +60,16 @@ router.post('/invite', authenticate, async (req, res) => {
     const token = crypto.randomBytes(20).toString('hex');
     run("INSERT OR REPLACE INTO user_invites (token, email, expires_at) VALUES (?, ?, datetime('now', '+7 days'))", [token, email]);
     
-    const { sendInviteEmail } = require('../utils/email');
-    await sendInviteEmail(email, token, req);
+    let emailSent = false;
+    try {
+      const { sendInviteEmail } = require('../utils/email');
+      await sendInviteEmail(email, token, req);
+      emailSent = true;
+    } catch (mailErr) {
+      // SMTP not configured or failed - allow admin to use/copy the invite token
+    }
     
-    res.json({ message: 'Invitation sent' });
+    res.json({ message: emailSent ? 'Invitation sent' : 'Invitation created (SMTP not configured)', token });
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: e.message || 'Failed to send invitation' });
@@ -173,5 +179,235 @@ router.post('/reset-password', authLimiter, async (req, res) => {
     res.json({ message: 'Password reset successful' });
   } catch (e) { console.error(e); res.status(500).json({ error: 'Failed to reset password' }); }
 });
+
+﻿// ─── OIDC / SSO AUTHENTICATION (Discussion #65) ───────────────────────────
+router.get('/oidc/login', authLimiter, async (req, res) => {
+  try {
+    const oidc = require('../utils/oidc');
+    const config = oidc.getOidcConfig();
+
+    if (!config.oidc_enabled) {
+      return res.status(400).json({ error: 'Single Sign-On (OIDC) is not enabled on this instance' });
+    }
+    if (!config.oidc_issuer_url || !config.oidc_client_id) {
+      return res.status(500).json({ error: 'OIDC is not fully configured (missing issuer URL or client ID)' });
+    }
+
+    const endpoints = await oidc.discoverOidcEndpoints(config.oidc_issuer_url);
+    if (!endpoints.authorization_endpoint) {
+      return res.status(502).json({ error: 'Failed to discover OIDC authorization endpoint' });
+    }
+
+    const state = crypto.randomBytes(24).toString('hex');
+    const nonce = crypto.randomBytes(24).toString('hex');
+
+    const redirectUri = oidc.getRedirectUri(req, config.oidc_redirect_uri);
+    const isHttps = req.secure || req.headers['x-forwarded-proto'] === 'https';
+
+    res.cookie('oidc_state', state, {
+      httpOnly: true,
+      secure: isHttps,
+      sameSite: 'lax',
+      maxAge: 10 * 60 * 1000 // 10 minutes
+    });
+    res.cookie('oidc_nonce', nonce, {
+      httpOnly: true,
+      secure: isHttps,
+      sameSite: 'lax',
+      maxAge: 10 * 60 * 1000
+    });
+
+    const authUrl = new URL(endpoints.authorization_endpoint);
+    authUrl.searchParams.set('response_type', 'code');
+    authUrl.searchParams.set('client_id', config.oidc_client_id);
+    authUrl.searchParams.set('redirect_uri', redirectUri);
+    authUrl.searchParams.set('scope', config.oidc_scopes || 'openid profile email groups');
+    authUrl.searchParams.set('state', state);
+    authUrl.searchParams.set('nonce', nonce);
+
+    res.redirect(authUrl.toString());
+  } catch (err) {
+    console.error('OIDC Login error:', err);
+    res.redirect('/?error=sso_failed&message=' + encodeURIComponent(err.message || 'Failed to initiate SSO login'));
+  }
+});
+
+router.get('/oidc/callback', authLimiter, async (req, res) => {
+  const isHttps = req.secure || req.headers['x-forwarded-proto'] === 'https';
+  const clearOidcCookies = () => {
+    res.clearCookie('oidc_state');
+    res.clearCookie('oidc_nonce');
+  };
+
+  try {
+    const oidc = require('../utils/oidc');
+    const config = oidc.getOidcConfig();
+
+    if (!config.oidc_enabled) {
+      clearOidcCookies();
+      return res.redirect('/?error=sso_failed&message=' + encodeURIComponent('Single Sign-On is disabled'));
+    }
+
+    if (req.query.error) {
+      clearOidcCookies();
+      const desc = req.query.error_description || req.query.error;
+      return res.redirect('/?error=sso_failed&message=' + encodeURIComponent(desc));
+    }
+
+    const { code, state } = req.query;
+    const cookieState = req.cookies.oidc_state;
+
+    if (!state || !cookieState || state !== cookieState) {
+      clearOidcCookies();
+      return res.redirect('/?error=sso_failed&message=' + encodeURIComponent('Invalid or expired OIDC state parameter. Please try again.'));
+    }
+
+    if (!code) {
+      clearOidcCookies();
+      return res.redirect('/?error=sso_failed&message=' + encodeURIComponent('Missing authorization code from Identity Provider'));
+    }
+
+    const endpoints = await oidc.discoverOidcEndpoints(config.oidc_issuer_url);
+    if (!endpoints.token_endpoint) {
+      clearOidcCookies();
+      return res.redirect('/?error=sso_failed&message=' + encodeURIComponent('OIDC token endpoint not available'));
+    }
+
+    const redirectUri = oidc.getRedirectUri(req, config.oidc_redirect_uri);
+
+    const tokenParams = new URLSearchParams();
+    tokenParams.set('grant_type', 'authorization_code');
+    tokenParams.set('code', String(code));
+    tokenParams.set('redirect_uri', redirectUri);
+    tokenParams.set('client_id', config.oidc_client_id);
+    if (config.oidc_client_secret) {
+      tokenParams.set('client_secret', config.oidc_client_secret);
+    }
+
+    const tokenHeaders = {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'Accept': 'application/json',
+      'User-Agent': 'GyroidVault-OIDC'
+    };
+
+    if (config.oidc_client_id && config.oidc_client_secret) {
+      tokenHeaders['Authorization'] = 'Basic ' + Buffer.from(config.oidc_client_id + ':' + config.oidc_client_secret).toString('base64');
+    }
+
+    const tokenRes = await fetch(endpoints.token_endpoint, {
+      method: 'POST',
+      headers: tokenHeaders,
+      body: tokenParams.toString()
+    });
+
+    if (!tokenRes.ok) {
+      const errBody = await tokenRes.text().catch(() => '');
+      console.error('OIDC Token Exchange failed:', tokenRes.status, errBody);
+      clearOidcCookies();
+      return res.redirect('/?error=sso_failed&message=' + encodeURIComponent('Failed to exchange authorization code for tokens'));
+    }
+
+    const tokenData = await tokenRes.json();
+    const idClaims = oidc.parseJwtPayload(tokenData.id_token);
+
+    let userinfo = {};
+    if (endpoints.userinfo_endpoint && tokenData.access_token) {
+      try {
+        const uRes = await fetch(endpoints.userinfo_endpoint, {
+          headers: {
+            'Authorization': 'Bearer ' + tokenData.access_token,
+            'Accept': 'application/json',
+            'User-Agent': 'GyroidVault-OIDC'
+          }
+        });
+        if (uRes.ok) {
+          userinfo = await uRes.json();
+        }
+      } catch (uiErr) {
+        console.warn('OIDC Userinfo fetch warning:', uiErr.message);
+      }
+    }
+
+    const sub = String(userinfo.sub || idClaims.sub || '').trim();
+    if (!sub) {
+      clearOidcCookies();
+      return res.redirect('/?error=sso_failed&message=' + encodeURIComponent('Identity Provider did not provide a unique subject (sub) claim'));
+    }
+
+    const email = String(userinfo.email || idClaims.email || '').trim().toLowerCase();
+    let username = String(
+      userinfo.preferred_username ||
+      userinfo.username ||
+      userinfo.nickname ||
+      idClaims.preferred_username ||
+      idClaims.username ||
+      idClaims.nickname ||
+      (email ? email.split('@')[0] : '') ||
+      ('sso_' + sub.slice(0, 8))
+    ).trim();
+
+    username = username.replace(/[^a-zA-Z0-9_\-\.]/g, '_').slice(0, 32) || ('sso_' + sub.slice(0, 8));
+
+    const rawGroups = userinfo.groups || userinfo.roles || idClaims.groups || idClaims.roles || [];
+    const mappedRole = oidc.resolveUserRole(rawGroups, config);
+
+    let user = get('SELECT * FROM users WHERE oidc_sub = ?', [sub]);
+
+    if (!user && email) {
+      user = get('SELECT * FROM users WHERE LOWER(email) = LOWER(?)', [email]);
+      if (user) {
+        run('UPDATE users SET oidc_sub = ? WHERE id = ?', [sub, user.id]);
+        user.oidc_sub = sub;
+      }
+    }
+
+    if (!user) {
+      if (!config.oidc_auto_create_user) {
+        clearOidcCookies();
+        return res.redirect('/?error=sso_failed&message=' + encodeURIComponent('No matching GyroidVault account found and auto-provisioning is disabled'));
+      }
+
+      const totalUsers = get('SELECT COUNT(*) as c FROM users').c;
+      const initialRole = totalUsers === 0 ? 'admin' : mappedRole;
+
+      let candidateUsername = username;
+      let counter = 1;
+      while (get('SELECT id FROM users WHERE LOWER(username) = LOWER(?)', [candidateUsername])) {
+        candidateUsername = username + '_' + (counter++);
+      }
+
+      const disabledHash = '!oidc_' + crypto.randomBytes(16).toString('hex');
+      const ins = run(
+        'INSERT INTO users (username, email, password_hash, role, oidc_sub) VALUES (?, ?, ?, ?, ?)',
+        [candidateUsername, email || null, disabledHash, initialRole, sub]
+      );
+      user = get('SELECT * FROM users WHERE id = ?', [ins.lastId]);
+    } else {
+      if (user.id !== 1 && mappedRole && mappedRole !== user.role && (config.oidc_admin_group || config.oidc_uploader_group || config.oidc_viewer_group)) {
+        run('UPDATE users SET role = ? WHERE id = ?', [mappedRole, user.id]);
+        user.role = mappedRole;
+      }
+    }
+
+    clearOidcCookies();
+
+    const csrfToken = crypto.randomBytes(32).toString('hex');
+    const token = jwt.sign({ id: user.id, role: user.role, csrfToken }, getJwtSecret(), { expiresIn: '30d' });
+
+    res.cookie('pv_token', token, {
+      httpOnly: true,
+      secure: isHttps,
+      sameSite: 'lax',
+      maxAge: 30 * 24 * 60 * 60 * 1000
+    });
+
+    res.redirect('/?sso=1');
+  } catch (err) {
+    console.error('OIDC Callback error:', err);
+    clearOidcCookies();
+    res.redirect('/?error=sso_failed&message=' + encodeURIComponent(err.message || 'SSO authentication failed'));
+  }
+});
+
 
 module.exports = router;

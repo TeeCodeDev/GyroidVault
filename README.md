@@ -1,6 +1,6 @@
 # GyroidVault
 
-[![Version](https://img.shields.io/badge/version-2.0.2-blue.svg)](https://github.com/TeeCodeDev/GyroidVault/releases)
+[![Version](https://img.shields.io/badge/version-2.3.0-blue.svg)](https://github.com/TeeCodeDev/GyroidVault/releases)
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-purple.svg)](LICENSE)
 [![Docker](https://img.shields.io/badge/docker-ghcr.io-cyan.svg)](https://github.com/TeeCodeDev/GyroidVault/pkgs/container/gyroidvault)
 [![Website](https://img.shields.io/badge/website-gyroidvault.com-emerald.svg)](https://gyroidvault.com)
@@ -12,17 +12,16 @@
 
 ---
 
-## What's New in v2.0.0
+## What's New in v2.3.0
 
-- 🧩 **Multi-Part 3D Assembly:** Render all STL and 3MF parts together on the virtual build plate in contrasting colors, or inspect them one by one.
-- 📐 **Real Physical Dimensions:** See the exact size in millimeters (`W × D × H mm`) right in the 3D header before firing up your slicer.
-- ⚡ **Background Scanner for 2TB+ Libraries:** Non-blocking indexing that runs in the background with live progress counters and memory safety guards for giant folders.
-- 🎨 **2-Column Studio Workspace:** A clean, distraction-free layout with a full-size 3D viewport, Markdown notes, slicing specs, and print history tabs.
-- 📚 **2x2 Collection Collages & 1-Click ZIP:** Visual grid previews for folders and direct ZIP downloads straight to your browser.
-- 🛡️ **Under-the-Hood Security:** Stronger access control on private collections, path traversal defenses, parameterized queries, and login rate limiting.
-- 🚀 **1-Click Slicer Integration:** Launch models directly into Bambu Studio, PrusaSlicer, OrcaSlicer, or Elegoo Slicer.
-
----
+- 🎨 **Customizable UI & Themes:** Dedicated *User Interface* tab in Settings with 6 visual themes (Dark Glass, Slate, Midnight, Light, OLED High Contrast, Cyberpunk) and 6 vibrant accent colors with instant live switching.
+- ⚙️ **Granular Module Toggles & Landing View:** Tailor your sidebar and workspace. Toggle categories, collections, tags, favorites, browse explorer, statistics, format pills, print history, or printers off if you don't use them. Choose your landing view (Models, Browse, Collections).
+- 🔑 **OpenID Connect (OIDC) Single Sign-On (SSO):** Native SSO for Keycloak, Authentik, Authelia, and Okta with auto-provisioning and role mapping.
+- 📂 **Library Scan Modes (Folder Mode vs. File Mode):** Choose between grouping subfolders into unified multi-part models (assemblies) or indexing standalone 3D files with automatic companion image/gcode pairing, plus native root-file grouping.
+- 🌙 **Spin-Down Friendly Disk Sync (NAS / Unraid):** Fully configurable library disk sync interval, or set to 0 to completely disable periodic disk wakeups for sleeping hard drives.
+- 🖨️ **Creality Print Slicer Integration:** 1-click slicing deep-link support (`crealityprint://`) alongside OrcaSlicer, Bambu Studio, Elegoo Slicer, and Cura.
+- 💬 **Model & Folder Name Tooltips:** Hovering over truncated model or folder names now displays their full title instantly.
+- 🛡️ **1-Click SQLite & Thumbnail Backup:** Instant single-click `.zip` archive download of your database and custom thumbnails for secure offsite backup.
 
 ## Screenshots
 
@@ -148,14 +147,13 @@ npm start
 
 ## Slicer URL Handlers
 
-GyroidVault supports direct file launching into major slicers via desktop URI protocols:
-- **Bambu Studio:** `bambustudio://`
-- **PrusaSlicer:** `prusaslicer://`
+GyroidVault supports direct 1-click file launching into major slicers via desktop URI protocols:
 - **OrcaSlicer:** `orcaslicer://`
-
-Make sure your slicer has URL protocol registration enabled in its system preferences.
-
----
+- **Bambu Studio:** `bambustudio://` (automatic on-the-fly .3mf packaging for raw STL files)
+- **Creality Print:** `crealityprint://`
+- **Elegoo Slicer:** `orcaslicer://`
+- **Ultimaker Cura:** `cura://`
+- **PrusaSlicer:** `prusaslicer://`
 
 ## Community & Support
 

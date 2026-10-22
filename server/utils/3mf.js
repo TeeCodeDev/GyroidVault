@@ -46,7 +46,7 @@ function extract3mfThumbnail(filePath, uploadsDir) {
 
     return thumbFilename;
   } catch (error) {
-    console.error(`Failed to extract 3MF thumbnail for ${filePath}:`, error.message);
+    console.error('Failed to extract 3MF thumbnail for %s: %s', filePath, error.message);
     return null;
   }
 }

@@ -7,6 +7,8 @@ on:
 jobs:
   update-template:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - name: Checkout Unraid Templates repository
         uses: actions/checkout@v4
@@ -17,15 +19,18 @@ jobs:
           path: unraid-templates
 
       - name: Update XML File
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          RELEASE_BODY: ${{ github.event.release.body }}
         run: |
           cd unraid-templates
           
           # Haal versie, datum en de release notes (body) op uit de GitHub Release
-          VERSION="${{ github.event.release.tag_name }}"
+          VERSION="$RELEASE_TAG"
           DATE=$(date +'%Y-%m-%d')
           
           # Escaping nodig voor de sed/awk acties
-          echo "${{ github.event.release.body }}" > release_notes.txt
+          printf "%s\n" "$RELEASE_BODY" > release_notes.txt
           
           # Update Versie en Datum in de XML
           sed -i "s|<Version>.*</Version>|<Version>$VERSION</Version>|g" templates/GyroidVault.xml

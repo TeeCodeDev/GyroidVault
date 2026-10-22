@@ -29,3 +29,10 @@ Thumbs.db
 scratch/
 .vscode/
 import_models/
+
+# Internal notes & drafts
+TODO.md
+todo.md
+SECURITY.md
+Release_Notes_*.md
+Reddit_Post_*.md

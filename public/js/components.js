@@ -2,6 +2,11 @@
 const UI = {
   // HTML entity escaping helper
   escapeHtml(str) {
+    if (str === null || str === undefined) return "";
+    return String(str).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+  },
+  esc(str) { return this.escapeHtml(str); },
+  _origEscapeHtml(str) {
     if (str === null || str === undefined) return '';
     return String(str)
       .replace(/&/g, '&amp;')
@@ -145,7 +150,7 @@ const UI = {
         }
       </div>
       <div class="model-card-body">
-        <div class="model-card-name">${folder.name}</div>
+        <div class="model-card-name" title="${this.escapeHtml(folder.name)}">${folder.name}</div>
         <div class="model-card-meta"><span class="badge badge-stl">${folder.itemCount} items</span></div>
       </div>
     </div>`;
@@ -224,17 +229,31 @@ const UI = {
       : '';
     const canManage = App.currentUser && App.currentUser.role !== 'viewer';
     const canEdit = App.currentUser?.role === 'admin' || (canManage && m.user_id === App.currentUser?.id);
-    const plusBtn = canEdit ? `<button class="btn btn-ghost btn-xs" onclick="event.stopPropagation();App.addToProject(${m.id})" title="Add to project" style="margin-top:-4px;margin-right:-8px;padding:4px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg></button>` : '';
+    const plusBtn = canEdit ? `<button class="btn btn-ghost btn-xs btn-collection-action" onclick="event.stopPropagation();App.addToProject(${m.id})" title="Add to project" style="margin-top:-4px;margin-right:-8px;padding:4px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg></button>` : '';
 
     const isSelected = App.selectedModelIds?.includes(m.id);
     const checkboxHtml = canManage ? `<div class="model-card-checkbox" onclick="App.toggleModelSelection(event, ${m.id})"></div>` : '';
 
+    const quickActions = `
+      <div class="model-card-hover-actions">
+        <button type="button" class="card-hover-btn" onclick="App.quickPreviewModel(${m.id}, event)" title="Quick 3D Preview" aria-label="Quick 3D Preview">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+        </button>
+        ${canManage ? `<button type="button" class="card-hover-btn btn-collection-action" onclick="event.stopPropagation();App.addToProject(${m.id})" title="Add to collection" aria-label="Add to collection">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/></svg>
+        </button>` : ''}
+        <a href="/api/models/${m.id}/download" class="card-hover-btn" onclick="event.stopPropagation()" download title="Download all files (.zip)" aria-label="Download all files (.zip)">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        </a>
+      </div>
+    `;
+
     return `<div class="model-card ${isSelected ? 'selected' : ''}" onclick="App.handleModelCardClick(event, ${m.id})" data-model-id="${m.id}">
       ${checkboxHtml}
-      <div class="model-card-thumb">${thumb}<div class="model-card-badges">${types}</div></div>
+      <div class="model-card-thumb">${thumb}<div class="model-card-badges">${types}</div>${quickActions}</div>
       <div class="model-card-body">
         <div style="display:flex;justify-content:space-between;align-items:flex-start">
-          <div class="model-card-name" style="flex:1">${m.name}</div>
+          <div class="model-card-name" style="flex:1" title="${this.escapeHtml(m.name)}">${m.name}</div>
           ${plusBtn}
         </div>
         <div class="model-card-meta">${cat} ${printed}</div>
@@ -490,8 +509,11 @@ const UI = {
   modelDetail(model, hasPrinters = false) {
     const canEdit = App.currentUser?.role === 'admin' || (App.currentUser?.role !== 'viewer' && model.user_id === App.currentUser?.id);
     const cat = model.category_name
-      ? `<span class="badge badge-category" style="background:${model.category_color}20;color:${model.category_color};border:1px solid ${model.category_color}33">${model.category_name}</span>`
+      ? `<span class="badge badge-category" style="background:${model.category_color}20;color:${model.category_color};border:1px solid ${model.category_color}33;cursor:pointer" onclick="App.navigate('/models?category=${model.category_id}')" title="Filter by category: ${this.escapeHtml(model.category_name)}">${model.category_name}</span>`
       : '';
+    const collectionBadges = (model.projects || []).map(p =>
+      `<span class="badge badge-collection" style="cursor:pointer;display:inline-flex;align-items:center;gap:4px" onclick="App.navigate('/collections/${p.id}')" title="View Collection: ${this.escapeHtml(p.name)}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>${this.escapeHtml(p.name)}</span>`
+    ).join(' ');
     const tags = (model.tags || []).map(t => `<span class="badge badge-tag" style="cursor:pointer" onclick="App.navigate('/models?tag=${t.id}')" title="Filter by tag: ${this.escapeHtml(t.name)}">${t.name}</span>`).join('');
     const printed = model.has_printed
       ? '<span class="badge badge-printed">✓ Printed</span>'
@@ -657,6 +679,7 @@ const UI = {
       const slicerLinks = {
         'orcaslicer': { name: 'OrcaSlicer', url: `orcaslicer://open?file=${encodeURI(window.location.origin + '/api/files/' + f.id + '/download/model.' + f.file_type)}` },
         'elegooslicer': { name: 'Elegoo Slicer', url: `elegooslicer://open?file=${encodeURI(window.location.origin + '/api/files/' + f.id + '/download/model.' + f.file_type)}` },
+        'crealityprint': { name: 'Creality Print', url: `crealityprintlink://open?file=${encodeURI(window.location.origin + '/api/files/' + f.id + '/download/model.' + f.file_type)}` },
         'cura': { name: 'Ultimaker Cura', url: `cura://open?file=${encodeURI(window.location.origin + '/api/files/' + f.id + '/download/model.' + f.file_type)}` },
         'bambustudio': { name: 'Bambu Studio', url: `bambustudio://open?file=${encodeURI(window.location.origin + '/api/files/' + f.id + '/3mf/model.3mf')}` }
       };
@@ -726,7 +749,7 @@ const UI = {
           <div style="display:flex;align-items:center;gap:5px;flex-shrink:0">
             ${(is3D || isGcode) ? `<button class="file-action-btn preview" onclick="event.stopPropagation();App.previewStl(${model.id},'${f.url || '/uploads/'+f.filename}', '${f.file_type}')" title="Preview 3D / G-Code"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg></button>` : ''}
             <a href="/api/files/${f.id}/download" class="file-action-btn" title="Download file"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></a>
-            ${canEdit ? `<button class="file-action-btn delete" onclick="event.stopPropagation();App.confirmDeleteFile(${f.id},'${(f.original_name || f.filename).replace(/'/g, "\\'")}',${model.id})" title="Delete file"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>` : ''}
+            ${canEdit ? `<button class="file-action-btn delete" onclick="event.stopPropagation();App.confirmDeleteFile(${f.id},'${(f.original_name || f.filename).replace(/\\/g, '\\\\').replace(/'/g, "\\'")}',${model.id})" title="Delete file"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>` : ''}
           </div>
         </div>
 
@@ -758,7 +781,7 @@ const UI = {
         </div>
         <div class="file-actions" style="display:flex;gap:4px;align-items:center">
           <a href="/api/files/${f.id}/download" target="_blank" class="btn btn-ghost" style="padding:6px;color:var(--accent-cyan)" title="View Document"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg></a>
-          ${canEdit ? `<button class="btn btn-ghost" style="padding:6px;color:var(--error)" onclick="event.stopPropagation();App.confirmDeleteFile(${f.id},'${(f.original_name || f.filename).replace(/'/g, "\\'")}',${model.id})" title="Delete"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg></button>` : ''}
+          ${canEdit ? `<button class="btn btn-ghost" style="padding:6px;color:var(--error)" onclick="event.stopPropagation();App.confirmDeleteFile(${f.id},'${(f.original_name || f.filename).replace(/\\/g, '\\\\').replace(/'/g, "\\'")}',${model.id})" title="Delete"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg></button>` : ''}
         </div>
       </div>`;
     }).join('');
@@ -789,7 +812,7 @@ const UI = {
       <div class="detail-header">
         <div>
           <div class="detail-title">${this.escapeHtml(model.name)}</div>
-          <div class="detail-meta">${cat} ${printed}</div>
+          <div class="detail-meta">${cat} ${collectionBadges} ${printed}</div>
         </div>
         <div class="detail-actions">
           ${(App.currentUser && model.files && model.files.length > 0) ? `
@@ -1101,10 +1124,14 @@ const UI = {
           <input type="text" placeholder="Search models, tags, categories..." id="search-input" oninput="App.handleSearch(this.value)">
         </div>
         <select class="filter-select" id="filter-category" onchange="App.handleFilter()">
-          <option value="">All Categories</option>${catOpts}
+          <option value="">All Categories</option>
+          <option value="uncategorized">⚠ Uncategorized</option>
+          ${catOpts}
         </select>
         <select class="filter-select" id="filter-tag" onchange="App.handleFilter()">
-          <option value="">All Tags</option>${tagOpts}
+          <option value="">All Tags</option>
+          <option value="untagged">⚠ Untagged</option>
+          ${tagOpts}
         </select>
         <select class="filter-select" id="filter-user" onchange="App.handleFilter()">
           <option value="">All Users</option>${userOpts}
@@ -1198,7 +1225,7 @@ const UI = {
   settingsPanel(title, items, type) {
     const listHtml = items.map(item => {
       const color = item.color ? `<span class="color-dot" style="background:${item.color}"></span>` : '';
-      const preset = item.is_preset ? '<span style="font-size:.7rem;color:var(--text-muted);margin-left:4px">(preset)</span>' : '';
+      const preset = item.is_preset ? '<span class="badge" style="font-size:0.65rem;padding:2px 6px;border-radius:4px;background:rgba(255,255,255,0.06);color:var(--text-muted);font-weight:600;margin-left:6px;border:1px solid rgba(255,255,255,0.08);letter-spacing:0.04em">PRESET</span>' : '';
       const count = item.model_count != null ? `<span style="font-size:.75rem;color:var(--text-muted)">${item.model_count || item.usage_count || 0}</span>` : '';
       const canDelete = type === 'materials' ? !item.is_preset : true;
       const isAdmin = App.currentUser?.role === 'admin';
@@ -1206,7 +1233,7 @@ const UI = {
         <span class="settings-item-name">${color} ${item.name}${preset}</span>
         <div class="settings-item-actions">
           ${count}
-          ${canDelete && isAdmin ? `<button class="btn btn-ghost btn-xs" style="color:var(--error);padding:4px" onclick="App.deleteSettingsItem('${type}',${item.id},'${item.name.replace(/'/g, "\\'")}')"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg></button>` : ''}
+          ${canDelete && isAdmin ? `<button class="btn btn-ghost btn-xs" style="color:var(--error);padding:4px" onclick="App.deleteSettingsItem('${type}',${item.id},'${item.name.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}')"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg></button>` : ''}
         </div>
       </div>`;
     }).join('');
@@ -1241,7 +1268,7 @@ const UI = {
       <div class="panel-header"><div class="panel-title">${iconMap[type] || ''} ${title}</div></div>
       <div class="panel-body">
         ${defaultMatBlock}
-        ${listHtml || '<div style="color:var(--text-muted);font-size:.875rem;padding:8px 0">None yet</div>'}
+        ${listHtml ? `<div class="settings-list">${listHtml}</div>` : '<div style="color:var(--text-muted);font-size:.875rem;padding:8px 0">None yet</div>'}
         ${App.currentUser?.role === 'admin' ? `
         <div class="add-inline" style="margin-top:14px">
           <input class="form-input" id="add-${type}-input" placeholder="Add new ${type.slice(0,-1)}...">
@@ -1258,7 +1285,7 @@ const UI = {
     return models.map(m => `
       <div class="activity-item" style="cursor:pointer" onclick="App.navigate('/models/${m.id}')">
         <div class="activity-dot" style="background:${m.category_color || 'var(--text-muted)'}"></div>
-        <div style="flex:1;font-weight:500">${m.name}</div>
+        <div style="flex:1;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${this.escapeHtml(m.name)}">${m.name}</div>
         <span style="font-size:.75rem;color:var(--text-muted)">${this.formatDateShort(m.created_at)}</span>
       </div>`).join('');
   },
@@ -1366,34 +1393,57 @@ const UI = {
   printersSettingsForm(printers = []) {
     const list = printers.map(p => `
       <div class="settings-item">
-        <div style="flex:1">
-          <div style="font-weight:500">${p.name}</div>
-          <div style="font-size:0.8rem;color:var(--text-muted);display:flex;align-items:center;gap:4px">${p.url} ${p.api_key ? '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--accent-yellow)" title="API Key Configured"><circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6"/><path d="m15.5 7.5 3 3M18.5 4.5l3 3"/></svg>' : ''}</div>
+        <div style="flex:1; display:flex; align-items:center; gap:12px">
+          <div style="width:36px; height:36px; border-radius:var(--radius-sm); background:rgba(0,212,255,0.08); color:var(--accent-cyan); display:flex; align-items:center; justify-content:center; flex-shrink:0">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+          </div>
+          <div>
+            <div style="font-weight:600; color:var(--text-primary); font-size:0.9rem">${this.escapeHtml(p.name)}</div>
+            <div style="font-size:0.775rem; color:var(--text-muted); display:flex; align-items:center; gap:6px; margin-top:1px">
+              <span>${this.escapeHtml(p.url)}</span>
+              ${p.api_key ? '<span class="badge" style="font-size:0.65rem; padding:1px 5px; border-radius:4px; background:rgba(245,158,11,0.1); color:var(--warning); border:1px solid rgba(245,158,11,0.2)">API KEY</span>' : ''}
+            </div>
+          </div>
         </div>
-        <button class="btn btn-danger btn-sm" onclick="App.deletePrinter('${p.id}')">Delete</button>
+        <button class="btn btn-danger btn-xs" onclick="App.deletePrinter('${p.id}')" style="display:inline-flex; align-items:center; gap:4px">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+          Delete
+        </button>
       </div>
     `).join('');
-    
+
     return `
-      ${list || '<div style="color:var(--text-muted);font-size:.875rem;padding:8px 0">No printers configured</div>'}
-      <form onsubmit="App.handleAddPrinter(event)" class="form-grid" style="margin-top:20px;padding-top:20px;border-top:1px solid var(--border)">
-        <h4>Add Moonraker / Klipper Printer</h4>
-        <div class="form-group">
-          <label>Printer Name</label>
-          <input type="text" name="name" required class="form-input" placeholder="e.g. Voron 2.4">
+      <div style="margin-bottom: 24px;">
+        <h3 style="margin-bottom: 6px; font-size: 1.05rem; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 8px;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent-cyan)"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+          Configured 3D Printers (Moonraker / Klipper)
+        </h3>
+        <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 14px;">Connected printers provide real-time status monitoring, bed/nozzle temperatures, and direct print uploads.</p>
+
+        ${printers.length ? `<div class="settings-list" style="margin-bottom: 20px;">${list}</div>` : '<div style="background:var(--bg-secondary); border:1px dashed var(--border); border-radius:var(--radius-md); padding:24px; text-align:center; color:var(--text-muted); font-size:0.875rem; margin-bottom:20px;">No network printers configured yet.</div>'}
+
+        <div style="background: var(--bg-secondary); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 18px 20px;">
+          <h4 style="margin: 0 0 6px 0; font-size: 0.95rem; font-weight: 600; color: var(--text-primary);">Add Moonraker / Klipper Printer</h4>
+          <p style="font-size: 0.775rem; color: var(--text-muted); margin-bottom: 14px;">Connect directly to a Moonraker-powered 3D printer over your local network.</p>
+          <form onsubmit="App.handleAddPrinter(event)" style="display: flex; flex-direction: column; gap: 14px;">
+            <div>
+              <label style="font-weight: 600; font-size: 0.85rem; color: var(--text-primary); display: block; margin-bottom: 4px;">Printer Name</label>
+              <input type="text" name="name" required placeholder="Voron 2.4, Ender 3 V3, etc." class="form-input" style="width: 100%">
+            </div>
+            <div>
+              <label style="font-weight: 600; font-size: 0.85rem; color: var(--text-primary); display: block; margin-bottom: 4px;">Moonraker URL</label>
+              <input type="url" name="url" required placeholder="http://192.168.1.150:7125" class="form-input" style="width: 100%">
+            </div>
+            <div>
+              <label style="font-weight: 600; font-size: 0.85rem; color: var(--text-primary); display: block; margin-bottom: 4px;">API Key (Optional)</label>
+              <input type="password" name="api_key" placeholder="Moonraker API Key if trusted clients are restricted" class="form-input" style="width: 100%">
+            </div>
+            <div style="padding-top: 4px;">
+              <button type="submit" class="btn btn-primary" style="padding: 10px 22px; font-weight: 600;">Add Printer</button>
+            </div>
+          </form>
         </div>
-        <div class="form-group">
-          <label>Printer URL</label>
-          <input type="url" name="url" required class="form-input" placeholder="e.g. http://192.168.1.100">
-        </div>
-        <div class="form-group">
-          <label>API Key (Optional)</label>
-          <input type="password" name="api_key" class="form-input" placeholder="If required by Moonraker">
-        </div>
-        <div>
-          <button type="submit" class="btn btn-primary">Add Printer</button>
-        </div>
-      </form>
+      </div>
     `;
   },
 
@@ -1414,147 +1464,577 @@ const UI = {
       </form>`;
   },
 
-  systemSettingsForm(config = {}) {
+  uiSettingsForm(config = {}) {
     config = config || {};
+    const currentTheme = (typeof localStorage !== 'undefined' && localStorage.getItem('gv_theme')) || config.default_theme || 'glass';
+    const currentAccent = (typeof localStorage !== 'undefined' && localStorage.getItem('gv_accent')) || config.default_accent || 'blue';
+    const currentViewMode = config.library_view_mode || 'grid';
+
     return `
       <form onsubmit="App.handleSaveSystemSettings(event)" class="form-grid">
-        <h3 style="grid-column: 1 / -1; margin-bottom: 10px; border-bottom: 1px solid var(--border-color); padding-bottom: 5px;">General Settings</h3>
-        <div class="form-group" style="grid-column: 1 / -1">
-          <label style="font-weight:600">Default Library View Mode</label>
-          <select name="library_view_mode" class="form-input" style="max-width:420px;margin-bottom:12px">
-            <option value="grid" ${(config.library_view_mode || 'grid') === 'grid' ? 'selected' : ''}>All Models (Flat Grid Gallery)</option>
-            <option value="folder" ${config.library_view_mode === 'folder' ? 'selected' : ''}>Folder View (Disk Directory Hierarchy)</option>
-          </select>
-          <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(280px, 1fr));gap:12px;margin-top:4px">
-            <div style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:8px;padding:12px 14px;display:flex;gap:12px;align-items:flex-start">
-              <div style="width:36px;height:36px;border-radius:6px;background:rgba(59,130,246,0.1);color:var(--accent-cyan);display:flex;align-items:center;justify-content:center;flex-shrink:0">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
-              </div>
+        <!-- 1. Theme & Visual Appearance -->
+        <div style="grid-column: 1 / -1; margin-bottom: 24px">
+          <h3 style="margin-bottom: 6px; font-size: 1.05rem; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 8px;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent-cyan)"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+            Theme & Studio Appearance
+          </h3>
+          <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 14px;">Personalize your visual theme and highlight colors across the application.</p>
+
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 28px; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 20px 22px;">
+            <div style="display: flex; flex-direction: column; justify-content: space-between;">
               <div>
-                <div style="font-weight:600;font-size:0.875rem;color:var(--text-primary);margin-bottom:3px">All Models (Flat Grid Gallery)</div>
-                <div style="font-size:0.8rem;color:var(--text-secondary);line-height:1.4">Displays all indexed 3D models across subfolders in a single unified gallery. Best for fast global searching, tag filtering, and print status tracking.</div>
+                <label style="font-weight: 600; font-size: 0.875rem; color: var(--text-primary); display: block; margin-bottom: 8px;">Application Theme</label>
+                <select id="ui-theme-selector" name="default_theme" class="form-input theme-selector" onchange="App.previewTheme(this.value)" style="width: 100%; margin-bottom: 8px;">
+                  <option value="glass" ${currentTheme === 'glass' ? 'selected' : ''}>Glass / Studio Dark (Default)</option>
+                  <option value="industrial" ${currentTheme === 'industrial' ? 'selected' : ''}>Industrial (Monospace High-Contrast)</option>
+                  <option value="light" ${currentTheme === 'light' ? 'selected' : ''}>Clean Studio Light</option>
+                </select>
               </div>
+              <span style="font-size: 0.75rem; color: var(--text-muted); display: block; margin-top: 4px;">Changes apply instantly across your current workspace.</span>
             </div>
-            <div style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:8px;padding:12px 14px;display:flex;gap:12px;align-items:flex-start">
-              <div style="width:36px;height:36px;border-radius:6px;background:rgba(245,158,11,0.1);color:var(--warning);display:flex;align-items:center;justify-content:center;flex-shrink:0">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
-              </div>
+
+            <div style="display: flex; flex-direction: column; justify-content: space-between;">
               <div>
-                <div style="font-weight:600;font-size:0.875rem;color:var(--text-primary);margin-bottom:3px">Folder View (Directory Hierarchy)</div>
-                <div style="font-size:0.8rem;color:var(--text-secondary);line-height:1.4">Mirrors your exact storage directory layout on disk. Browse and drill down through nested folders and collections just like a file manager.</div>
+                <label style="font-weight: 600; font-size: 0.875rem; color: var(--text-primary); display: block; margin-bottom: 8px;">Accent Color</label>
+                <input type="hidden" name="default_accent" id="setting-default-accent" value="${currentAccent}">
+                <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap; padding: 6px 2px 8px 2px; min-height: 44px;">
+                  <button type="button" class="accent-color-btn" data-accent="blue" style="background:#3b82f6; box-shadow: ${(currentAccent === 'blue' || currentAccent === 'cyan') ? '0 0 0 2px var(--bg-secondary), 0 0 0 4px var(--text-primary)' : 'none'};" onclick="App.setAccent('blue')" title="Studio Blue (Default)"></button>
+                  <button type="button" class="accent-color-btn" data-accent="emerald" style="background:#10b981; box-shadow: ${(currentAccent === 'emerald' || currentAccent === 'green') ? '0 0 0 2px var(--bg-secondary), 0 0 0 4px var(--text-primary)' : 'none'};" onclick="App.setAccent('emerald')" title="Emerald Green"></button>
+                  <button type="button" class="accent-color-btn" data-accent="amber" style="background:#f59e0b; box-shadow: ${(currentAccent === 'amber' || currentAccent === 'orange') ? '0 0 0 2px var(--bg-secondary), 0 0 0 4px var(--text-primary)' : 'none'};" onclick="App.setAccent('amber')" title="Amber Gold"></button>
+                  <button type="button" class="accent-color-btn" data-accent="rose" style="background:#f43f5e; box-shadow: ${(currentAccent === 'rose' || currentAccent === 'red') ? '0 0 0 2px var(--bg-secondary), 0 0 0 4px var(--text-primary)' : 'none'};" onclick="App.setAccent('rose')" title="Coral Rose"></button>
+                  <button type="button" class="accent-color-btn" data-accent="violet" style="background:#8b5cf6; box-shadow: ${(currentAccent === 'violet' || currentAccent === 'purple') ? '0 0 0 2px var(--bg-secondary), 0 0 0 4px var(--text-primary)' : 'none'};" onclick="App.setAccent('violet')" title="Studio Violet"></button>
+                  <button type="button" class="accent-color-btn" data-accent="teal" style="background:#14b8a6; box-shadow: ${(currentAccent === 'teal') ? '0 0 0 2px var(--bg-secondary), 0 0 0 4px var(--text-primary)' : 'none'};" onclick="App.setAccent('teal')" title="Teal Sage"></button>
+                </div>
               </div>
+              <span style="font-size: 0.75rem; color: var(--text-muted); display: block; margin-top: 4px;">Used for active navigation tabs, buttons, and badges.</span>
             </div>
           </div>
         </div>
-        <div class="form-group">
-          <label>Auto-Scan Interval (Hours)</label>
-          <input type="number" name="auto_scan_interval" value="${config.auto_scan_interval !== undefined ? config.auto_scan_interval : 24}" min="0" max="168" class="form-input">
-          <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;">Set to 0 to disable background scanning. Default is 24.</p>
-        </div>
-        <div class="form-group" style="grid-column: 1 / -1; margin-top: 10px;">
-          <label class="toggle-item">
+
+        <!-- 2. Library & Navigation Defaults -->
+        <div style="grid-column: 1 / -1; margin-bottom: 24px">
+          <h3 style="margin-bottom: 6px; font-size: 1.05rem; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 8px;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent-cyan)"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+            Library View & Navigation Defaults
+          </h3>
+          <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 14px;">Select how your 3D library renders by default and which screen opens at launch.</p>
+
+          <label style="font-weight: 600; font-size: 0.875rem; color: var(--text-primary); display: block; margin-bottom: 8px;">Default Library View Mode</label>
+          <input type="hidden" name="library_view_mode" id="setting-library-view-mode" value="${currentViewMode}">
+          
+          <div class="view-mode-selector-grid" style="margin-bottom: 16px;">
+            <div class="view-mode-card ${currentViewMode === 'grid' ? 'active' : ''}" data-mode="grid" onclick="App.selectViewMode('grid')">
+              <div class="view-mode-card-header">
+                <div class="view-mode-icon" style="background: rgba(59,130,246,0.12); color: var(--accent-cyan);">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+                </div>
+                <div class="view-mode-radio"></div>
+              </div>
+              <div class="view-mode-title">All Models (Flat Grid Gallery)</div>
+              <div class="view-mode-desc">Displays all indexed 3D models across subfolders in a single unified gallery. Best for fast global searching, tag filtering, and print status tracking.</div>
+            </div>
+
+            <div class="view-mode-card ${currentViewMode === 'folder' ? 'active' : ''}" data-mode="folder" onclick="App.selectViewMode('folder')">
+              <div class="view-mode-card-header">
+                <div class="view-mode-icon" style="background: rgba(245,158,11,0.12); color: var(--warning);">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                </div>
+                <div class="view-mode-radio"></div>
+              </div>
+              <div class="view-mode-title">Folder View (Directory Hierarchy)</div>
+              <div class="view-mode-desc">Mirrors your exact storage directory layout on disk. Browse and drill down through nested folders and collections just like a file manager.</div>
+            </div>
+          </div>
+
+          <div style="background: var(--bg-secondary); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 14px 18px; display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap;">
             <div>
-              <div style="font-weight:600;font-size:0.95rem;color:var(--text-primary)">Scan & Index ZIP Archives</div>
-              <div style="font-size:0.75rem;color:var(--text-muted);margin-top:2px">Deep inspect .zip archive files to index internal 3D models and images without unpacking to disk.</div>
+              <div style="font-weight: 600; font-size: 0.875rem; color: var(--text-primary)">Default Landing Page</div>
+              <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 1px;">Determines which section loads when navigating to the root application address.</div>
+            </div>
+            <select name="default_landing_page" class="form-input" style="min-width: 260px; max-width: 320px;">
+              <option value="dashboard" ${(config.default_landing_page || 'dashboard') === 'dashboard' ? 'selected' : ''}>Dashboard (Overview & Metrics)</option>
+              <option value="models" ${config.default_landing_page === 'models' ? 'selected' : ''}>All Models (Direct Library Grid)</option>
+              <option value="browse" ${config.default_landing_page === 'browse' ? 'selected' : ''}>Folder Explorer (Disk Hierarchy)</option>
+              <option value="collections" ${config.default_landing_page === 'collections' ? 'selected' : ''}>Collections (Organized Projects)</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- 3. Module & Feature Toggles -->
+        <div style="grid-column: 1 / -1; margin-bottom: 24px">
+          <h3 style="margin-bottom: 6px; font-size: 1.05rem; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 8px;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent-cyan)"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+            Module & Feature Toggles
+          </h3>
+          <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 14px;">Toggle sections, taxonomies, and integrated features on or off to tailor your workspace.</p>
+
+          <div class="toggle-grid">
+            <!-- 1. Categories -->
+            <label class="toggle-card">
+              <div class="toggle-card-main">
+                <div class="toggle-card-icon">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h7"/></svg>
+                </div>
+                <div class="toggle-card-text">
+                  <div class="toggle-card-title">Categories Taxonomy</div>
+                  <div class="toggle-card-desc">Hierarchical category sorting and sidebar taxonomy.</div>
+                </div>
+              </div>
+              <input type="checkbox" name="enable_categories" value="true" ${config.enable_categories === 'false' || config.enable_categories === false ? '' : 'checked'} onchange="App.handleToggleSystemSetting('enable_categories', this.checked, 'Categories')">
+              <span class="toggle-switch"></span>
+            </label>
+
+            <!-- 2. Collections -->
+            <label class="toggle-card">
+              <div class="toggle-card-main">
+                <div class="toggle-card-icon">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                </div>
+                <div class="toggle-card-text">
+                  <div class="toggle-card-title">Collections & Projects</div>
+                  <div class="toggle-card-desc">Curated multi-part model collections and project binders.</div>
+                </div>
+              </div>
+              <input type="checkbox" name="enable_collections" value="true" ${config.enable_collections === 'false' || config.enable_collections === false ? '' : 'checked'} onchange="App.handleToggleSystemSetting('enable_collections', this.checked, 'Collections')">
+              <span class="toggle-switch"></span>
+            </label>
+
+            <!-- 3. Tags -->
+            <label class="toggle-card">
+              <div class="toggle-card-main">
+                <div class="toggle-card-icon">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
+                </div>
+                <div class="toggle-card-text">
+                  <div class="toggle-card-title">Tags Taxonomy</div>
+                  <div class="toggle-card-desc">Freeform labels, model card tag pills, and tag filters.</div>
+                </div>
+              </div>
+              <input type="checkbox" name="enable_tags" value="true" ${config.enable_tags === 'false' || config.enable_tags === false ? '' : 'checked'} onchange="App.handleToggleSystemSetting('enable_tags', this.checked, 'Tags')">
+              <span class="toggle-switch"></span>
+            </label>
+
+            <!-- 4. Favorites -->
+            <label class="toggle-card">
+              <div class="toggle-card-main">
+                <div class="toggle-card-icon">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                </div>
+                <div class="toggle-card-text">
+                  <div class="toggle-card-title">Favorites</div>
+                  <div class="toggle-card-desc">Quick-access favorite stars and starred models filter.</div>
+                </div>
+              </div>
+              <input type="checkbox" name="enable_favorites" value="true" ${config.enable_favorites === 'false' || config.enable_favorites === false ? '' : 'checked'} onchange="App.handleToggleSystemSetting('enable_favorites', this.checked, 'Favorites')">
+              <span class="toggle-switch"></span>
+            </label>
+
+            <!-- 5. Folder Explorer -->
+            <label class="toggle-card">
+              <div class="toggle-card-main">
+                <div class="toggle-card-icon">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>
+                </div>
+                <div class="toggle-card-text">
+                  <div class="toggle-card-title">Folder Explorer (Browse)</div>
+                  <div class="toggle-card-desc">Filesystem directory tree navigation in the sidebar.</div>
+                </div>
+              </div>
+              <input type="checkbox" name="enable_browse" value="true" ${config.enable_browse === 'false' || config.enable_browse === false ? '' : 'checked'} onchange="App.handleToggleSystemSetting('enable_browse', this.checked, 'Folder Explorer')">
+              <span class="toggle-switch"></span>
+            </label>
+
+            <!-- 6. Statistics Dashboard -->
+            <label class="toggle-card">
+              <div class="toggle-card-main">
+                <div class="toggle-card-icon">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+                </div>
+                <div class="toggle-card-text">
+                  <div class="toggle-card-title">Statistics Dashboard</div>
+                  <div class="toggle-card-desc">Storage metrics, model format stats, and analytics.</div>
+                </div>
+              </div>
+              <input type="checkbox" name="enable_stats" value="true" ${config.enable_stats === 'false' || config.enable_stats === false ? '' : 'checked'} onchange="App.handleToggleSystemSetting('enable_stats', this.checked, 'Statistics')">
+              <span class="toggle-switch"></span>
+            </label>
+
+            <!-- 7. Format Quick-Pills -->
+            <label class="toggle-card">
+              <div class="toggle-card-main">
+                <div class="toggle-card-icon">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
+                </div>
+                <div class="toggle-card-text">
+                  <div class="toggle-card-title">Format Quick-Pills</div>
+                  <div class="toggle-card-desc">Toolbar quick filters (STL, 3MF, STEP, G-Code, OBJ).</div>
+                </div>
+              </div>
+              <input type="checkbox" name="enable_format_pills" value="true" ${config.enable_format_pills === 'false' || config.enable_format_pills === false ? '' : 'checked'} onchange="App.handleToggleSystemSetting('enable_format_pills', this.checked, 'Format pills')">
+              <span class="toggle-switch"></span>
+            </label>
+
+            <!-- 8. Print History & Materials -->
+            <label class="toggle-card">
+              <div class="toggle-card-main">
+                <div class="toggle-card-icon">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                </div>
+                <div class="toggle-card-text">
+                  <div class="toggle-card-title">Print History & Materials</div>
+                  <div class="toggle-card-desc">Filament spool tracker, print logging, and cost estimates.</div>
+                </div>
+              </div>
+              <input type="checkbox" name="enable_print_history" value="true" ${config.enable_print_history === 'false' || config.enable_print_history === false ? '' : 'checked'} onchange="App.handleToggleSystemSetting('enable_print_history', this.checked, 'Print History')">
+              <span class="toggle-switch"></span>
+            </label>
+
+            <!-- 9. Public Model Sharing -->
+            <label class="toggle-card">
+              <div class="toggle-card-main">
+                <div class="toggle-card-icon">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+                </div>
+                <div class="toggle-card-text">
+                  <div class="toggle-card-title">Public Model Sharing</div>
+                  <div class="toggle-card-desc">Generate secure public view & download share links.</div>
+                </div>
+              </div>
+              <input type="checkbox" name="enable_sharing" value="true" ${config.enable_sharing === 'false' || config.enable_sharing === false ? '' : 'checked'} onchange="App.handleToggleSystemSetting('enable_sharing', this.checked, 'Public Sharing')">
+              <span class="toggle-switch"></span>
+            </label>
+
+            <!-- 10. 3D Printers Live Monitoring -->
+            <label class="toggle-card">
+              <div class="toggle-card-main">
+                <div class="toggle-card-icon">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+                </div>
+                <div class="toggle-card-text">
+                  <div class="toggle-card-title">3D Printers Monitoring</div>
+                  <div class="toggle-card-desc">Moonraker & OctoPrint printer telemetry and actions.</div>
+                </div>
+              </div>
+              <input type="checkbox" name="enable_printers" value="true" ${config.enable_printers === 'false' || config.enable_printers === false ? '' : 'checked'} onchange="App.handleToggleSystemSetting('enable_printers', this.checked, 'Printers')">
+              <span class="toggle-switch"></span>
+            </label>
+          </div>
+        </div>
+
+        <div style="grid-column: 1 / -1; padding-top: 10px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end;">
+          <button type="submit" class="btn btn-primary" style="padding: 10px 24px; font-weight: 600;">Save User Interface Settings</button>
+        </div>
+      </form>`;
+  },
+
+  systemSettingsForm(config = {}) {
+    config = config || {};
+    const currentScanMode = config.scan_grouping_mode || 'folder';
+
+    return `
+      <form onsubmit="App.handleSaveSystemSettings(event)" class="form-grid">
+        <!-- 1. Storage & Scanner Architecture -->
+        <div style="grid-column: 1 / -1; margin-bottom: 24px">
+          <h3 style="margin-bottom: 6px; font-size: 1.05rem; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 8px;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent-cyan)"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+            Library Storage & Scanning Engine
+          </h3>
+          <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 14px;">Configure how your disk directory structures are scanned, grouped into models, and synchronized.</p>
+
+          <label style="font-weight: 600; font-size: 0.875rem; color: var(--text-primary); display: block; margin-bottom: 8px;">Library Scan & Grouping Method</label>
+          <input type="hidden" name="scan_grouping_mode" id="setting-scan-grouping-mode" value="${currentScanMode}">
+          
+          <div class="view-mode-selector-grid" style="margin-bottom: 16px;">
+            <div class="scan-mode-card ${currentScanMode === 'folder' ? 'active' : ''}" data-mode="folder" onclick="App.selectScanMode('folder')">
+              <div class="view-mode-card-header">
+                <div class="view-mode-icon" style="background: rgba(59,130,246,0.12); color: var(--accent-cyan);">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                </div>
+                <div class="view-mode-radio"></div>
+              </div>
+              <div class="view-mode-title">Folder Mode (Recommended)</div>
+              <div class="view-mode-desc">Treats each subfolder as a single unified 3D model. Ideal for multi-part prints, assemblies, and projects with multiple parts in one directory.</div>
+            </div>
+
+            <div class="scan-mode-card ${currentScanMode === 'file' ? 'active' : ''}" data-mode="file" onclick="App.selectScanMode('file')">
+              <div class="view-mode-card-header">
+                <div class="view-mode-icon" style="background: rgba(16,185,129,0.12); color: var(--success);">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                </div>
+                <div class="view-mode-radio"></div>
+              </div>
+              <div class="view-mode-title">File Mode (Individual Files)</div>
+              <div class="view-mode-desc">Treats each standalone 3D file as its own model. Files sharing the same base name (e.g. <code>part.stl</code>, <code>part.png</code>, <code>part.gcode</code>) are paired together.</div>
+            </div>
+          </div>
+
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; margin-bottom: 14px;">
+            <div style="background: var(--bg-secondary); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 14px 18px;">
+              <label style="font-weight: 600; font-size: 0.875rem; color: var(--text-primary); display: block; margin-bottom: 4px;">Auto-Scan Interval (Hours)</label>
+              <input type="number" name="auto_scan_interval" value="${config.auto_scan_interval !== undefined ? config.auto_scan_interval : 24}" min="0" max="168" class="form-input" style="width: 100%; margin-top: 6px;">
+              <span style="font-size: 0.725rem; color: var(--text-muted); display: block; margin-top: 4px;">Periodically scan disk for new files & folders. Set to 0 to disable. Default is 24h.</span>
+            </div>
+
+            <div style="background: var(--bg-secondary); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 14px 18px;">
+              <label style="font-weight: 600; font-size: 0.875rem; color: var(--text-primary); display: block; margin-bottom: 4px;">Auto-Sync Interval (Hours)</label>
+              <input type="number" name="auto_sync_interval" value="${config.auto_sync_interval !== undefined ? config.auto_sync_interval : 1}" min="0" max="168" class="form-input" style="width: 100%; margin-top: 6px;">
+              <span style="font-size: 0.725rem; color: var(--text-muted); display: block; margin-top: 4px;">Verify library against disk & prune removed files. Set to 0 to disable (spins down NAS/HDDs). Default is 1h.</span>
+            </div>
+          </div>
+
+          <label class="toggle-card" style="margin: 0; align-self: stretch;">
+            <div class="toggle-card-main">
+              <div class="toggle-card-icon">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg>
+              </div>
+              <div class="toggle-card-text">
+                <div class="toggle-card-title">Scan & Index ZIP Archives</div>
+                <div class="toggle-card-desc">Inspect .zip files for internal 3D files and covers without unpacking to disk.</div>
+              </div>
             </div>
             <input type="checkbox" name="scan_zip_archives" value="true" ${config.scan_zip_archives === 'false' || config.scan_zip_archives === false ? '' : 'checked'} onchange="App.handleToggleSystemSetting('scan_zip_archives', this.checked, 'ZIP archive scanning')">
             <span class="toggle-switch"></span>
           </label>
         </div>
 
-        <div style="grid-column: 1 / -1; margin-top:20px">
-          <button type="submit" class="btn btn-primary">Save General Settings</button>
+        <!-- 2. Backup & Maintenance -->
+        <div style="grid-column: 1 / -1; margin-bottom: 24px">
+          <h3 style="margin-bottom: 6px; font-size: 1.05rem; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 8px;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent-cyan)"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Backup & Data Protection
+          </h3>
+          <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 14px;">Download a complete snapshot of your database and custom thumbnails for safe offsite backup.</p>
+
+          <div style="background: var(--bg-secondary); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 16px 20px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 14px;">
+            <div>
+              <div style="font-weight: 600; font-size: 0.95rem; color: var(--text-primary)">1-Click Database & Thumbnail Archive</div>
+              <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 3px; max-width: 580px;">Packages your SQLite database (models, collections, tags, materials, print logs, and settings) along with custom uploaded cover images into a single compressed <code>.zip</code> file.</div>
+            </div>
+            <a href="/api/system/backup" class="btn btn-secondary" download style="display: inline-flex; align-items: center; gap: 8px; text-decoration: none; white-space: nowrap; padding: 10px 18px; font-weight: 600;">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              Download Backup (.zip)
+            </a>
+          </div>
+        </div>
+
+        <div style="grid-column: 1 / -1; padding-top: 10px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end;">
+          <button type="submit" class="btn btn-primary" style="padding: 10px 24px; font-weight: 600;">Save System Settings</button>
         </div>
       </form>`;
   },
-
   securitySettingsForm(config = {}) {
     config = config || {};
+    const oidcEnabled = config.oidc_enabled === 'true' || config.oidc_enabled === true;
     return `
-      <form onsubmit="App.handleSaveSystemSettings(event)" style="display:flex;flex-direction:column;gap:20px">
-        <div style="display:flex;flex-direction:column;gap:14px">
-          <label class="toggle-item">
-            <div>
-              <div style="font-weight:600;font-size:0.95rem;color:var(--text-primary)">Enable Open Registration</div>
-              <div style="font-size:0.75rem;color:var(--text-muted);margin-top:2px">Allows anyone to register an account without needing an invite code.</div>
-            </div>
-            <input type="checkbox" name="open_registration" value="true" ${config.open_registration === 'true' ? 'checked' : ''} onchange="App.handleToggleSystemSetting('open_registration', this.checked, 'Open registration')">
-            <span class="toggle-switch"></span>
-          </label>
+      <form onsubmit="App.handleSaveSystemSettings(event)" class="form-grid">
+        <!-- 1. Access Control & Registration -->
+        <div style="grid-column: 1 / -1; margin-bottom: 24px">
+          <h3 style="margin-bottom: 6px; font-size: 1.05rem; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 8px;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent-cyan)"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            Instance Security & Access Policy
+          </h3>
+          <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 14px;">Manage visitor visibility and public account registration rules.</p>
 
-          <label class="toggle-item">
-            <div>
-              <div style="font-weight:600;font-size:0.95rem;color:var(--text-primary)">Private Instance Mode</div>
-              <div style="font-size:0.75rem;color:var(--text-muted);margin-top:2px">Forces all guests to log in before viewing any models or library files.</div>
-            </div>
-            <input type="checkbox" name="require_login_to_view" value="true" ${config.require_login_to_view === 'true' ? 'checked' : ''} onchange="App.handleToggleSystemSetting('require_login_to_view', this.checked, 'Private instance mode')">
-            <span class="toggle-switch"></span>
-          </label>
+          <div class="toggle-grid">
+            <label class="toggle-card">
+              <div class="toggle-card-main">
+                <div class="toggle-card-icon">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
+                </div>
+                <div class="toggle-card-text">
+                  <div class="toggle-card-title">Enable Open Registration</div>
+                  <div class="toggle-card-desc">Allows any visitor to create an account without an invite.</div>
+                </div>
+              </div>
+              <input type="checkbox" name="open_registration" value="true" ${config.open_registration === 'true' || config.open_registration === true ? 'checked' : ''} onchange="App.handleToggleSystemSetting('open_registration', this.checked, 'Open registration')">
+              <span class="toggle-switch"></span>
+            </label>
+
+            <label class="toggle-card">
+              <div class="toggle-card-main">
+                <div class="toggle-card-icon">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                </div>
+                <div class="toggle-card-text">
+                  <div class="toggle-card-title">Private Instance Mode</div>
+                  <div class="toggle-card-desc">Forces all visitors to log in before viewing any models.</div>
+                </div>
+              </div>
+              <input type="checkbox" name="require_login_to_view" value="true" ${config.require_login_to_view === 'true' || config.require_login_to_view === true ? 'checked' : ''} onchange="App.handleToggleSystemSetting('require_login_to_view', this.checked, 'Private instance mode')">
+              <span class="toggle-switch"></span>
+            </label>
+          </div>
         </div>
 
-        <div>
-          <button type="submit" class="btn btn-primary">Save Security Settings</button>
+        <!-- 2. Single Sign-On (OIDC / SSO) -->
+        <div style="grid-column: 1 / -1; margin-bottom: 24px">
+          <h3 style="margin-bottom: 6px; font-size: 1.05rem; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 8px;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent-cyan)"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+            Single Sign-On (OpenID Connect / OAuth2)
+          </h3>
+          <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 14px;">Integrate with your identity provider (Authentik, Keycloak, Authelia, Pocket ID, Okta, etc.).</p>
+
+          <div style="background: var(--bg-secondary); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 18px 20px;">
+            <label class="toggle-card" style="margin-bottom: 16px; background: rgba(255,255,255,0.02)">
+              <div class="toggle-card-main">
+                <div class="toggle-card-icon" style="color: var(--accent-cyan)">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+                </div>
+                <div class="toggle-card-text">
+                  <div class="toggle-card-title">Enable Single Sign-On (OIDC)</div>
+                  <div class="toggle-card-desc">Display an SSO login button on the login modal and authenticate via OpenID Connect.</div>
+                </div>
+              </div>
+              <input type="checkbox" name="oidc_enabled" value="true" ${oidcEnabled ? 'checked' : ''} onchange="App.handleToggleSystemSetting('oidc_enabled', this.checked, 'OIDC Single Sign-On')">
+              <span class="toggle-switch"></span>
+            </label>
+
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px;">
+              <div style="grid-column: 1 / -1">
+                <label style="font-weight: 600; font-size: 0.85rem; color: var(--text-primary); display: block; margin-bottom: 4px;">Issuer Discovery URL</label>
+                <div style="display: flex; gap: 8px;">
+                  <input type="url" name="oidc_issuer_url" value="${config.oidc_issuer_url || ''}" placeholder="https://auth.example.com/application/o/gyroidvault/" class="form-input" style="flex: 1">
+                  <button type="button" class="btn btn-secondary btn-sm" onclick="App.testOidcDiscovery()" style="white-space: nowrap">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 4px"><circle cx="12" cy="12" r="10"/><path d="m4.93 4.93 4.24 4.24"/><path d="m14.83 9.17 4.24-4.24"/><path d="m14.83 14.83 4.24 4.24"/><path d="m9.17 14.83-4.24 4.24"/></svg>
+                    Test Discovery
+                  </button>
+                </div>
+                <div id="oidc-test-result" style="margin-top: 6px;"></div>
+                <span style="font-size: 0.725rem; color: var(--text-muted); display: block; margin-top: 4px;">The base URL of your identity provider containing <code>.well-known/openid-configuration</code>.</span>
+              </div>
+
+              <div>
+                <label style="font-weight: 600; font-size: 0.85rem; color: var(--text-primary); display: block; margin-bottom: 4px;">Client ID</label>
+                <input type="text" name="oidc_client_id" value="${config.oidc_client_id || ''}" placeholder="gyroidvault-client" class="form-input" style="width: 100%">
+              </div>
+
+              <div>
+                <label style="font-weight: 600; font-size: 0.85rem; color: var(--text-primary); display: block; margin-bottom: 4px;">Client Secret</label>
+                <input type="password" name="oidc_client_secret" placeholder="${config.oidc_has_secret ? '•••••••• (Secret Configured)' : 'Enter client secret'}" class="form-input" style="width: 100%">
+              </div>
+
+              <div>
+                <label style="font-weight: 600; font-size: 0.85rem; color: var(--text-primary); display: block; margin-bottom: 4px;">SSO Button Label</label>
+                <input type="text" name="oidc_button_label" value="${config.oidc_button_label || 'Single Sign-On'}" placeholder="Login with Authentik" class="form-input" style="width: 100%">
+              </div>
+
+              <div>
+                <label style="font-weight: 600; font-size: 0.85rem; color: var(--text-primary); display: block; margin-bottom: 4px;">Admin Group Claim (Optional)</label>
+                <input type="text" name="oidc_admin_group" value="${config.oidc_admin_group || ''}" placeholder="gyroidvault-admins" class="form-input" style="width: 100%">
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 3. Brute Force & IP Security -->
+        <div style="grid-column: 1 / -1; margin-bottom: 24px">
+          <h3 style="margin-bottom: 6px; font-size: 1.05rem; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 8px;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent-purple)"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>
+            Blocked IP Addresses (Brute-Force Protection)
+          </h3>
+          <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 14px;">IP addresses temporarily blocked due to repeated failed login attempts.</p>
+
+          <div style="background: var(--bg-secondary); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 18px 20px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+              <span style="font-size: 0.8rem; color: var(--text-muted)">Unblock IP addresses flagged by the rate limiter.</span>
+              <button type="button" class="btn btn-secondary btn-sm" onclick="App.loadBlockedIps()">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 4px"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+                Refresh
+              </button>
+            </div>
+            <div id="blocked-ips-container">
+              <div id="blocked-ips-list"></div>
+            </div>
+          </div>
+        </div>
+
+        <div style="grid-column: 1 / -1; padding-top: 10px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end;">
+          <button type="submit" class="btn btn-primary" style="padding: 10px 24px; font-weight: 600;">Save Security Settings</button>
         </div>
       </form>
-
-      <div style="margin-top:32px; border-top:1px solid var(--border); padding-top:20px">
-        <h3 style="margin-bottom:12px; font-size:1.1rem; color:var(--text-primary); display:flex; align-items:center; gap:8px"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--accent-purple)"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>Blocked IP Addresses</h3>
-        <div id="blocked-ips-container">
-          <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
-            <button type="button" class="btn btn-secondary btn-sm" onclick="App.loadBlockedIps()">Refresh Blocked IPs</button>
-            <span style="font-size:0.75rem;color:var(--text-muted)">Unblock IP addresses flagged for failed login attempts.</span>
-          </div>
-          <div id="blocked-ips-list"></div>
-        </div>
-      </div>`;
+    `;
   },
 
   maintenanceSettingsForm() {
     return `
-      <div style="display:flex;flex-direction:column;gap:24px">
-        <div>
-          <h3 style="margin-bottom:8px; font-size:1.1rem; color:var(--text-primary); display:flex; align-items:center; gap:8px"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--accent-cyan)"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>Duplicate File Finder</h3>
-          <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:16px">Scans your library using SHA-256 file hashes to find identical 3D model files across different folders or models.</p>
-          <button type="button" class="btn btn-primary btn-sm" onclick="App.scanForDuplicates()">Scan for Duplicate Files</button>
-          <div id="duplicates-results" style="margin-top:16px"></div>
+      <div>
+        <h3 style="margin-bottom: 6px; font-size: 1.05rem; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 8px;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent-cyan)"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          SHA-256 Duplicate File Finder
+        </h3>
+        <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 14px;">Compute cryptographic checksums across all 3D files in your storage directory to detect identical duplicate models.</p>
+
+        <div style="background: var(--bg-secondary); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 18px 20px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+            <div>
+              <div style="font-weight: 600; font-size: 0.95rem; color: var(--text-primary)">Library Integrity & Hash Scanner</div>
+              <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 2px;">Scans STLs, 3MFs, STEPs, and OBJ models to find duplicate assets stored across different folders.</div>
+            </div>
+            <button type="button" class="btn btn-primary" onclick="App.scanForDuplicates()" style="padding: 9px 18px; font-weight: 600;">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+              Scan for Duplicate Files
+            </button>
+          </div>
+          <div id="duplicates-results" style="margin-top: 14px"></div>
         </div>
-      </div>`;
+      </div>
+    `;
   },
 
   smtpSettingsForm(config = {}) {
     config = config || {};
     return `
-      <form onsubmit="App.handleSaveSMTP(event)" class="form-grid">
-        <div class="form-group">
-          <label>SMTP Host</label>
-          <input type="text" name="smtp_host" value="${config.smtp_host || ''}" placeholder="smtp.gmail.com" class="form-input">
+      <form onsubmit="App.handleSaveSMTP(event)">
+        <div style="margin-bottom: 24px">
+          <h3 style="margin-bottom: 6px; font-size: 1.05rem; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 8px;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent-cyan)"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+            Outbound Mail Server (SMTP)
+          </h3>
+          <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 16px;">Configure an SMTP server for sending user invitations and password reset emails.</p>
+
+          <div style="background: var(--bg-secondary); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 22px 24px; display: flex; flex-direction: column; gap: 16px;">
+            <div>
+              <label style="font-weight: 600; font-size: 0.85rem; color: var(--text-primary); display: block; margin-bottom: 5px;">SMTP Host</label>
+              <input type="text" name="smtp_host" value="${config.smtp_host || ''}" placeholder="smtp.gmail.com" class="form-input" style="width: 100%">
+            </div>
+
+            <div>
+              <label style="font-weight: 600; font-size: 0.85rem; color: var(--text-primary); display: block; margin-bottom: 5px;">SMTP Port</label>
+              <input type="number" name="smtp_port" value="${config.smtp_port || 587}" class="form-input" style="width: 100%">
+            </div>
+
+            <div>
+              <label style="font-weight: 600; font-size: 0.85rem; color: var(--text-primary); display: block; margin-bottom: 5px;">Security & Encryption</label>
+              <select name="smtp_secure" class="form-input" style="width: 100%">
+                <option value="false" ${config.smtp_secure === 'false' ? 'selected' : ''}>STARTTLS (Port 587)</option>
+                <option value="true" ${config.smtp_secure === 'true' ? 'selected' : ''}>SSL / TLS (Port 465)</option>
+              </select>
+            </div>
+
+            <div>
+              <label style="font-weight: 600; font-size: 0.85rem; color: var(--text-primary); display: block; margin-bottom: 5px;">SMTP Username</label>
+              <input type="text" name="smtp_user" value="${config.smtp_user || ''}" placeholder="user@example.com" class="form-input" style="width: 100%">
+            </div>
+
+            <div>
+              <label style="font-weight: 600; font-size: 0.85rem; color: var(--text-primary); display: block; margin-bottom: 5px;">SMTP Password</label>
+              <input type="password" name="smtp_pass" value="${config.smtp_pass || ''}" placeholder="••••••••" class="form-input" style="width: 100%">
+            </div>
+
+            <div>
+              <label style="font-weight: 600; font-size: 0.85rem; color: var(--text-primary); display: block; margin-bottom: 5px;">Sender Email (From)</label>
+              <input type="text" name="smtp_from" value="${config.smtp_from || ''}" placeholder="GyroidVault &lt;noreply@example.com&gt;" class="form-input" style="width: 100%">
+              <span style="font-size: 0.725rem; color: var(--text-muted); display: block; margin-top: 4px;">Display name and sender email address visible to recipients.</span>
+            </div>
+          </div>
         </div>
-        <div class="form-group">
-          <label>SMTP Port</label>
-          <input type="number" name="smtp_port" value="${config.smtp_port || 587}" class="form-input">
-        </div>
-        <div class="form-group">
-          <label>SMTP User</label>
-          <input type="text" name="smtp_user" value="${config.smtp_user || ''}" class="form-input">
-        </div>
-        <div class="form-group">
-          <label>SMTP Password</label>
-          <input type="password" name="smtp_pass" value="${config.smtp_pass || ''}" class="form-input">
-        </div>
-        <div class="form-group">
-          <label>From Email</label>
-          <input type="text" name="smtp_from" value="${config.smtp_from || ''}" placeholder="GyroidVault <noreply@example.com>" class="form-input">
-        </div>
-        <div class="form-group">
-          <label>Secure (SSL/TLS)</label>
-          <select name="smtp_secure" class="form-input">
-            <option value="false" ${config.smtp_secure === 'false' ? 'selected' : ''}>STARTTLS (Port 587)</option>
-            <option value="true" ${config.smtp_secure === 'true' ? 'selected' : ''}>SSL (Port 465)</option>
-          </select>
-        </div>
-        <div style="margin-top:20px; display:flex; gap:10px;">
-          <button type="submit" class="btn btn-primary">Save SMTP Settings</button>
-          <button type="button" class="btn btn-secondary" onclick="App.testSMTP(event)">Send Test Email</button>
+
+        <div style="display: flex; justify-content: space-between; align-items: center; gap: 12px; padding-top: 10px; border-top: 1px solid var(--border);">
+          <button type="button" class="btn btn-secondary" onclick="App.testSMTP(event)" style="padding: 10px 18px; font-weight: 600;">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+            Send Test Email
+          </button>
+          <button type="submit" class="btn btn-primary" style="padding: 10px 24px; font-weight: 600;">Save SMTP Settings</button>
         </div>
       </form>`;
   },
@@ -1585,6 +2065,7 @@ const UI = {
               <option value="" ${!user.preferred_slicer ? 'selected' : ''}>None (Ask every time)</option>
               <option value="orcaslicer" ${user.preferred_slicer === 'orcaslicer' ? 'selected' : ''}>OrcaSlicer</option>
               <option value="elegooslicer" ${user.preferred_slicer === 'elegooslicer' ? 'selected' : ''}>Elegoo Slicer</option>
+                  <option value="crealityprint" ${user.preferred_slicer === 'crealityprint' ? 'selected' : ''}>Creality Print</option>
               <option value="cura" ${user.preferred_slicer === 'cura' ? 'selected' : ''}>Ultimaker Cura</option>
               <option value="bambustudio" ${user.preferred_slicer === 'bambustudio' ? 'selected' : ''}>Bambu Studio</option>
             </select>

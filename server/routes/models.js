@@ -31,18 +31,87 @@ router.get('/', (req, res) => {
     }
 
     if (search) {
-      const s = `%${search}%`;
-      conds.push(`(
-        m.name LIKE ?
-        OR m.description LIKE ?
-        OR m.category_id IN (SELECT id FROM categories WHERE name LIKE ?)
-        OR m.id IN (SELECT mt.model_id FROM model_tags mt JOIN tags t ON mt.tag_id = t.id WHERE t.name LIKE ?)
-        OR m.id IN (SELECT pm.model_id FROM project_models pm JOIN projects p ON pm.project_id = p.id WHERE p.name LIKE ?)
-      )`);
-      params.push(s, s, s, s, s);
+      // Parse typed search syntax (tag:, -tag:, cat:, format:, user:)
+      const tokenRegex = /(?:^|\s)([-+]?[a-zA-Z_]+):(?:"([^"]+)"|'([^']+)'|(\S+))/g;
+      let match;
+      const includeTags = [];
+      const excludeTags = [];
+      const searchCats = [];
+      const searchFormats = [];
+      const searchUsers = [];
+
+      while ((match = tokenRegex.exec(search)) !== null) {
+        const key = match[1].toLowerCase();
+        const val = (match[2] !== undefined ? match[2] : match[3] !== undefined ? match[3] : match[4] || '').trim();
+        if (!val) continue;
+
+        if (key === 'tag') {
+          includeTags.push(val);
+        } else if (key === '-tag' || key === '!tag') {
+          excludeTags.push(val);
+        } else if (key === 'cat' || key === 'category') {
+          searchCats.push(val);
+        } else if (key === 'format' || key === 'ext') {
+          searchFormats.push(val.toLowerCase().replace(/^\./, ''));
+        } else if (key === 'user' || key === 'creator' || key === 'author' || key === 'uploader') {
+          searchUsers.push(val);
+        }
+      }
+
+      includeTags.forEach(t => {
+        conds.push("m.id IN (SELECT mt.model_id FROM model_tags mt JOIN tags t ON mt.tag_id = t.id WHERE t.name LIKE ?)");
+        params.push(`%${t}%`);
+      });
+
+      excludeTags.forEach(t => {
+        conds.push("m.id NOT IN (SELECT mt.model_id FROM model_tags mt JOIN tags t ON mt.tag_id = t.id WHERE t.name LIKE ?)");
+        params.push(`%${t}%`);
+      });
+
+      searchCats.forEach(c => {
+        conds.push("m.category_id IN (SELECT id FROM categories WHERE name LIKE ?)");
+        params.push(`%${c}%`);
+      });
+
+      searchFormats.forEach(f => {
+        conds.push("m.id IN (SELECT DISTINCT model_id FROM files WHERE file_type = ?)");
+        params.push(f);
+      });
+
+      searchUsers.forEach(u => {
+        conds.push("m.user_id IN (SELECT id FROM users WHERE username LIKE ?)");
+        params.push(`%${u}%`);
+      });
+
+      const freeText = search.replace(/(?:^|\s)([-+]?[a-zA-Z_]+):(?:"([^"]+)"|'([^']+)'|(\S+))/g, ' ').replace(/\s+/g, ' ').trim();
+      if (freeText) {
+        const s = `%${freeText}%`;
+        conds.push(`(
+          m.name LIKE ?
+          OR m.description LIKE ?
+          OR m.category_id IN (SELECT id FROM categories WHERE name LIKE ?)
+          OR m.id IN (SELECT mt.model_id FROM model_tags mt JOIN tags t ON mt.tag_id = t.id WHERE t.name LIKE ?)
+          OR m.id IN (SELECT pm.model_id FROM project_models pm JOIN projects p ON pm.project_id = p.id WHERE p.name LIKE ?)
+        )`);
+        params.push(s, s, s, s, s);
+      }
     }
-    if (category) { conds.push("m.category_id=?"); params.push(Number(category)); }
-    if (tag) { conds.push("m.id IN (SELECT model_id FROM model_tags WHERE tag_id=?)"); params.push(Number(tag)); }
+    if (category) {
+      if (category === 'uncategorized' || category === 'none') {
+        conds.push("m.category_id IS NULL");
+      } else {
+        conds.push("m.category_id=?");
+        params.push(Number(category));
+      }
+    }
+    if (tag) {
+      if (tag === 'untagged' || tag === 'none') {
+        conds.push("m.id NOT IN (SELECT model_id FROM model_tags)");
+      } else {
+        conds.push("m.id IN (SELECT model_id FROM model_tags WHERE tag_id=?)");
+        params.push(Number(tag));
+      }
+    }
     if (format && format !== 'all') {
       conds.push("m.id IN (SELECT DISTINCT model_id FROM files WHERE file_type=?)");
       params.push(format.toLowerCase());
@@ -192,7 +261,8 @@ router.get('/:id', (req, res) => {
     }));
     model.prints = all('SELECT ph.*,mat.name as material_name, u.username as printer_name FROM print_history ph LEFT JOIN materials mat ON ph.material_id=mat.id LEFT JOIN users u ON ph.user_id=u.id WHERE ph.model_id=? ORDER BY ph.printed_at DESC', [model.id]);
     model.tags = all('SELECT t.id,t.name FROM tags t JOIN model_tags mt ON mt.tag_id=t.id WHERE mt.model_id=?', [model.id]);
-    model.projects = all('SELECT p.id, p.name, p.visibility FROM projects p JOIN project_models pm ON p.id=pm.project_id WHERE pm.model_id=?', [model.id]);
+    model.projects = all('SELECT p.id, p.name, p.visibility, p.user_id FROM projects p JOIN project_models pm ON p.id=pm.project_id WHERE pm.model_id=?', [model.id])
+      .filter(p => p.visibility === 'public' || (req.user && (req.user.role === 'admin' || p.user_id === req.user.id)));
     model.has_printed = model.prints.length > 0;
     
     // Versions
@@ -400,7 +470,13 @@ router.post('/', authenticate, requireUploader, (req, res) => {
       const currentYear = new Date().getFullYear();
 
       // 1. Versioning: detect if name ends with v1, v2, etc.
-      const versionMatch = trimmedName.match(/^(.*?)\s*\(?v(\d+)\)?$/i);
+      let versionMatch = null;
+    const vMatch = /(?:[\s_.-]+\(?v(\d+)\)?|\s+v(\d+))$/i.exec(trimmedName);
+    if (vMatch) {
+      const vNum = vMatch[1] || vMatch[2];
+      const base = trimmedName.slice(0, vMatch.index).trim();
+      versionMatch = [trimmedName, base, vNum];
+    }
       if (versionMatch) {
         const base = versionMatch[1].trim();
         const nextVer = parseInt(versionMatch[2], 10) + 1;

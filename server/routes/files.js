@@ -316,11 +316,14 @@ router.post('/:id/send-to-printer', authenticate, async (req, res) => {
 const uploadSlicerHandler = [authenticate, upload.single('file'), (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
   try {
-    const filename = req.file.originalname;
+    const filename = path.basename(req.file.originalname);
     const name = path.parse(filename).name;
     const userId = req.user.id;
     const safeName = name.replace(/[<>:"/\\|?*]/g, '').trim() || `model_${Date.now()}`;
     const libPath = path.join(LIBRARY_PATH, safeName);
+    if (!path.resolve(libPath).startsWith(path.resolve(LIBRARY_PATH))) {
+      return res.status(400).json({ error: 'Invalid library destination' });
+    }
     if (!fs.existsSync(libPath)) fs.mkdirSync(libPath, { recursive: true });
 
     let finalDest = path.join(libPath, filename);
@@ -330,6 +333,9 @@ const uploadSlicerHandler = [authenticate, upload.single('file'), (req, res) => 
       const base = path.basename(filename, ext);
       finalDest = path.join(libPath, `${base}_${counter}${ext}`);
       counter++;
+    }
+    if (!path.resolve(finalDest).startsWith(path.resolve(LIBRARY_PATH))) {
+      return res.status(400).json({ error: 'Invalid file destination' });
     }
     fs.copyFileSync(req.file.path, finalDest);
     try { fs.unlinkSync(req.file.path); } catch (e) {}

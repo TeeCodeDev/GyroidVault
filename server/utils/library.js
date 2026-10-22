@@ -104,7 +104,105 @@ async function collectAllFilesInModelDir(rootModelPath) {
   return collected;
 }
 
-// ?? Scanner State & Lock Management ??????????????????????????????????????????
+/**
+ * Groups files in a single directory by their normalized base name (without extension).
+ * Used for File Mode indexing and for indexing loose files directly in the root of LIBRARY_PATH.
+ * Automatically couples companion images (.png, .jpg, .webp), slicer files (.gcode), and docs.
+ */
+function groupFilesByBaseName(fileItems, dirPath) {
+  const groups = new Map();
+  const unattachedImages = [];
+
+  for (const item of fileItems) {
+    const isDir = typeof item.isDirectory === 'function' ? item.isDirectory() : item.isDirectory;
+    if (isDir) continue;
+
+    const ext = path.extname(item.name).toLowerCase();
+    if (!SUPPORTED_EXTENSIONS.includes(ext) && !IMAGE_EXTENSIONS.includes(ext)) continue;
+
+    const stem = path.parse(item.name).name;
+    const normStem = stem.trim().toLowerCase();
+    const isModelFile = MODEL_TRIGGER_EXTENSIONS.includes(ext);
+    const isImage = IMAGE_EXTENSIONS.includes(ext);
+    const isGcode = (ext === '.gcode' || ext === '.bgcode');
+
+    const fileObj = {
+      filename: item.name,
+      filePath: path.join(dirPath, item.name),
+      relName: item.name,
+      ext,
+      stem,
+      normStem,
+      isModelFile,
+      isImage,
+      isGcode
+    };
+
+    if (isImage) {
+      unattachedImages.push(fileObj);
+    }
+
+    if (!groups.has(normStem)) {
+      groups.set(normStem, {
+        stem,
+        normStem,
+        files: [],
+        modelFiles: [],
+        images: [],
+        gcodes: []
+      });
+    }
+
+    const g = groups.get(normStem);
+    g.files.push(fileObj);
+    if (isModelFile) g.modelFiles.push(fileObj);
+    if (isImage) g.images.push(fileObj);
+    if (isGcode) g.gcodes.push(fileObj);
+  }
+
+  // Model groups that contain at least one 3D / CAD / trigger model file
+  const activeModelGroups = Array.from(groups.values()).filter(g => g.modelFiles.length > 0);
+
+  // Check unattached images for companion patterns like stem_thumb, stem-cover, or normalized punctuation
+  for (const img of unattachedImages) {
+    const exactGroup = groups.get(img.normStem);
+    if (exactGroup && exactGroup.modelFiles.length > 0) continue;
+
+    for (const mg of activeModelGroups) {
+      const p = mg.normStem;
+      const imgName = img.normStem;
+      if (
+        imgName === `${p}_thumb` || imgName === `${p}_cover` || imgName === `${p}_preview` ||
+        imgName === `${p}-thumb` || imgName === `${p}-cover` || imgName === `${p}-preview` ||
+        imgName.replace(/[-_ ]+/g, ' ') === p.replace(/[-_ ]+/g, ' ')
+      ) {
+        if (!mg.files.some(f => f.filePath === img.filePath)) {
+          mg.files.push(img);
+          mg.images.push(img);
+        }
+        break;
+      }
+    }
+  }
+
+  // If there is exactly one model group in this directory and it has no image yet,
+  // see if there is any generic cover image (cover.jpg, thumbnail.png, etc.)
+  if (activeModelGroups.length === 1 && activeModelGroups[0].images.length === 0) {
+    const singleGroup = activeModelGroups[0];
+    const genericCover = unattachedImages.find(img => {
+      const n = img.normStem;
+      return n === 'cover' || n === 'thumbnail' || n === 'preview' || n === 'thumb' || n === 'image';
+    }) || unattachedImages[0];
+    if (genericCover && !singleGroup.files.some(f => f.filePath === genericCover.filePath)) {
+      singleGroup.files.push(genericCover);
+      singleGroup.images.push(genericCover);
+    }
+  }
+
+  return activeModelGroups;
+}
+
+// ── Scanner State & Lock Management ──────────────────────────────────────────
 let isScanning = false;
 let shouldCancel = false;
 let scanStatus = {
@@ -177,6 +275,11 @@ async function scanLibrary(libraryPath) {
   if (!initialScanZipEnabled) {
     db.run('DELETE FROM files WHERE is_archive_entry = 1', [], true);
   }
+
+  // Scan grouping mode: 'folder' (default) vs 'file' (Issue #5)
+  const scanModeSetting = db.get("SELECT value FROM system_settings WHERE key = 'scan_grouping_mode'");
+  const scanGroupingMode = (scanModeSetting && scanModeSetting.value) ? scanModeSetting.value.toLowerCase() : 'folder';
+  const isFileMode = scanGroupingMode === 'file';
 
   async function indexModelFile(model, fileObj) {
     const { filename, filePath, relName } = fileObj;
@@ -357,6 +460,46 @@ async function scanLibrary(libraryPath) {
     }
   }
 
+  async function indexModelGroup(group, dirPath) {
+    // Prioritize primary 3D CAD formats over G-code/archives for the model name and library_path anchor
+    const priorityOrder = ['.stl', '.3mf', '.step', '.stp', '.obj', '.f3d', '.scad', '.zip', '.7z', '.rar', '.gcode', '.bgcode'];
+    group.modelFiles.sort((a, b) => {
+      const idxA = priorityOrder.indexOf(a.ext);
+      const idxB = priorityOrder.indexOf(b.ext);
+      return (idxA === -1 ? 99 : idxA) - (idxB === -1 ? 99 : idxB);
+    });
+
+    const primaryModelFile = group.modelFiles[0];
+    const modelPath = primaryModelFile.filePath;
+    const modelName = group.stem;
+
+    let model = db.get('SELECT id, thumbnail FROM models WHERE library_path = ?', [modelPath]);
+    if (!model && dirPath && dirPath !== resolvedLibraryRoot) {
+      // Check if there is an existing folder model for this directory to preserve its ID and associations
+      const folderModel = db.get('SELECT id, thumbnail FROM models WHERE library_path = ?', [dirPath]);
+      if (folderModel) {
+        db.run('UPDATE models SET library_path = ?, name = ? WHERE id = ?', [modelPath, modelName, folderModel.id], true);
+        model = folderModel;
+      }
+    }
+
+    if (!model) {
+      const r = db.run('INSERT INTO models (name, library_path) VALUES (?, ?)', [modelName, modelPath], true);
+      model = { id: r.lastId, thumbnail: null };
+      results.modelsAdded++;
+      processedSinceSave++;
+      scanStatus.modelsAdded = results.modelsAdded;
+    }
+
+    // Sort group files so image files are indexed first (guaranteeing model.thumbnail is set from companion image if present)
+    group.files.sort((a, b) => (a.isImage ? -1 : (b.isImage ? 1 : 0)));
+
+    for (const fileObj of group.files) {
+      if (shouldCancel) return;
+      await indexModelFile(model, fileObj);
+    }
+  }
+
   async function walk(currentPath) {
     if (shouldCancel) {
       console.log('[Scanner] Scan aborted early by cancellation request.');
@@ -378,6 +521,30 @@ async function scanLibrary(libraryPath) {
 
     const resolvedCurrent = path.resolve(currentPath);
     const isLibraryRoot = resolvedCurrent === resolvedLibraryRoot;
+
+    if (isFileMode) {
+      // ══════════════════════════════════════════════════════════════════════
+      // FILE MODE: Group matching files by filename, 1 model per 3D file/stem
+      // ══════════════════════════════════════════════════════════════════════
+      const modelGroups = groupFilesByBaseName(items, resolvedCurrent);
+      for (const group of modelGroups) {
+        if (shouldCancel) return;
+        await indexModelGroup(group, resolvedCurrent);
+      }
+
+      // Always walk all subdirectories in File Mode
+      for (const item of items) {
+        if (shouldCancel) return;
+        if (item.isDirectory()) {
+          await walk(path.join(currentPath, item.name));
+        }
+      }
+      return;
+    }
+
+    // ════════════════════════════════════════════════════════════════════════
+    // FOLDER MODE (Default): Group all files in a folder into a single model
+    // ════════════════════════════════════════════════════════════════════════
 
     // 1. Check if this directory directly contains any 3D/archive files (not just .txt/.pdf/.md docs)
     const hasDirectModelFiles = items.some(item => {
@@ -404,8 +571,15 @@ async function scanLibrary(libraryPath) {
       const modelPath = resolvedCurrent;
       const modelName = path.basename(currentPath);
 
+      const childPrefix = modelPath + path.sep;
       let model = db.get('SELECT id, thumbnail FROM models WHERE library_path = ?', [modelPath]);
-      if (!model) {
+      const childModels = db.all('SELECT id, thumbnail FROM models WHERE library_path LIKE ?', [childPrefix + '%']);
+
+      if (!model && childModels.length === 1) {
+        const existingChild = childModels[0];
+        db.run('UPDATE models SET library_path = ?, name = ? WHERE id = ?', [modelPath, modelName, existingChild.id], true);
+        model = existingChild;
+      } else if (!model) {
         const r = db.run('INSERT INTO models (name, library_path) VALUES (?, ?)', [modelName, modelPath], true);
         model = { id: r.lastId, thumbnail: null };
         results.modelsAdded++;
@@ -414,9 +588,8 @@ async function scanLibrary(libraryPath) {
       }
 
       // Consolidate and remove any previously created child models under this model folder (e.g. "stl files", "Version 1") (#78)
-      const childPrefix = modelPath + path.sep;
-      const childModels = db.all('SELECT id, thumbnail FROM models WHERE id != ? AND library_path LIKE ?', [model.id, childPrefix + '%']);
-      for (const child of childModels) {
+      const remainingChildren = db.all('SELECT id, thumbnail FROM models WHERE id != ? AND library_path LIKE ?', [model.id, childPrefix + '%']);
+      for (const child of remainingChildren) {
         if (child.thumbnail && !model.thumbnail) {
           db.run('UPDATE models SET thumbnail = ? WHERE id = ?', [child.thumbnail, model.id], true);
           model.thumbnail = child.thumbnail;
@@ -440,27 +613,16 @@ async function scanLibrary(libraryPath) {
       return;
     }
 
-    // If loose 3D files exist directly at the root of LIBRARY_PATH, index only the direct files
+    // If loose 3D files exist directly at the root of LIBRARY_PATH:
+    // Group loose root files by base name instead of forcing them into one giant "library" model! (Issue #5)
     if (isLibraryRoot && hasDirectModelFiles) {
-      const modelPath = resolvedCurrent;
-      const modelName = path.basename(currentPath);
-      let model = db.get('SELECT id, thumbnail FROM models WHERE library_path = ?', [modelPath]);
-      if (!model) {
-        const r = db.run('INSERT INTO models (name, library_path) VALUES (?, ?)', [modelName, modelPath], true);
-        model = { id: r.lastId, thumbnail: null };
-        results.modelsAdded++;
-        processedSinceSave++;
-        scanStatus.modelsAdded = results.modelsAdded;
-      }
-      for (const item of items) {
+      const rootModelGroups = groupFilesByBaseName(items, resolvedCurrent);
+      for (const group of rootModelGroups) {
         if (shouldCancel) return;
-        if (item.isDirectory()) continue;
-        await indexModelFile(model, {
-          filename: item.name,
-          filePath: path.join(modelPath, item.name),
-          relName: item.name
-        });
+        await indexModelGroup(group, resolvedCurrent);
       }
+      // Clean up any legacy single-folder model representing the library root itself (#78 / Issue #5)
+      db.run('DELETE FROM models WHERE library_path = ?', [resolvedLibraryRoot], true);
     }
 
     // Continue walking subdirectories for category / organizational folders
@@ -532,6 +694,7 @@ module.exports = {
   cancelScan,
   getFileType,
   isModelInternalSubfolder,
+  groupFilesByBaseName,
   MODEL_TRIGGER_EXTENSIONS,
   DOCUMENT_EXTENSIONS,
   SUPPORTED_EXTENSIONS,

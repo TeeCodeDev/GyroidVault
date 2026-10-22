@@ -1,6 +1,6 @@
 const fs = require('fs');
 const { all, get, run, saveDb } = require('../database');
-const { LIBRARY_PATH, SYNC_BATCH_SIZE, SYNC_INTERVAL_MS } = require('../config');
+const { LIBRARY_PATH, SYNC_BATCH_SIZE, SYNC_INTERVAL_MS, DEFAULT_SYNC_INTERVAL_HOURS } = require('../config');
 const { logEvent } = require('../utils/modelHelpers');
 const logger = require('../utils/logger');
 
@@ -76,6 +76,27 @@ async function syncLibraryWithDisk() {
 }
 
 /**
+ * Configures the periodic library sync according to system_settings 'auto_sync_interval'
+ */
+function setupBackgroundSync() {
+  if (syncIntervalId) {
+    clearInterval(syncIntervalId);
+    syncIntervalId = null;
+  }
+
+  const setting = get('SELECT value FROM system_settings WHERE key="auto_sync_interval"');
+  const defaultHours = DEFAULT_SYNC_INTERVAL_HOURS !== undefined ? DEFAULT_SYNC_INTERVAL_HOURS : 1;
+  const hours = (setting && setting.value !== undefined) ? Number(setting.value) : defaultHours;
+
+  if (hours > 0) {
+    logger.info('Sync', `Starting background library sync (interval: ${hours} hours)`);
+    syncIntervalId = setInterval(syncLibraryWithDisk, hours * 3600 * 1000);
+  } else {
+    logger.info('Sync', 'Background library sync is disabled (auto_sync_interval: 0).');
+  }
+}
+
+/**
  * Configures the periodic library scanner according to system_settings 'auto_scan_interval'
  */
 function setupBackgroundScanner() {
@@ -110,10 +131,17 @@ function setupBackgroundScanner() {
  * Bootstraps all background tasks
  */
 function startBackgroundServices() {
-  // Hourly disk sync
-  syncIntervalId = setInterval(syncLibraryWithDisk, SYNC_INTERVAL_MS);
-  // Initial sync 10s after startup
-  setTimeout(syncLibraryWithDisk, 10000);
+  // Configurable disk sync
+  setupBackgroundSync();
+
+  // Initial sync 10s after startup only if disk sync is enabled
+  const setting = get('SELECT value FROM system_settings WHERE key="auto_sync_interval"');
+  const defaultHours = DEFAULT_SYNC_INTERVAL_HOURS !== undefined ? DEFAULT_SYNC_INTERVAL_HOURS : 1;
+  const hours = (setting && setting.value !== undefined) ? Number(setting.value) : defaultHours;
+  if (hours > 0) {
+    setTimeout(syncLibraryWithDisk, 10000);
+  }
+
   // Scheduled scanner
   setupBackgroundScanner();
 }
@@ -128,6 +156,7 @@ function stopBackgroundServices() {
 
 module.exports = {
   syncLibraryWithDisk,
+  setupBackgroundSync,
   setupBackgroundScanner,
   startBackgroundServices,
   stopBackgroundServices

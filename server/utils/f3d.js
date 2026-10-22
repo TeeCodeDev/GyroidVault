@@ -45,7 +45,7 @@ function extractF3dThumbnail(filePath, uploadsDir) {
 
     return thumbFilename;
   } catch (error) {
-    console.error(`Failed to extract F3D thumbnail for ${filePath}:`, error.message);
+    console.error('Failed to extract F3D thumbnail for %s: %s', filePath, error.message);
     return null;
   }
 }

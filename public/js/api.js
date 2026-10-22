@@ -3,7 +3,7 @@ const API = {
   async request(url, options = {}) {
     const csrfToken = localStorage.getItem('pv_csrf_token');
     // Don't even try profile calls if no token is present
-    if (url.startsWith('/api/auth/') && !['login', 'register', 'forgot-password', 'reset-password', 'logout'].some(p => url.includes(p)) && !csrfToken) {
+    if (url.startsWith('/api/auth/') && !['login', 'register', 'forgot-password', 'reset-password', 'logout', 'me', 'oidc'].some(p => url.includes(p)) && !csrfToken) {
       return null;
     }
     const headers = { 'Content-Type': 'application/json', ...options.headers };
@@ -70,6 +70,7 @@ const API = {
   getSMTPSettings() { return this.request('/api/settings/smtp'); },
   saveSMTPSettings(data) { return this.request('/api/settings/smtp', { method: 'POST', body: JSON.stringify(data) }); },
   testSMTP(data) { return this.request('/api/settings/smtp/test', { method: 'POST', body: JSON.stringify(data) }); },
+  testOidcDiscovery(issuer_url) { return this.request('/api/settings/oidc/test', { method: 'POST', body: JSON.stringify({ issuer_url }) }); },
   getViewMode() { return this.request('/api/settings/view-mode'); },
 
   // Library browser

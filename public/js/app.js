@@ -40,6 +40,13 @@ const App = {
     try {
       this.publicConfig = await API.getPublicConfig();
     } catch(e) { this.publicConfig = {}; }
+    this.applyFeatureToggles();
+    if (!localStorage.getItem('gv_theme') && this.publicConfig && this.publicConfig.default_theme) {
+      document.documentElement.setAttribute('data-theme', this.publicConfig.default_theme);
+    }
+    if (!localStorage.getItem('gv_accent') && this.publicConfig && this.publicConfig.default_accent) {
+      document.documentElement.setAttribute('data-accent', this.publicConfig.default_accent);
+    }
 
     // Auto-resume scan monitoring if background scan is active
     if (this.currentUser && this.currentUser.role === 'admin') {
@@ -93,7 +100,34 @@ const App = {
     this.checkWhatsNew();
   },
 
-  WHATS_NEW_VERSION: '2.0.2',
+  WHATS_NEW_VERSION: '2.3.0',
+
+  isFeatureEnabled(key) {
+    if (!this.publicConfig) return true;
+    if (this.publicConfig[key] === false || this.publicConfig[key] === 'false') {
+      return false;
+    }
+    return true;
+  },
+
+  applyFeatureToggles() {
+    const flags = [
+      'enable_categories',
+      'enable_collections',
+      'enable_tags',
+      'enable_favorites',
+      'enable_browse',
+      'enable_stats',
+      'enable_format_pills',
+      'enable_print_history',
+      'enable_sharing',
+      'enable_printers'
+    ];
+    flags.forEach(flag => {
+      const enabled = this.isFeatureEnabled(flag);
+      document.body.setAttribute(`data-${flag.replace(/_/g, '-')}`, enabled ? 'true' : 'false');
+    });
+  },
 
   checkWhatsNew() {
     const seenVersion = localStorage.getItem('gv_last_seen_version');
@@ -111,13 +145,13 @@ const App = {
   },
 
   async openWhatsNew() {
-    localStorage.setItem('gv_last_seen_version', this.WHATS_NEW_VERSION || '2.0.2');
+    localStorage.setItem('gv_last_seen_version', this.WHATS_NEW_VERSION || '2.3.0');
     try {
       const res = await API.getReleaseNotes().catch(() => ({ notes: [] }));
       this.cachedReleaseNotes = res.notes || [];
-      this.openModal('Welcome to GyroidVault 2.0', UI.whatsNewModal('2.2.1', this.cachedReleaseNotes), 'modal-lg');
+      this.openModal('Welcome to GyroidVault v2.3', UI.whatsNewModal('2.3.0', this.cachedReleaseNotes), 'modal-lg');
     } catch (e) {
-      this.openModal('Welcome to GyroidVault 2.0', UI.whatsNewModal('2.2.1', []), 'modal-lg');
+      this.openModal('Welcome to GyroidVault v2.3', UI.whatsNewModal('2.3.0', []), 'modal-lg');
     }
   },
 
@@ -386,6 +420,10 @@ const App = {
     document.documentElement.setAttribute('data-theme', nextTheme);
     localStorage.setItem('gv_theme', nextTheme);
     this.updateThemeIcon();
+    document.querySelectorAll('.theme-selector').forEach(s => {
+      s.value = nextTheme;
+    });
+    this.setAccent(localStorage.getItem('gv_accent') || 'blue');
   },
 
   updateThemeIcon() {
@@ -441,6 +479,16 @@ const App = {
     this.renderBulkBrowseBar();
 
     if (path === '/' || path === '/dashboard') {
+      const defaultLanding = this.publicConfig?.default_landing_page || 'dashboard';
+      if (path === '/' && defaultLanding !== 'dashboard') {
+        if (defaultLanding === 'models') {
+          return this.navigate('/models');
+        } else if (defaultLanding === 'browse') {
+          return this.navigate('/browse');
+        } else if (defaultLanding === 'collections') {
+          return this.navigate('/collections');
+        }
+      }
       document.getElementById('nav-dashboard')?.classList.add('active');
       this.renderDashboard();
     } else if (path === '/models') {
@@ -480,15 +528,28 @@ const App = {
     location.hash = path;
   },
 
-  previewTheme() {
-    const t = document.getElementById('theme-selector').value;
+  previewTheme(targetTheme) {
+    const sel = document.querySelector('.theme-selector');
+    const t = targetTheme || (sel ? sel.value : (localStorage.getItem('gv_theme') || 'glass'));
     document.documentElement.setAttribute('data-theme', t);
     localStorage.setItem('gv_theme', t);
+    this.updateThemeIcon();
+    document.querySelectorAll('.theme-selector').forEach(s => {
+      s.value = t;
+    });
+    this.setAccent(localStorage.getItem('gv_accent') || 'blue');
   },
 
   setAccent(a) {
     document.documentElement.setAttribute('data-accent', a);
     localStorage.setItem('gv_accent', a);
+    document.querySelectorAll('.accent-color-btn').forEach(btn => {
+      const isSelected = btn.dataset.accent === a || (a === 'blue' && (btn.dataset.accent === 'blue' || btn.dataset.accent === 'cyan'));
+      btn.style.boxShadow = isSelected ? '0 0 0 2px var(--bg-secondary), 0 0 0 4px var(--text-primary)' : 'none';
+      btn.style.outline = 'none';
+    });
+    const hiddenInput = document.getElementById('setting-default-accent');
+    if (hiddenInput) hiddenInput.value = a;
   },
 
   // ── Toast ──
@@ -1405,12 +1466,62 @@ const App = {
     } catch(e) { this.toast(e.message, 'error'); }
   },
   
+  selectViewMode(mode) {
+    const input = document.getElementById('setting-library-view-mode');
+    if (input) input.value = mode;
+    document.querySelectorAll('.view-mode-card').forEach(card => {
+      card.classList.toggle('active', card.dataset.mode === mode);
+    });
+  },
+
+  selectScanMode(mode) {
+    const input = document.getElementById('setting-scan-grouping-mode');
+    if (input) input.value = mode;
+    document.querySelectorAll('.scan-mode-card').forEach(card => {
+      card.classList.toggle('active', card.dataset.mode === mode);
+    });
+  },
+
   async handleToggleSystemSetting(key, isChecked, label) {
     try {
       await API.saveSystemSettings({ [key]: isChecked ? 'true' : 'false' });
+      if (this.publicConfig) {
+        this.publicConfig[key] = isChecked;
+      }
+      this.applyFeatureToggles();
       this.toast(`${label} ${isChecked ? 'enabled' : 'disabled'}`);
     } catch (e) {
       this.toast(e.message || 'Failed to update setting', 'error');
+    }
+  },
+
+  
+  async testOidcDiscovery() {
+    const input = document.querySelector('input[name="oidc_issuer_url"]');
+    const resultEl = document.getElementById('oidc-test-result');
+    const url = input ? input.value.trim() : '';
+    if (!url) {
+      this.toast('Please enter an OIDC Issuer URL first', 'error');
+      return;
+    }
+    if (resultEl) {
+      resultEl.innerHTML = '<span style="color:var(--text-muted);font-size:0.8rem">Testing discovery endpoint...</span>';
+    }
+    try {
+      const res = await API.testOidcDiscovery(url);
+      if (res && res.success) {
+        this.toast('OIDC Discovery successful!');
+        if (resultEl) {
+          resultEl.innerHTML = `<span style="color:var(--success);font-size:0.8rem">✓ Verified: Auth (${UI.escapeHtml(res.endpoints.authorization_endpoint)}) & Token (${UI.escapeHtml(res.endpoints.token_endpoint)})</span>`;
+        }
+      } else {
+        throw new Error(res?.error || 'Discovery failed');
+      }
+    } catch (err) {
+      this.toast(err.message, 'error');
+      if (resultEl) {
+        resultEl.innerHTML = `<span style="color:var(--error);font-size:0.8rem">✗ Error: ${UI.escapeHtml(err.message)}</span>`;
+      }
     }
   },
 
@@ -1428,9 +1539,27 @@ const App = {
       data.scan_zip_archives = fd.has('scan_zip_archives') ? 'true' : 'false';
     }
     try {
+      const prevScanMode = this.cachedSystemSettings?.scan_grouping_mode || 'folder';
       await API.saveSystemSettings(data);
+      try {
+        this.publicConfig = await API.getPublicConfig();
+        this.applyFeatureToggles();
+      } catch (err) {}
       await this.loadViewMode(); // refresh the cached view mode
       this.toast('System settings saved');
+
+      const newScanMode = data.scan_grouping_mode || 'folder';
+      if (data.scan_grouping_mode && prevScanMode !== newScanMode) {
+        if (this.cachedSystemSettings) {
+          this.cachedSystemSettings.scan_grouping_mode = newScanMode;
+        }
+        const runNow = confirm(`Scan method has been changed to "${newScanMode === 'file' ? 'File Mode' : 'Folder Mode'}". Would you like to run a library scan now to re-index your models?`);
+        if (runNow) {
+          this.handleScanLibrary();
+        }
+      } else if (this.cachedSystemSettings) {
+        Object.assign(this.cachedSystemSettings, data);
+      }
     } catch(e) { this.toast(e.message, 'error'); }
   },
 
@@ -1606,6 +1735,7 @@ const App = {
                     <option value="" ${!user.preferred_slicer ? 'selected' : ''}>None (Ask every time)</option>
                     <option value="orcaslicer" ${user.preferred_slicer === 'orcaslicer' ? 'selected' : ''}>OrcaSlicer</option>
                     <option value="elegooslicer" ${user.preferred_slicer === 'elegooslicer' ? 'selected' : ''}>Elegoo Slicer</option>
+            <option value="crealityprint" ${user.preferred_slicer === 'crealityprint' ? 'selected' : ''}>Creality Print</option>
                     <option value="cura" ${user.preferred_slicer === 'cura' ? 'selected' : ''}>Ultimaker Cura</option>
                     <option value="bambustudio" ${user.preferred_slicer === 'bambustudio' ? 'selected' : ''}>Bambu Studio</option>
                   </select>
@@ -1618,6 +1748,8 @@ const App = {
           </div>
         `;
       } else if (tab === 'appearance') {
+        const currentTheme = localStorage.getItem('gv_theme') || 'glass';
+        const currentAccent = localStorage.getItem('gv_accent') || 'blue';
         content.innerHTML = `
           <div class="glass-panel">
             <div class="panel-header"><div class="panel-title">Local Appearance</div></div>
@@ -1626,21 +1758,22 @@ const App = {
               <div class="form-grid">
                 <div class="form-group">
                   <label class="form-label">App Theme</label>
-                  <select id="theme-selector" class="form-select" onchange="App.previewTheme()">
-                    <option value="glass" ${localStorage.getItem('gv_theme') === 'glass' || !localStorage.getItem('gv_theme') ? 'selected' : ''}>Glass (Default)</option>
-                    <option value="industrial" ${localStorage.getItem('gv_theme') === 'industrial' ? 'selected' : ''}>Industrial</option>
+                  <select id="theme-selector" class="form-select theme-selector" onchange="App.previewTheme(this.value)">
+                    <option value="glass" ${currentTheme === 'glass' ? 'selected' : ''}>Glass (Default)</option>
+                    <option value="industrial" ${currentTheme === 'industrial' ? 'selected' : ''}>Industrial</option>
+                    <option value="light" ${currentTheme === 'light' ? 'selected' : ''}>Clean Light</option>
                   </select>
                 </div>
                 <div class="form-group" style="margin-bottom:0">
                   <label class="form-label">Accent Color</label>
                   <p style="font-size:0.8rem; color:var(--text-muted); margin-bottom:12px">Choose your preferred studio accent color</p>
                   <div style="display:flex; gap:12px; margin-top:6px; flex-wrap:wrap;">
-                    <button type="button" class="accent-color-btn" style="background:#3b82f6; outline: ${(localStorage.getItem('gv_accent') === 'blue' || localStorage.getItem('gv_accent') === 'cyan' || !localStorage.getItem('gv_accent')) ? '2px solid #ffffff' : 'none'}" onclick="App.setAccent('blue'); App.renderProfile();" title="Studio Blue (Default)"></button>
-                    <button type="button" class="accent-color-btn" style="background:#10b981; outline: ${localStorage.getItem('gv_accent') === 'emerald' || localStorage.getItem('gv_accent') === 'green' ? '2px solid #ffffff' : 'none'}" onclick="App.setAccent('emerald'); App.renderProfile();" title="Emerald Green"></button>
-                    <button type="button" class="accent-color-btn" style="background:#f59e0b; outline: ${localStorage.getItem('gv_accent') === 'amber' || localStorage.getItem('gv_accent') === 'orange' ? '2px solid #ffffff' : 'none'}" onclick="App.setAccent('amber'); App.renderProfile();" title="Amber Gold"></button>
-                    <button type="button" class="accent-color-btn" style="background:#f43f5e; outline: ${localStorage.getItem('gv_accent') === 'rose' || localStorage.getItem('gv_accent') === 'red' ? '2px solid #ffffff' : 'none'}" onclick="App.setAccent('rose'); App.renderProfile();" title="Coral Rose"></button>
-                    <button type="button" class="accent-color-btn" style="background:#8b5cf6; outline: ${localStorage.getItem('gv_accent') === 'violet' || localStorage.getItem('gv_accent') === 'purple' ? '2px solid #ffffff' : 'none'}" onclick="App.setAccent('violet'); App.renderProfile();" title="Studio Violet"></button>
-                    <button type="button" class="accent-color-btn" style="background:#14b8a6; outline: ${localStorage.getItem('gv_accent') === 'teal' ? '2px solid #ffffff' : 'none'}" onclick="App.setAccent('teal'); App.renderProfile();" title="Teal Sage"></button>
+                    <button type="button" class="accent-color-btn" data-accent="blue" style="background:#3b82f6; outline: ${(currentAccent === 'blue' || currentAccent === 'cyan') ? '2px solid var(--text-primary)' : 'none'}; outline-offset: 2px;" onclick="App.setAccent('blue')" title="Studio Blue (Default)"></button>
+                    <button type="button" class="accent-color-btn" data-accent="emerald" style="background:#10b981; outline: ${(currentAccent === 'emerald' || currentAccent === 'green') ? '2px solid var(--text-primary)' : 'none'}; outline-offset: 2px;" onclick="App.setAccent('emerald')" title="Emerald Green"></button>
+                    <button type="button" class="accent-color-btn" data-accent="amber" style="background:#f59e0b; outline: ${(currentAccent === 'amber' || currentAccent === 'orange') ? '2px solid var(--text-primary)' : 'none'}; outline-offset: 2px;" onclick="App.setAccent('amber')" title="Amber Gold"></button>
+                    <button type="button" class="accent-color-btn" data-accent="rose" style="background:#f43f5e; outline: ${(currentAccent === 'rose' || currentAccent === 'red') ? '2px solid var(--text-primary)' : 'none'}; outline-offset: 2px;" onclick="App.setAccent('rose')" title="Coral Rose"></button>
+                    <button type="button" class="accent-color-btn" data-accent="violet" style="background:#8b5cf6; outline: ${(currentAccent === 'violet' || currentAccent === 'purple') ? '2px solid var(--text-primary)' : 'none'}; outline-offset: 2px;" onclick="App.setAccent('violet')" title="Studio Violet"></button>
+                    <button type="button" class="accent-color-btn" data-accent="teal" style="background:#14b8a6; outline: ${(currentAccent === 'teal') ? '2px solid var(--text-primary)' : 'none'}; outline-offset: 2px;" onclick="App.setAccent('teal')" title="Teal Sage"></button>
                   </div>
                 </div>
               </div>
@@ -2139,6 +2272,8 @@ const App = {
     if (slicer === 'bambustudio') protocol = 'bambustudio://open?file=';
     else if (slicer === 'prusaslicer') protocol = 'prusaslicer://';
     else if (slicer === 'orcaslicer') protocol = 'orcaslicer://open?file=';
+    else if (slicer === 'elegooslicer') protocol = 'elegooslicer://open?file=';
+    else if (slicer === 'crealityprint') protocol = 'crealityprintlink://open?file=';
     
     if (protocol) {
       window.location.href = protocol + absoluteUrl;
@@ -2296,7 +2431,7 @@ const App = {
             ${file.folderPath ? `<span>·</span><span style="display:inline-flex;align-items:center;gap:3px;color:#f59e0b"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>${file.folderPath}</span>` : ''}
           </div>
           <div style="display:flex;gap:8px;align-items:center">
-            ${(is3D || isGcode) ? `<button class="btn btn-secondary btn-sm" onclick="App.previewFileModal('${file.url}', '${file.name.replace(/'/g, "\\'")}', '${file.type}')">Full Screen</button>` : ''}
+            ${(is3D || isGcode) ? `<button class="btn btn-secondary btn-sm" onclick="App.previewFileModal('${file.url}', '${file.name.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}', '${file.type}')">Full Screen</button>` : ''}
             ${file.id ? `<a href="/api/files/${file.id}/download" class="btn btn-primary btn-sm" download>Download</a>` : `<a href="${file.url}" class="btn btn-primary btn-sm" download="${file.name}">Download</a>`}
           </div>
         </div>
@@ -2480,7 +2615,7 @@ const App = {
       <div class="page-header" style="margin-bottom:20px">
         <div>
           <h1 class="page-title">Settings</h1>
-          <p class="page-subtitle">Configure and personalize your GyroidVault 2.0 instance</p>
+          <p class="page-subtitle">Configure and personalize your GyroidVault instance</p>
         </div>
       </div>
 
@@ -2505,6 +2640,18 @@ const App = {
 
           ${isAdmin ? `
             <div class="settings-nav-group">
+              <div class="settings-nav-group-title">Configuration</div>
+              <button class="settings-nav-btn" data-tab="ui">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
+                <span>User Interface</span>
+              </button>
+              <button class="settings-nav-btn" data-tab="system">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                <span>System & Storage</span>
+              </button>
+            </div>
+
+            <div class="settings-nav-group">
               <div class="settings-nav-group-title">Hardware</div>
               <button class="settings-nav-btn" data-tab="printers">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
@@ -2525,10 +2672,6 @@ const App = {
               <button class="settings-nav-btn" data-tab="users">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
                 <span>Users & Roles</span>
-              </button>
-              <button class="settings-nav-btn" data-tab="system">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-                <span>System</span>
               </button>
               <button class="settings-nav-btn" data-tab="maintenance">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
@@ -2617,11 +2760,20 @@ const App = {
               <div class="panel-header"><div class="panel-title">SMTP Mail Configuration</div></div>
               <div class="panel-body">${UI.smtpSettingsForm(config)}</div>
             </div>`;
-        } else if (tab === 'system') {
+        } else if (tab === 'ui') {
           const config = await API.getSystemSettings();
+          this.cachedSystemSettings = config;
           content.innerHTML = `
             <div class="glass-panel">
-              <div class="panel-header"><div class="panel-title">System Settings</div></div>
+              <div class="panel-header"><div class="panel-title"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:6px"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>User Interface & Display</div></div>
+              <div class="panel-body">${UI.uiSettingsForm(config)}</div>
+            </div>`;
+        } else if (tab === 'system') {
+          const config = await API.getSystemSettings();
+          this.cachedSystemSettings = config;
+          content.innerHTML = `
+            <div class="glass-panel">
+              <div class="panel-header"><div class="panel-title"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:6px"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>System & Storage</div></div>
               <div class="panel-body">${UI.systemSettingsForm(config)}</div>
             </div>`;
         } else if (tab === 'users') {
@@ -2777,9 +2929,10 @@ const App = {
     const label = document.createElement('label');
     label.className = 'tag-pill-checkbox';
     // Use a prefix to identify it as a new tag string rather than an ID
+    const safeVal = UI.esc(val);
     label.innerHTML = `
-      <input type="checkbox" name="tags" value="NEW:${val}" checked> 
-      <span class="tag-pill new">${val}</span>`;
+      <input type="checkbox" name="tags" value="NEW:${safeVal}" checked> 
+      <span class="tag-pill new">${safeVal}</span>`;
     container.appendChild(label);
     input.value = '';
     input.focus();
@@ -2882,7 +3035,7 @@ const App = {
           this.pendingSuggestedName = suggestions[0] || null;
           if (container) {
             container.innerHTML = suggestions.map(s => `
-              <button type="button" class="btn btn-secondary btn-xs" onclick="App.applySuggestedName('${s.replace(/'/g, "\\'")}')" style="background:var(--bg-input);border:1px solid var(--border-hover);color:var(--text-primary);padding:4px 10px;font-size:0.75rem;border-radius:6px;display:inline-flex;align-items:center;gap:4px">
+              <button type="button" class="btn btn-secondary btn-xs" onclick="App.applySuggestedName('${s.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}')" style="background:var(--bg-input);border:1px solid var(--border-hover);color:var(--text-primary);padding:4px 10px;font-size:0.75rem;border-radius:6px;display:inline-flex;align-items:center;gap:4px">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg> ${s}
               </button>
             `).join('');
@@ -2904,7 +3057,8 @@ const App = {
     }
   },
 
-  async quickPreviewModel(modelId) {
+  async quickPreviewModel(modelId, event) {
+    if (event && event.stopPropagation) event.stopPropagation();
     try {
       const model = await API.getModel(modelId);
       const stlFile = (model.files || []).find(f => f.file_type === 'stl' || f.file_type === '3mf' || f.file_type === 'gcode');

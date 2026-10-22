@@ -32,7 +32,13 @@ function getThumbUrl(thumbnail, folderPath = null) {
   }
   
   if (folderPath) {
-    const thumbPath = path.join(folderPath, thumbnail);
+    let baseDir = folderPath;
+    try {
+      if (fs.existsSync(folderPath) && fs.statSync(folderPath).isFile()) {
+        baseDir = path.dirname(folderPath);
+      }
+    } catch (e) {}
+    const thumbPath = path.join(baseDir, thumbnail);
     if (fs.existsSync(thumbPath)) {
       return getFileUrl({ filename: thumbnail, library_path: thumbPath });
     }
@@ -64,15 +70,26 @@ function deleteModelInternal(id, deleteDisk = false) {
     if (fs.existsSync(p)) {
       try { fs.unlinkSync(p); } catch (err) {}
     }
-    if (deleteDisk && model.library_path && fs.existsSync(path.join(model.library_path, model.thumbnail))) {
-      try { fs.unlinkSync(path.join(model.library_path, model.thumbnail)); } catch (err) { console.error('Failed to delete physical thumbnail:', err); }
+    if (deleteDisk && model.library_path) {
+      let modelDir = model.library_path;
+      try {
+        if (fs.existsSync(model.library_path) && fs.statSync(model.library_path).isFile()) {
+          modelDir = path.dirname(model.library_path);
+        }
+      } catch (e) {}
+      const physicalThumb = path.join(modelDir, model.thumbnail);
+      if (fs.existsSync(physicalThumb)) {
+        try { fs.unlinkSync(physicalThumb); } catch (err) { console.error('Failed to delete physical thumbnail:', err); }
+      }
     }
   }
   
   if (deleteDisk && model.library_path && fs.existsSync(model.library_path)) {
     try {
-      if (fs.readdirSync(model.library_path).length === 0) {
-        fs.rmdirSync(model.library_path);
+      if (fs.statSync(model.library_path).isDirectory()) {
+        if (fs.readdirSync(model.library_path).length === 0) {
+          fs.rmdirSync(model.library_path);
+        }
       }
     } catch (err) {}
   }

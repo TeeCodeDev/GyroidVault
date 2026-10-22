@@ -512,6 +512,11 @@ const Viewer = {
     // Smooth Surface Normal Computation for curved CAD geometry (eliminates faceted triangle artifacts)
     const smoothGeometryNormals = (geometry, maxAngleDeg = 45) => {
       try {
+        // If geometry is indexed (e.g. 3MF files), use native area-weighted vertex normals
+        if (geometry.index) {
+          geometry.computeVertexNormals();
+          return;
+        }
         const pos = geometry.attributes.position;
         if (!pos || pos.count < 3) return;
         const count = pos.count;

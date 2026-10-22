@@ -155,7 +155,8 @@ if (fs.existsSync(LIBRARY_PATH)) {
 
 // Direct file access fallback for uploads
 app.get('/uploads/:filename', (req, res) => {
-  const filePath = path.join(UPLOADS_DIR, req.params.filename);
+  const safeFilename = path.basename(req.params.filename);
+  const filePath = path.join(UPLOADS_DIR, safeFilename);
   if (fs.existsSync(filePath)) {
     res.sendFile(filePath);
   } else {

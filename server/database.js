@@ -86,6 +86,7 @@ async function initDatabase() {
       preferred_slicer TEXT,
       password_reset_token TEXT,
       password_reset_expires DATETIME,
+      oidc_sub TEXT,
       created_at DATETIME DEFAULT (datetime('now'))
     )
   `);
@@ -261,6 +262,8 @@ async function initDatabase() {
     if (!uCols.some(c => c.name === 'password_reset_token')) db.run('ALTER TABLE users ADD COLUMN password_reset_token TEXT');
     if (!uCols.some(c => c.name === 'password_reset_expires')) db.run('ALTER TABLE users ADD COLUMN password_reset_expires DATETIME');
     if (!uCols.some(c => c.name === 'preferred_slicer')) db.run('ALTER TABLE users ADD COLUMN preferred_slicer TEXT');
+    if (!uCols.some(c => c.name === 'oidc_sub')) db.run('ALTER TABLE users ADD COLUMN oidc_sub TEXT');
+    db.run('CREATE INDEX IF NOT EXISTS idx_users_oidc_sub ON users(oidc_sub)');
     
     // Auto-migrate the very first user (id 1) to admin to prevent lockout when roles are enforced
     db.run("UPDATE users SET role = 'admin' WHERE id = 1 AND role != 'admin'");
@@ -356,6 +359,7 @@ async function initDatabase() {
       }
     }
     db.run("INSERT OR REPLACE INTO system_settings (key, value) VALUES ('seeded_defaults', 'true')");
+    db.run("INSERT OR IGNORE INTO system_settings (key, value) VALUES ('scan_grouping_mode', 'folder')");
   }
 
   saveDb();

@@ -38,7 +38,8 @@ const LIBRARY_PATH = process.env.LIBRARY_PATH
 
 // Periodic Sync Configuration
 const SYNC_BATCH_SIZE = 200;
-const SYNC_INTERVAL_MS = 3600000; // 1 hour
+const SYNC_INTERVAL_MS = 3600000; // 1 hour default
+const DEFAULT_SYNC_INTERVAL_HOURS = process.env.SYNC_INTERVAL_HOURS !== undefined ? Number(process.env.SYNC_INTERVAL_HOURS) : 1;
 
 // Security Checks
 if (isProduction && !process.env.JWT_SECRET) {
@@ -54,5 +55,6 @@ module.exports = {
   UPLOADS_DIR,
   LIBRARY_PATH,
   SYNC_BATCH_SIZE,
-  SYNC_INTERVAL_MS
+  SYNC_INTERVAL_MS,
+  DEFAULT_SYNC_INTERVAL_HOURS
 };
