@@ -1313,9 +1313,29 @@ const UI = {
       </div>`).join('');
   },
 
-  loginForm(allowRegistration = false) {
+  loginForm(allowRegistration = false, oidcConfig = null) {
+    const oidc = oidcConfig || (typeof App !== 'undefined' && App.publicConfig) || {};
+    const oidcEnabled = oidc.oidc_enabled === true || oidc.oidc_enabled === 'true';
+    const oidcLabel = oidc.oidc_button_label || 'Single Sign-On';
+
     return `
       <form onsubmit="App.handleLogin(event)" class="form-grid">
+        ${oidcEnabled ? `
+          <div style="grid-column: 1 / -1; margin-bottom: 4px;">
+            <a href="/api/auth/oidc/login" class="btn btn-secondary" style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 10px; padding: 11px 16px; font-weight: 600; text-decoration: none; border-radius: var(--radius-md); background: var(--bg-secondary); border: 1px solid var(--border); color: var(--text-primary); transition: all 0.2s ease;">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent-cyan);">
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+              </svg>
+              <span>${this.escapeHtml(oidcLabel)}</span>
+            </a>
+            <div style="display: flex; align-items: center; margin: 18px 0 14px 0; gap: 12px;">
+              <div style="flex: 1; height: 1px; background: var(--border);"></div>
+              <span style="font-size: 0.72rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">or password</span>
+              <div style="flex: 1; height: 1px; background: var(--border);"></div>
+            </div>
+          </div>
+        ` : ''}
         <div class="form-group">
           <label>Username or Email</label>
           <input type="text" name="username" required placeholder="Enter username or email" class="form-input">

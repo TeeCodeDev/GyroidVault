@@ -107,11 +107,12 @@ async function runStaticAndUiChecks() {
   const sandbox = {
     window: { location: { hash: '', origin: 'http://localhost:3000', pathname: '/' }, addEventListener: () => {} },
     document: {
-      getElementById: () => ({ innerHTML: '', textContent: '', style: {}, classList: { add: () => {}, remove: () => {}, toggle: () => {} }, addEventListener: () => {}, querySelectorAll: () => [], querySelector: () => null }),
+      getElementById: () => ({ innerHTML: '', textContent: '', style: {}, classList: { add: () => {}, remove: () => {}, toggle: () => {} }, addEventListener: () => {}, querySelectorAll: () => [], querySelector: () => null, appendChild: () => {} }),
       querySelector: () => null,
       querySelectorAll: () => [],
       createElement: () => ({ style: {}, classList: { add: () => {} }, appendChild: () => {} }),
-      body: { appendChild: () => {}, classList: { toggle: () => {}, add: () => {}, remove: () => {} }, style: {} },
+      body: { appendChild: () => {}, setAttribute: () => {}, getAttribute: () => null, classList: { toggle: () => {}, add: () => {}, remove: () => {} }, style: {} },
+      documentElement: { setAttribute: () => {}, getAttribute: () => null },
       addEventListener: () => {}
     },
     localStorage: {
@@ -121,7 +122,14 @@ async function runStaticAndUiChecks() {
       removeItem(k) { delete this._store[k]; }
     },
     navigator: { clipboard: { writeText: async () => {} } },
-    location: { hash: '', reload: () => {} },
+    location: { hash: '', search: '', pathname: '/', reload: () => {} },
+    history: {
+      replaceState: (st, tit, url) => {
+        if (sandbox && sandbox.location) {
+          sandbox.location.search = url.includes('?') ? '?' + url.split('?')[1].split('#')[0] : '';
+        }
+      }
+    },
     fetch: async () => ({ ok: true, status: 200, json: async () => ({}) }),
     FormData: class {},
     URLSearchParams,
@@ -135,6 +143,8 @@ async function runStaticAndUiChecks() {
   };
   sandbox.window.document = sandbox.document;
   sandbox.window.localStorage = sandbox.localStorage;
+  sandbox.window.location = sandbox.location;
+  sandbox.window.history = sandbox.history;
 
   const apiCode = fs.readFileSync(path.join(ROOT_DIR, 'public/js/api.js'), 'utf8');
   const compCode = fs.readFileSync(path.join(ROOT_DIR, 'public/js/components.js'), 'utf8');
@@ -205,6 +215,7 @@ async function runStaticAndUiChecks() {
       ['UI.systemSettingsForm', () => UI.systemSettingsForm({ scan_zip_archives: 'true', scan_method: 'folder' })],
       ['UI.securitySettingsForm', () => UI.securitySettingsForm({ private_instance: 'false', open_registration: 'false' })],
       ['UI.maintenanceSettingsForm', () => UI.maintenanceSettingsForm()],
+      ['UI.loginForm', () => UI.loginForm(true, { oidc_enabled: true, oidc_button_label: 'SSO Login' })],
       ['UI.pagination', () => UI.pagination(5, 2)]
     ];
 
@@ -312,7 +323,7 @@ async function runStaticAndUiChecks() {
     assert(viewerContent.includes('geometry.computeVertexNormals()'), 'Expected geometry.computeVertexNormals() call in smoothGeometryNormals');
   });
 
-  await check('Card SVG quick actions, model detail collection badges & maintenance filters render correctly', () => {
+  await check('Card SVG quick actions, model detail collection badges & maintenance filters render correctly', async () => {
     // 1. UI.modelCard quick-actions and tooltips (Issue #82)
     const cardHtml = UI.modelCard(mockModel);
     assert(cardHtml.includes('class="model-card-hover-actions"'), 'Expected .model-card-hover-actions in modelCard');
@@ -356,6 +367,37 @@ async function runStaticAndUiChecks() {
     assert(!smtpHtml.includes('max-width: 580px;'), 'Expected SMTP form to be full width without max-width: 580px');
     const printersHtml = UI.printersSettingsForm([]);
     assert(!printersHtml.includes('max-width: 580px;'), 'Expected Printers form to be full width without max-width: 580px');
+
+    // 5. OIDC SSO Login Form rendering (Issue #84 guard)
+    const oidcLoginHtml = UI.loginForm(false, { oidc_enabled: true, oidc_button_label: 'Pocket-ID SSO' });
+    assert(oidcLoginHtml.includes('href="/api/auth/oidc/login"'), 'Expected SSO button link in login form when oidc_enabled (Issue #84)');
+    assert(oidcLoginHtml.includes('Pocket-ID SSO'), 'Expected custom oidc_button_label in SSO button (Issue #84)');
+
+    const standardLoginHtml = UI.loginForm(false, { oidc_enabled: false });
+    assert(!standardLoginHtml.includes('/api/auth/oidc/login'), 'SSO button must not render when oidc_enabled is false (Issue #84)');
+
+    // 6. OIDC SSO Client Session Handling & Toggle Persistence (Issue #84 guard)
+    sandbox.localStorage.removeItem('pv_user');
+    sandbox.localStorage.removeItem('pv_csrf_token');
+    sandbox.location.search = '?sso=1';
+    API.getMe = async () => ({ id: 99, username: 'sso_user', role: 'admin', csrfToken: 'mock_csrf_99' });
+    API.getPublicConfig = async () => ({ oidc_enabled: true });
+    API.getCategories = async () => [];
+    API.getTags = async () => [];
+    API.getProjects = async () => [];
+    App.route = () => {};
+    await App.init();
+    assert(App.currentUser && App.currentUser.username === 'sso_user', 'App.init() should establish currentUser after SSO callback (Issue #84)');
+    assert(sandbox.localStorage.getItem('pv_user'), 'Expected pv_user to be persisted after SSO login (Issue #84)');
+    assert(sandbox.localStorage.getItem('pv_csrf_token') === 'mock_csrf_99', 'Expected pv_csrf_token to be persisted after SSO login (Issue #84)');
+    assert(!sandbox.location.search.includes('sso'), 'Expected sso query parameter to be removed after SSO init (Issue #84)');
+
+    App.cachedSystemSettings = { oidc_enabled: 'false' };
+    App.publicConfig = { oidc_enabled: false };
+    API.saveSystemSettings = async (data) => Object.assign(App.cachedSystemSettings, data);
+    await App.handleToggleSystemSetting('oidc_enabled', true, 'OIDC');
+    assert(App.cachedSystemSettings.oidc_enabled === 'true', 'Expected cachedSystemSettings.oidc_enabled to be "true" (Issue #84)');
+    assert(App.publicConfig.oidc_enabled === true, 'Expected publicConfig.oidc_enabled to be true (Issue #84)');
   });
 }
 

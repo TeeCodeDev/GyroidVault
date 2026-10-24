@@ -13,12 +13,34 @@ const App = {
   // ── Init ──
   async init() {
     this.el = document.getElementById('app');
+
+    // Check if returning from SSO callback or error (Issue #84)
+    let hasSso = false;
+    let ssoError = null;
+    try {
+      if (typeof window !== 'undefined' && window.location) {
+        const urlParams = new URLSearchParams(window.location.search);
+        hasSso = urlParams.has('sso');
+        if (urlParams.get('error') === 'sso_failed') {
+          ssoError = urlParams.get('message') || 'SSO authentication failed';
+        }
+        if (hasSso || ssoError) {
+          urlParams.delete('sso');
+          urlParams.delete('error');
+          urlParams.delete('message');
+          const newSearch = urlParams.toString();
+          const cleanUrl = window.location.pathname + (newSearch ? `?${newSearch}` : '') + window.location.hash;
+          window.history.replaceState({}, '', cleanUrl);
+        }
+      }
+    } catch (e) {}
+
     const savedUser = localStorage.getItem('pv_user');
     if (savedUser) {
       try { this.currentUser = JSON.parse(savedUser); } catch(e) { localStorage.removeItem('pv_user'); }
     }
     
-    if (this.currentUser) {
+    if (this.currentUser || hasSso) {
       try {
         const user = await API.getMe();
         if (user && user.csrfToken) {
@@ -35,6 +57,10 @@ const App = {
         localStorage.removeItem('pv_csrf_token');
         this.currentUser = null;
       }
+    }
+
+    if (ssoError) {
+      setTimeout(() => this.toast(ssoError, 'error'), 300);
     }
     
     try {
@@ -1319,7 +1345,7 @@ const App = {
   // ── Auth ──
   showLogin() { 
     const allowReg = this.publicConfig && this.publicConfig.open_registration;
-    this.openModal('Login', UI.loginForm(allowReg)); 
+    this.openModal('Login', UI.loginForm(allowReg, this.publicConfig)); 
   },
   showRegister(token = '') { this.openModal('Register', UI.registerForm(token)); },
   showForgotPassword() { this.openModal('Reset Password', UI.forgotPasswordForm()); },
@@ -1485,6 +1511,9 @@ const App = {
   async handleToggleSystemSetting(key, isChecked, label) {
     try {
       await API.saveSystemSettings({ [key]: isChecked ? 'true' : 'false' });
+      if (this.cachedSystemSettings) {
+        this.cachedSystemSettings[key] = isChecked ? 'true' : 'false';
+      }
       if (this.publicConfig) {
         this.publicConfig[key] = isChecked;
       }
@@ -2723,6 +2752,7 @@ const App = {
             </div>`;
         } else if (tab === 'security') {
           const config = await API.getSystemSettings();
+          this.cachedSystemSettings = config;
           content.innerHTML = `
             <div class="glass-panel">
               <div class="panel-header"><div class="panel-title"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:6px"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>Security & Access Control</div></div>
