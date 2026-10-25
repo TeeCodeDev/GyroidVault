@@ -875,7 +875,7 @@ router.post('/:id/thumbnail', authenticate, upload.single('thumbnail'), (req, re
     if (req.user.role !== 'admin' && model.user_id !== req.user.id) return res.status(403).json({ error: 'Forbidden' });
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
     if (model.thumbnail) { const p = path.join(UPLOADS_DIR, model.thumbnail); if (fs.existsSync(p)) fs.unlinkSync(p); }
-    run("UPDATE models SET thumbnail=?,updated_at=datetime('now') WHERE id=?", [req.file.filename, id]);
+    run("UPDATE models SET thumbnail=? WHERE id=?", [req.file.filename, id]);
     res.json({ thumbnail: req.file.filename });
   } catch (e) { console.error(e); res.status(500).json({ error: 'Failed to upload thumbnail' }); }
 });
