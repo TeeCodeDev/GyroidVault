@@ -296,7 +296,7 @@ const Viewer = {
           ${modelFiles.length > 1 ? `
             <div class="viewer-pill" style="display:inline-flex;align-items:center;gap:5px">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;opacity:0.8"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
-              <select id="${containerId}-part-select" style="background:transparent;border:none;color:var(--text-primary);font-size:0.75rem;font-weight:600;cursor:pointer;outline:none;padding-right:2px">
+              <select id="${containerId}-part-select" style="background:transparent;border:none;color:#ffffff;font-size:0.75rem;font-weight:600;cursor:pointer;outline:none;padding-right:2px">
                 <option value="all" ${activePartVal === 'all' ? 'selected' : ''} style="background:#181829;color:#fff">✦ All Parts on Build Plate (${modelFiles.length})</option>
                 ${modelFiles.map(f => `<option value="${f.id}" ${String(f.id) === activePartVal ? 'selected' : ''} style="background:#181829;color:#fff">${f.original_name || f.filename}</option>`).join('')}
               </select>
@@ -308,6 +308,10 @@ const Viewer = {
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
             <span>Spin</span>
           </button>
+          <button class="viewer-tool-btn" id="${containerId}-btn-tree" style="display:none" title="3MF Object Tree / Parts">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+            <span>Parts</span>
+          </button>
           ${modelId ? `
             <button class="viewer-tool-btn" id="${containerId}-btn-thumb" title="Capture current 3D view as model thumbnail">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
@@ -318,6 +322,15 @@ const Viewer = {
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
           </button>
         </div>
+      </div>
+
+      <!-- 3MF Object Tree / Parts Drawer -->
+      <div id="${containerId}-parts-drawer" style="display:none;position:absolute;top:48px;left:10px;width:240px;max-height:280px;background:rgba(18,18,30,0.94);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,0.18);border-radius:8px;padding:12px;z-index:25;box-shadow:0 8px 24px rgba(0,0,0,0.5);overflow-y:auto;font-size:0.75rem;color:#f1f5f9">
+        <div style="font-weight:700;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;padding-bottom:6px;border-bottom:1px solid rgba(255,255,255,0.08)">
+          <span>3MF Objects & Parts</span>
+          <span id="${containerId}-parts-count" style="color:var(--text-muted);font-weight:normal;font-size:0.7rem"></span>
+        </div>
+        <div id="${containerId}-parts-list" style="display:flex;flex-direction:column;gap:6px"></div>
       </div>
 
       <!-- Bottom Interactive Studio Dock -->
@@ -339,6 +352,7 @@ const Viewer = {
 
         <!-- Color Palette -->
         <div style="display:flex;align-items:center;gap:4px">
+          <div class="viewer-swatch" id="${containerId}-swatch-orig" data-color="original" style="background:conic-gradient(from 0deg, #ff0055, #ffaa00, #22cc88, #00d4ff, #8800ff, #ff0055);display:none;box-shadow:0 0 6px rgba(0,212,255,0.4)" title="Original 3MF Colors"></div>
           <div class="viewer-swatch active" data-color="#00ccee" style="background:#00ccee" title="Cyan"></div>
           <div class="viewer-swatch" data-color="#f97316" style="background:#f97316" title="Orange"></div>
           <div class="viewer-swatch" data-color="#10b981" style="background:#10b981" title="Green"></div>
@@ -497,6 +511,15 @@ const Viewer = {
       currentColorHex = hex;
       swatches.forEach(s => s.classList.toggle('active', s.dataset.color === hex));
       if (!targetObject) return;
+      if (hex === 'original') {
+        targetObject.traverse((child) => {
+          if (child.isMesh && child.userData.origMaterial) {
+            try { child.material = child.userData.origMaterial.clone(); } catch(e){}
+            child.material.needsUpdate = true;
+          }
+        });
+        return;
+      }
       targetObject.traverse((child) => {
         if (child.isMesh && child.material) {
           child.material.color.set(hex);
@@ -629,18 +652,25 @@ const Viewer = {
           (object) => {
             const rawSize = new THREE.Vector3();
             if (is3D3MF) {
+              const meshes = [];
+              let hasNativeColors = false;
               object.traverse(child => {
                 if (child.isMesh && child.geometry) {
                   smoothGeometryNormals(child.geometry);
+                  meshes.push(child);
                   if (child.material) {
                     child.material.flatShading = false;
                     child.material.needsUpdate = true;
+                    try { child.userData.origMaterial = child.material.clone(); } catch(e){}
+                    if (child.material.vertexColors || (child.material.color && child.material.color.getHexString().toLowerCase() !== 'ffffff')) {
+                      hasNativeColors = true;
+                    }
                   }
                 }
               });
               const box = new THREE.Box3().setFromObject(object);
               box.getSize(rawSize);
-              resolve({ object, rawSize, is3MF: true });
+              resolve({ object, rawSize, is3MF: true, hasNativeColors, meshes });
             } else {
               const geometry = object;
               smoothGeometryNormals(geometry);
@@ -833,6 +863,62 @@ const Viewer = {
 
           scene.add(targetObject);
 
+          // 3MF Multi-Color and Object Tree handling (Issue #6)
+          const origSwatch = container.querySelector(`#${containerId}-swatch-orig`);
+          const treeBtn = container.querySelector(`#${containerId}-btn-tree`);
+          const drawer = container.querySelector(`#${containerId}-parts-drawer`);
+          const drawerCount = container.querySelector(`#${containerId}-parts-count`);
+          const drawerList = container.querySelector(`#${containerId}-parts-list`);
+
+          if (loaded.is3MF && loaded.hasNativeColors && origSwatch) {
+            origSwatch.style.display = 'inline-block';
+            setModelColor('original');
+          } else if (origSwatch) {
+            origSwatch.style.display = 'none';
+          }
+
+          if (loaded.is3MF && loaded.meshes && loaded.meshes.length > 1 && treeBtn && drawerList) {
+            treeBtn.style.display = 'inline-flex';
+            if (drawerCount) drawerCount.innerText = `${loaded.meshes.length} parts`;
+            drawerList.innerHTML = loaded.meshes.map((mesh, idx) => {
+              const partName = mesh.name || `Object #${idx + 1}`;
+              const hexColor = mesh.material?.color ? '#' + mesh.material.color.getHexString() : '#00d4ff';
+              return `
+                <div style="display:flex;align-items:center;justify-content:space-between;padding:4px 6px;border-radius:4px;background:rgba(255,255,255,0.04)">
+                  <div style="display:flex;align-items:center;gap:6px;min-width:0;flex:1">
+                    <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${hexColor};flex-shrink:0"></span>
+                    <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${partName}">${partName}</span>
+                  </div>
+                  <button type="button" class="part-eye-btn" data-part-idx="${idx}" style="background:none;border:none;color:var(--accent-cyan);cursor:pointer;padding:2px;display:flex;align-items:center">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                  </button>
+                </div>
+              `;
+            }).join('');
+
+            drawerList.querySelectorAll('.part-eye-btn').forEach(btn => {
+              btn.onclick = (e) => {
+                e.stopPropagation();
+                const idx = Number(btn.dataset.partIdx);
+                const m = loaded.meshes[idx];
+                if (m) {
+                  m.visible = !m.visible;
+                  btn.style.color = m.visible ? 'var(--accent-cyan)' : 'var(--text-muted)';
+                  btn.style.opacity = m.visible ? '1' : '0.4';
+                }
+              };
+            });
+
+            treeBtn.onclick = () => {
+              const isShown = drawer.style.display !== 'none';
+              drawer.style.display = isShown ? 'none' : 'block';
+              treeBtn.classList.toggle('active', !isShown);
+            };
+          } else {
+            if (treeBtn) treeBtn.style.display = 'none';
+            if (drawer) drawer.style.display = 'none';
+          }
+
           // Update Dimensions
           if (dimsEl && (loaded.rawSize.x > 0 || loaded.rawSize.y > 0 || loaded.rawSize.z > 0)) {
             const dimsText = dimsEl.querySelector('.dims-text');
@@ -877,6 +963,17 @@ const Viewer = {
           controls.update();
 
           if (viewer) viewer.targetObject = targetObject;
+          if (modelId && viewer && !viewer.autoThumbTaken) {
+            const hasExistingThumb = container.getAttribute('data-fallback-thumbnail');
+            if (!hasExistingThumb && (typeof App === 'undefined' || App.isFeatureEnabled('auto_generate_thumbnail') !== false)) {
+              viewer.autoThumbTaken = true;
+              setTimeout(async () => {
+                try {
+                  await Viewer.takeSnapshot(modelId, renderer, scene, camera);
+                } catch(e){}
+              }, 1200);
+            }
+          }
         }
         setStatus(null);
       } catch (err) {

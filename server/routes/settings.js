@@ -3,8 +3,10 @@ const router = express.Router();
 const path = require('path');
 const fs = require('fs');
 const AdmZip = require('adm-zip');
+const multer = require('multer');
+const restoreUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 500 * 1024 * 1024 } });
 
-const { get, all, run, saveDb } = require('../database');
+const { get, all, run, saveDb, initDatabase } = require('../database');
 const { DB_PATH, LIBRARY_PATH, UPLOADS_DIR } = require('../config');
 const { authenticate } = require('../middleware/auth');
 const { getSettingBool, hashFileStream } = require('../utils/modelHelpers');
@@ -86,6 +88,67 @@ router.get('/system/backup', authenticate, (req, res) => {
   } catch (err) {
     logger.error(`[Backup] Failed to generate backup: ${err.message}`);
     res.status(500).json({ error: 'Failed to generate backup archive' });
+  }
+});
+
+router.post('/system/restore', authenticate, restoreUpload.single('backup'), async (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
+  try {
+    if (!req.file || !req.file.buffer) {
+      return res.status(400).json({ error: 'No backup file uploaded' });
+    }
+
+    const zip = new AdmZip(req.file.buffer);
+    const entries = zip.getEntries();
+    
+    // Find gyroidvault.db in the zip
+    const dbEntry = entries.find(e => !e.isDirectory && (e.entryName === 'gyroidvault.db' || e.entryName.endsWith('/gyroidvault.db')));
+    if (!dbEntry) {
+      return res.status(400).json({ error: 'Invalid backup: gyroidvault.db not found in ZIP archive' });
+    }
+
+    const dbBuffer = dbEntry.getData();
+    // Validate SQLite header: "SQLite format 3\0" (16 bytes)
+    const magicHeader = Buffer.from('SQLite format 3\0');
+    if (dbBuffer.length < 16 || !dbBuffer.subarray(0, 16).equals(magicHeader)) {
+      return res.status(400).json({ error: 'Corrupt or invalid SQLite database file in archive' });
+    }
+
+    // Safety backup of existing database file if it exists
+    if (fs.existsSync(DB_PATH)) {
+      try {
+        fs.copyFileSync(DB_PATH, DB_PATH + '.bak');
+      } catch (err) {
+        logger.warn(`Failed to create .bak backup before restore: ${err.message}`);
+      }
+    }
+
+    // Write new database file to DB_PATH
+    fs.writeFileSync(DB_PATH, dbBuffer);
+
+    // Extract uploads if present in the ZIP
+    let extractedUploadsCount = 0;
+    for (const entry of entries) {
+      if (!entry.isDirectory && (entry.entryName.startsWith('uploads/') || entry.entryName.startsWith('uploads\\'))) {
+        const relName = entry.entryName.replace(/^uploads[\\\/]/, '');
+        // Guard against path traversal
+        const safeBase = path.basename(relName);
+        if (safeBase) {
+          const targetPath = path.join(UPLOADS_DIR, safeBase);
+          fs.writeFileSync(targetPath, entry.getData());
+          extractedUploadsCount++;
+        }
+      }
+    }
+
+    // Re-initialize database connection with the new DB
+    await initDatabase();
+
+    logger.info(`[Restore] Admin "${req.user.username}" successfully restored database and ${extractedUploadsCount} uploads from backup`);
+    res.json({ success: true, message: 'Database and thumbnails restored successfully', uploadsRestored: extractedUploadsCount });
+  } catch (err) {
+    logger.error(`[Restore] Failed to restore backup: ${err.message}`);
+    res.status(500).json({ error: 'Failed to restore backup archive: ' + err.message });
   }
 });
 

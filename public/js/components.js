@@ -222,8 +222,8 @@ const UI = {
       `<span class="badge badge-${t}" style="cursor:pointer" onclick="event.stopPropagation();App.setFormatFilter('${t.toLowerCase()}')" title="Filter by ${t.toUpperCase()}">${t}</span>`
     ).join('');
     const printed = m.has_printed
-      ? '<span class="badge badge-printed">✓ Printed</span>'
-      : '<span class="badge badge-not-printed">Not printed</span>';
+      ? '<span class="badge badge-printed model-card-printed-status">✓ Printed</span>'
+      : '<span class="badge badge-not-printed model-card-printed-status">Not printed</span>';
     const cat = m.category_name
       ? `<span class="badge badge-category" style="background:${m.category_color}20;color:${m.category_color};border:1px solid ${m.category_color}33;cursor:pointer" onclick="event.stopPropagation();App.navigate('/models?category=${m.category_id}')" title="Filter by category: ${this.escapeHtml(m.category_name)}">${m.category_name}</span>`
       : '';
@@ -248,9 +248,11 @@ const UI = {
       </div>
     `;
 
-    return `<div class="model-card ${isSelected ? 'selected' : ''}" onclick="App.handleModelCardClick(event, ${m.id})" data-model-id="${m.id}">
+    const versionBadge = m.version_count > 0 ? `<span class="badge" style="background:rgba(16,185,129,0.15);color:#10b981;border:1px solid rgba(16,185,129,0.3);font-size:0.65rem;padding:1px 5px" title="${m.version_count + 1} versions available">v${m.version_count + 1}</span>` : '';
+
+    return `<div class="model-card ${isSelected ? 'selected' : ''}" onclick="App.handleModelCardClick(event, ${m.latest_version_id || m.id})" data-model-id="${m.id}">
       ${checkboxHtml}
-      <div class="model-card-thumb">${thumb}<div class="model-card-badges">${types}</div>${quickActions}</div>
+      <div class="model-card-thumb">${thumb}<div class="model-card-badges">${types} ${versionBadge}</div>${quickActions}</div>
       <div class="model-card-body">
         <div style="display:flex;justify-content:space-between;align-items:flex-start">
           <div class="model-card-name" style="flex:1" title="${this.escapeHtml(m.name)}">${m.name}</div>
@@ -259,7 +261,7 @@ const UI = {
         <div class="model-card-meta">${cat} ${printed}</div>
       </div>
       <div class="model-card-footer">
-        <span style="font-size:.75rem;color:var(--text-muted)">${m.file_count || 0} files</span>
+        <span class="model-card-file-count" style="font-size:.75rem;color:var(--text-muted)">${m.file_count || 0} files</span>
         <span style="font-size:.75rem;color:var(--text-muted)">${this.formatDate(m.updated_at)}</span>
       </div>
     </div>`;
@@ -537,7 +539,7 @@ const UI = {
           <div class="viewer-container" id="stl-viewer-${model.id}" data-stl-url="${stlFile.url || '/uploads/'+stlFile.filename}" data-fallback-thumbnail="${model.thumbnail_url || ''}">
             <div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-muted)">Loading 3D preview...</div>
           </div>
-          <div style="padding:12px 16px;font-size:.7rem;color:var(--text-muted);border-top:1px solid var(--border);background:rgba(0,0,0,0.1)">
+          <div style="padding:12px 16px;font-size:.7rem;color:var(--text-muted);border-top:1px solid var(--border);background:var(--bg-tertiary)">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:4px"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>Drag to rotate · Scroll to zoom · Right-click to pan
           </div>
         </div>
@@ -807,8 +809,24 @@ const UI = {
       </div>
     `;
 
+    const versionAlertBanner = (!model.is_latest_version && model.latest_version) ? `
+      <div class="version-alert-banner" style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 18px;margin-bottom:18px;background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.3);border-radius:8px;color:var(--text-primary)">
+        <div style="display:flex;align-items:center;gap:12px">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--accent-yellow);flex-shrink:0"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          <div>
+            <div style="font-weight:700;font-size:0.875rem">You are viewing an older version of this model</div>
+            <div style="font-size:0.78rem;color:var(--text-secondary);margin-top:2px">A newer version is available: <strong style="color:var(--text-primary)">${this.escapeHtml(model.latest_version.name)}</strong> (${this.formatDateShort(model.latest_version.created_at)})</div>
+          </div>
+        </div>
+        <a href="#/models/${model.latest_version.id}" class="btn btn-primary btn-sm" style="display:inline-flex;align-items:center;gap:6px;white-space:nowrap;font-weight:600;text-decoration:none">
+          View Latest Version →
+        </a>
+      </div>
+    ` : '';
+
     return `
       ${breadcrumbs}
+      ${versionAlertBanner}
       <div class="detail-header">
         <div>
           <div class="detail-title">${this.escapeHtml(model.name)}</div>
@@ -912,14 +930,21 @@ const UI = {
           <div class="glass-panel" style="margin-top:16px">
             <div class="panel-header"><div class="panel-title"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:6px"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>Other Versions</div></div>
             <div class="panel-body no-pad">
-              ${model.versions.map(v => `
+              ${model.versions.map(v => {
+                const badge = v.is_latest
+                  ? '<span class="badge" style="background:rgba(16,185,129,0.15);color:#10b981;border:1px solid rgba(16,185,129,0.3);font-size:0.65rem;padding:1px 5px;margin-left:6px">LATEST</span>'
+                  : (v.is_newer
+                    ? '<span class="badge" style="background:rgba(0,212,255,0.15);color:var(--accent-cyan);border:1px solid rgba(0,212,255,0.3);font-size:0.65rem;padding:1px 5px;margin-left:6px">NEWER</span>'
+                    : '<span class="badge" style="background:rgba(148,163,184,0.15);color:#94a3b8;border:1px solid rgba(148,163,184,0.3);font-size:0.65rem;padding:1px 5px;margin-left:6px">OLDER</span>');
+                return `
                 <div class="activity-item" style="cursor:pointer;padding:12px" onclick="App.navigate('/models/${v.id}')">
                   <div style="flex:1">
-                    <div style="font-weight:600;font-size:.85rem">${v.name}</div>
-                    <div style="font-size:.7rem;color:var(--text-muted)">${this.formatDateShort(v.created_at)} · ${v.file_count} files</div>
+                    <div style="font-weight:600;font-size:.85rem;display:flex;align-items:center">${this.escapeHtml(v.name)} ${badge}</div>
+                    <div style="font-size:.7rem;color:var(--text-muted)">${this.formatDateShort(v.created_at)} · ${v.file_count || 0} files</div>
                   </div>
                   <div style="color:var(--accent-cyan);font-size:.8rem">View →</div>
-                </div>`).join('')}
+                </div>`;
+              }).join('')}
             </div>
           </div>` : ''}
           ${model.print_tips ? `
@@ -1489,6 +1514,7 @@ const UI = {
     const currentTheme = (typeof localStorage !== 'undefined' && localStorage.getItem('gv_theme')) || config.default_theme || 'glass';
     const currentAccent = (typeof localStorage !== 'undefined' && localStorage.getItem('gv_accent')) || config.default_accent || 'blue';
     const currentViewMode = config.library_view_mode || 'grid';
+    const currentDensity = (typeof localStorage !== 'undefined' && localStorage.getItem('gv_grid_density')) || 'comfortable';
 
     return `
       <form onsubmit="App.handleSaveSystemSettings(event)" class="form-grid">
@@ -1741,6 +1767,71 @@ const UI = {
           </div>
         </div>
 
+                <!-- 4. Model Cards & Grid Density -->
+        <div style="grid-column: 1 / -1; margin-bottom: 24px">
+          <h3 style="margin-bottom: 6px; font-size: 1.05rem; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 8px;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent-cyan)"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+            Model Cards & Grid Density
+          </h3>
+          <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 14px;">Adjust model card sizing and choose which metadata elements are displayed on cards.</p>
+
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; margin-bottom: 16px;">
+            <div style="background: var(--bg-secondary); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 16px;">
+              <label style="font-weight: 600; font-size: 0.875rem; color: var(--text-primary); display: block; margin-bottom: 8px;">Gallery Grid Density</label>
+              <div class="density-btn-group">
+                <button type="button" class="btn btn-sm density-btn ${currentDensity === 'compact' ? 'active' : 'btn-ghost'}" onclick="App.setGridDensity('compact', this)">Compact</button>
+                <button type="button" class="btn btn-sm density-btn ${currentDensity === 'comfortable' ? 'active' : 'btn-ghost'}" onclick="App.setGridDensity('comfortable', this)">Comfortable (Default)</button>
+                <button type="button" class="btn btn-sm density-btn ${currentDensity === 'large' ? 'active' : 'btn-ghost'}" onclick="App.setGridDensity('large', this)">Large</button>
+              </div>
+              <span style="font-size: 0.75rem; color: var(--text-muted); display: block; margin-top: 8px;">Controls the card thumbnail size and number of columns per row.</span>
+            </div>
+          </div>
+
+          <div class="toggle-grid">
+            <label class="toggle-card">
+              <div class="toggle-card-main">
+                <div class="toggle-card-icon">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/></svg>
+                </div>
+                <div class="toggle-card-text">
+                  <div class="toggle-card-title">Format Badges</div>
+                  <div class="toggle-card-desc">Show STL, 3MF, STEP format pills on model cards.</div>
+                </div>
+              </div>
+              <input type="checkbox" name="show_card_format_badges" value="true" ${config.show_card_format_badges === 'false' || config.show_card_format_badges === false ? '' : 'checked'} onchange="App.handleToggleSystemSetting('show_card_format_badges', this.checked, 'Format Badges')">
+              <span class="toggle-switch"></span>
+            </label>
+
+            <label class="toggle-card">
+              <div class="toggle-card-main">
+                <div class="toggle-card-icon">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                </div>
+                <div class="toggle-card-text">
+                  <div class="toggle-card-title">File Count in Footer</div>
+                  <div class="toggle-card-desc">Show number of files contained in each model.</div>
+                </div>
+              </div>
+              <input type="checkbox" name="show_card_file_count" value="true" ${config.show_card_file_count === 'false' || config.show_card_file_count === false ? '' : 'checked'} onchange="App.handleToggleSystemSetting('show_card_file_count', this.checked, 'File Count')">
+              <span class="toggle-switch"></span>
+            </label>
+
+            <label class="toggle-card">
+              <div class="toggle-card-main">
+                <div class="toggle-card-icon">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+                </div>
+                <div class="toggle-card-text">
+                  <div class="toggle-card-title">Print Status Badge</div>
+                  <div class="toggle-card-desc">Show "Printed" or "Not printed" badge on cards.</div>
+                </div>
+              </div>
+              <input type="checkbox" name="show_card_print_status" value="true" ${config.show_card_print_status === 'false' || config.show_card_print_status === false ? '' : 'checked'} onchange="App.handleToggleSystemSetting('show_card_print_status', this.checked, 'Print Status')">
+              <span class="toggle-switch"></span>
+            </label>
+          </div>
+        </div>
+
         <div style="grid-column: 1 / -1; padding-top: 10px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end;">
           <button type="submit" class="btn btn-primary" style="padding: 10px 24px; font-weight: 600;">Save User Interface Settings</button>
         </div>
@@ -1834,6 +1925,42 @@ const UI = {
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
               Download Backup (.zip)
             </a>
+          </div>
+
+          <div style="background: var(--bg-secondary); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 16px 20px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 14px;">
+            <div>
+              <div style="font-weight: 600; font-size: 0.95rem; color: var(--text-primary)">Restore Database & Thumbnails</div>
+              <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 3px; max-width: 580px;">Upload a previously generated <code>.zip</code> backup archive. This replaces your current database and thumbnails. (A temporary <code>.bak</code> file is saved automatically as a safety fallback).</div>
+            </div>
+            <div>
+              <input type="file" id="backup-restore-file" accept=".zip" style="display: none;" onchange="App.handleBackupRestore(event)">
+              <button type="button" class="btn btn-warning" onclick="document.getElementById('backup-restore-file').click()" style="display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; padding: 10px 18px; font-weight: 600;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/></svg>
+                Restore from Backup (.zip)
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 3. Model Context Protocol (MCP) -->
+        <div style="grid-column: 1 / -1; margin-bottom: 24px">
+          <h3 style="margin-bottom: 6px; font-size: 1.05rem; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 8px;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent-cyan)"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
+            Model Context Protocol (MCP) Server
+          </h3>
+          <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 14px;">Connect AI coding assistants (Claude Desktop, Cursor, Antigravity) to query and manage your 3D library directly in chat.</p>
+
+          <div style="background: var(--bg-secondary); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 16px 20px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 14px;">
+            <div>
+              <div style="font-weight: 600; font-size: 0.95rem; color: var(--text-primary); display: flex; align-items: center; gap: 8px;">
+                <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--success); box-shadow: 0 0 8px var(--success)"></span>
+                MCP Protocol Server Active
+              </div>
+              <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 3px; max-width: 580px;">Serving 6 tools via HTTP Server-Sent Events (SSE) and stdio CLI wrapper.</div>
+            </div>
+            <button type="button" class="btn btn-secondary" onclick="App.switchSettingsTab('mcp')" style="display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; padding: 10px 18px; font-weight: 600;">
+              Configure MCP & View Guides →
+            </button>
           </div>
         </div>
 
@@ -1996,6 +2123,176 @@ const UI = {
             </button>
           </div>
           <div id="duplicates-results" style="margin-top: 14px"></div>
+        </div>
+
+        <!-- 2. 3D Cover Thumbnail Maintenance -->
+        <div style="margin-top: 24px">
+          <h3 style="margin-bottom: 6px; font-size: 1.05rem; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 8px;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent-cyan)"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+            Automatic 3D Thumbnail Generator
+          </h3>
+          <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 14px;">Scan your library for 3D models lacking a cover image or thumbnail, and prepare snapshots.</p>
+
+          <div style="background: var(--bg-secondary); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 18px 20px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+              <div>
+                <div style="font-weight: 600; font-size: 0.95rem; color: var(--text-primary)">Scan & Generate Missing Cover Images</div>
+                <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 2px;">Checks models with STL/3MF files that do not have a photo yet, enabling seamless 3D rendering.</div>
+              </div>
+              <button type="button" class="btn btn-secondary" onclick="App.handleBatchGenerateThumbnails()" style="padding: 9px 18px; font-weight: 600;">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+                Scan Missing Thumbnails
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  },
+
+  mcpSettingsForm() {
+    const origin = (typeof window !== 'undefined' && window.location.origin) || 'http://localhost:3200';
+    const sseUrl = `${origin}/api/mcp/sse`;
+    const httpUrl = `${origin}/api/mcp`;
+    const claudeDesktopConfig = JSON.stringify({
+      mcpServers: {
+        gyroidvault: {
+          command: "node",
+          args: ["PATH_TO_GYROIDVAULT/app/scripts/mcp-server.js"]
+        }
+      }
+    }, null, 2);
+    const remoteSseConfig = JSON.stringify({
+      mcpServers: {
+        gyroidvault: {
+          url: sseUrl
+        }
+      }
+    }, null, 2);
+
+    return `
+      <div>
+        <!-- MCP Status Header -->
+        <div style="background: var(--bg-secondary); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 20px; margin-bottom: 24px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px;">
+          <div style="display: flex; align-items: center; gap: 14px;">
+            <div style="width: 44px; height: 44px; border-radius: var(--radius-sm); background: rgba(0,212,255,0.12); color: var(--accent-cyan); display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
+            </div>
+            <div>
+              <div style="font-weight: 700; font-size: 1.05rem; color: var(--text-primary); display: flex; align-items: center; gap: 8px;">
+                Model Context Protocol (MCP) Server
+                <span class="badge" style="background: rgba(16,185,129,0.15); color: #34d399; border: 1px solid rgba(16,185,129,0.3); font-size: 0.72rem; padding: 2px 8px;">● Active</span>
+              </div>
+              <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 3px;">
+                Open MCP standard (Protocol 2024-11-05). Allows AI coding assistants (Claude Desktop, Cursor, Antigravity, Cline) to explore and interact with your 3D library in natural language.
+              </div>
+            </div>
+          </div>
+          <button type="button" class="btn btn-secondary" onclick="App.testMcpConnection()" style="display: flex; align-items: center; gap: 6px;">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+            Test Connection (Ping)
+          </button>
+        </div>
+
+        <div id="mcp-test-status" style="display: none; margin-bottom: 20px;"></div>
+
+        <!-- 1. Connection Endpoints -->
+        <div style="margin-bottom: 24px;">
+          <h3 style="margin-bottom: 6px; font-size: 1.05rem; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 8px;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--accent-cyan)"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+            Connection Endpoints
+          </h3>
+          <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 14px;">Connect over HTTP Server-Sent Events (SSE) or standard input/output (stdio).</p>
+
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 14px;">
+            <div style="background: var(--bg-secondary); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 16px;">
+              <label style="font-weight: 600; font-size: 0.85rem; color: var(--text-primary); display: block; margin-bottom: 6px;">SSE Endpoint (Web / Network Clients)</label>
+              <div style="display: flex; gap: 8px;">
+                <input type="text" class="form-input" readonly value="${sseUrl}" id="mcp-sse-url" style="font-family: monospace; font-size: 0.8rem; flex: 1;">
+                <button type="button" class="btn btn-secondary btn-sm" onclick="navigator.clipboard.writeText(document.getElementById('mcp-sse-url').value); App.toast('Copied SSE URL!')">Copy</button>
+              </div>
+              <span style="font-size: 0.72rem; color: var(--text-muted); margin-top: 6px; display: block;">Supports bi-directional SSE streaming + <code>POST /api/mcp/messages</code>.</span>
+            </div>
+
+            <div style="background: var(--bg-secondary); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 16px;">
+              <label style="font-weight: 600; font-size: 0.85rem; color: var(--text-primary); display: block; margin-bottom: 6px;">JSON-RPC Direct Endpoint</label>
+              <div style="display: flex; gap: 8px;">
+                <input type="text" class="form-input" readonly value="${httpUrl}" id="mcp-http-url" style="font-family: monospace; font-size: 0.8rem; flex: 1;">
+                <button type="button" class="btn btn-secondary btn-sm" onclick="navigator.clipboard.writeText(document.getElementById('mcp-http-url').value); App.toast('Copied HTTP URL!')">Copy</button>
+              </div>
+              <span style="font-size: 0.72rem; color: var(--text-muted); margin-top: 6px; display: block;">Standard JSON-RPC 2.0 endpoint for direct POST requests.</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 2. Client Configurations -->
+        <div style="margin-bottom: 24px;">
+          <h3 style="margin-bottom: 6px; font-size: 1.05rem; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 8px;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--accent-cyan)"><rect x="4" y="4" width="16" height="16" rx="2" ry="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="1" x2="9" y2="4"/><line x1="15" y1="1" x2="15" y2="4"/><line x1="9" y1="20" x2="9" y2="23"/><line x1="15" y1="20" x2="15" y2="23"/><line x1="20" y1="9" x2="23" y2="9"/><line x1="20" y1="14" x2="23" y2="14"/><line x1="1" y1="9" x2="4" y2="9"/><line x1="1" y1="14" x2="4" y2="14"/></svg>
+            Quick Client Setup
+          </h3>
+          <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 14px;">Add GyroidVault to your AI tool configuration files (e.g. <code>claude_desktop_config.json</code> or Cursor MCP settings).</p>
+
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 14px;">
+            <div style="background: var(--bg-secondary); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 16px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                <span style="font-weight: 600; font-size: 0.85rem; color: var(--text-primary)">Claude Desktop / Cursor (Stdio)</span>
+                <button type="button" class="btn btn-secondary btn-xs" onclick="navigator.clipboard.writeText(document.getElementById('mcp-json-stdio').textContent); App.toast('Copied Stdio JSON!')">Copy JSON</button>
+              </div>
+              <pre id="mcp-json-stdio" style="background: var(--bg-primary); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 12px; font-size: 0.75rem; color: var(--accent-cyan); overflow-x: auto; margin: 0;">${claudeDesktopConfig}</pre>
+              <span style="font-size: 0.72rem; color: var(--text-muted); margin-top: 6px; display: block;">Replace <code>PATH_TO_GYROIDVAULT</code> with your full GyroidVault project directory.</span>
+            </div>
+
+            <div style="background: var(--bg-secondary); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 16px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                <span style="font-weight: 600; font-size: 0.85rem; color: var(--text-primary)">Remote / SSE Client Configuration</span>
+                <button type="button" class="btn btn-secondary btn-xs" onclick="navigator.clipboard.writeText(document.getElementById('mcp-json-sse').textContent); App.toast('Copied SSE JSON!')">Copy JSON</button>
+              </div>
+              <pre id="mcp-json-sse" style="background: var(--bg-primary); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 12px; font-size: 0.75rem; color: var(--accent-cyan); overflow-x: auto; margin: 0;">${remoteSseConfig}</pre>
+              <span style="font-size: 0.72rem; color: var(--text-muted); margin-top: 6px; display: block;">Works with any network client supporting standard MCP SSE transport.</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 3. Available Tools Reference -->
+        <div>
+          <h3 style="margin-bottom: 6px; font-size: 1.05rem; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 8px;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--accent-cyan)"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
+            Available MCP Tools (6 Registered)
+          </h3>
+          <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 14px;">The following actions are exposed to connected AI assistants:</p>
+
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px;">
+            <div style="background: var(--bg-secondary); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 14px 16px;">
+              <div style="font-family: monospace; font-size: 0.85rem; font-weight: 700; color: var(--accent-cyan); margin-bottom: 4px;">search_models</div>
+              <div style="font-size: 0.78rem; color: var(--text-muted);">Search models by query, tags, category, or print status with result limits.</div>
+            </div>
+
+            <div style="background: var(--bg-secondary); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 14px 16px;">
+              <div style="font-family: monospace; font-size: 0.85rem; font-weight: 700; color: var(--accent-cyan); margin-bottom: 4px;">get_model_details</div>
+              <div style="font-size: 0.78rem; color: var(--text-muted);">Fetch full model metadata, files list, print history, tags, and versions.</div>
+            </div>
+
+            <div style="background: var(--bg-secondary); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 14px 16px;">
+              <div style="font-family: monospace; font-size: 0.85rem; font-weight: 700; color: var(--accent-cyan); margin-bottom: 4px;">list_collections</div>
+              <div style="font-size: 0.78rem; color: var(--text-muted);">List all project binders and curated model collections with model counts.</div>
+            </div>
+
+            <div style="background: var(--bg-secondary); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 14px 16px;">
+              <div style="font-family: monospace; font-size: 0.85rem; font-weight: 700; color: var(--accent-cyan); margin-bottom: 4px;">get_collection</div>
+              <div style="font-size: 0.78rem; color: var(--text-muted);">Fetch details and list of 3D models contained inside a collection.</div>
+            </div>
+
+            <div style="background: var(--bg-secondary); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 14px 16px;">
+              <div style="font-family: monospace; font-size: 0.85rem; font-weight: 700; color: var(--accent-cyan); margin-bottom: 4px;">get_slicer_link</div>
+              <div style="font-size: 0.78rem; color: var(--text-muted);">Generate direct <code>orcaslicer://</code>, <code>bambustudio://</code>, or <code>prusa://</code> deep links.</div>
+            </div>
+
+            <div style="background: var(--bg-secondary); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 14px 16px;">
+              <div style="font-family: monospace; font-size: 0.85rem; font-weight: 700; color: var(--accent-cyan); margin-bottom: 4px;">update_model</div>
+              <div style="font-size: 0.78rem; color: var(--text-muted);">Update title, notes, print tips, category, or tags of any 3D model.</div>
+            </div>
+          </div>
         </div>
       </div>
     `;
@@ -2423,10 +2720,10 @@ const UI = {
           </div>
 
           <h2 style="font-size:1.55rem;font-weight:800;letter-spacing:-0.02em;margin:0 0 8px;color:var(--text-primary)">
-            Welcome to GyroidVault 2.0
+            Welcome to GyroidVault 2.4
           </h2>
           <p style="color:var(--text-secondary);font-size:0.88rem;line-height:1.55;max-width:540px;margin:0 auto">
-            Your self-hosted 3D vault and slicing workspace — equipped with Studio 2.0 multi-part assembly, real-time mm dimensions, background scanner, and hardened security.
+            Your self-hosted 3D vault and slicing workspace — equipped with native AI MCP integration, 3MF multi-color assembly studio, 1-click backup restore, and custom grid density.
           </p>
         </div>
 
@@ -2439,7 +2736,7 @@ const UI = {
             <div style="min-width:0">
               <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
                 <span style="font-weight:700;font-size:0.92rem;color:#ffffff">Official Website is Live!</span>
-                <span style="background:rgba(16,185,129,0.2);color:#34d399;border:1px solid rgba(16,185,129,0.35);padding:1px 7px;border-radius:8px;font-size:0.62rem;font-weight:700;text-transform:uppercase">Official</span>
+                <span style="background:rgba(16,185,129,0.2);color:#34d399;border:1px solid rgba(16,185,129,0.35);padding:1px 7px;border-radius:8px;font-size:0.62rem;font-weight:700;text-transform:uppercase">v2.4.0 Live</span>
               </div>
               <div style="font-size:0.8rem;color:var(--text-secondary);margin-top:2px">
                 Explore the interactive 3D Studio demo, feature overview & Docker setup at <strong style="color:var(--accent-cyan)">gyroidvault.com</strong>
@@ -2473,8 +2770,8 @@ const UI = {
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
               </div>
               <div>
-                <div style="font-weight:700;font-size:0.9rem;color:var(--text-primary);margin-bottom:3px">Studio 2.0 & Multi-Assembly</div>
-                <div style="font-size:0.8rem;color:var(--text-secondary);line-height:1.45">Inspect individual parts or arrange all project STL/3MF files on the virtual build plate with real-time physical mm dimension badges.</div>
+                <div style="font-weight:700;font-size:0.9rem;color:var(--text-primary);margin-bottom:3px">Native MCP Server (AI Vault)</div>
+                <div style="font-size:0.8rem;color:var(--text-secondary);line-height:1.45">Connect Claude Desktop, Cursor and LLM agents directly over SSE or stdio to search models, inspect specs, and manage your vault.</div>
               </div>
             </div>
 
@@ -2483,8 +2780,8 @@ const UI = {
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
               </div>
               <div>
-                <div style="font-weight:700;font-size:0.9rem;color:var(--text-primary);margin-bottom:3px">Massive Libraries (2TB+) & Scanner</div>
-                <div style="font-size:0.8rem;color:var(--text-secondary);line-height:1.45">Engineered for massive libraries of 2TB+ and 10,000+ models. Indexes directories and identifies duplicates in the background with zero UI freezes.</div>
+                <div style="font-weight:700;font-size:0.9rem;color:var(--text-primary);margin-bottom:3px">3MF Multi-Color & Parts Drawer</div>
+                <div style="font-size:0.8rem;color:var(--text-secondary);line-height:1.45">View embedded multi-color 3MF filaments with original palettes, and toggle individual parts on/off in the interactive 3MF parts drawer.</div>
               </div>
             </div>
 
@@ -2493,8 +2790,8 @@ const UI = {
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
               </div>
               <div>
-                <div style="font-weight:700;font-size:0.9rem;color:var(--text-primary);margin-bottom:3px">Power Batch Editing</div>
-                <div style="font-size:0.8rem;color:var(--text-secondary);line-height:1.45">Multi-select dozens of models across library views to bulk-assign tags, categories, or collections in a single instant action.</div>
+                <div style="font-weight:700;font-size:0.9rem;color:var(--text-primary);margin-bottom:3px">1-Click Backup & Restore</div>
+                <div style="font-size:0.8rem;color:var(--text-secondary);line-height:1.45">Export and restore your entire database and thumbnails via .zip archives with automatic safety copies and database integrity validation.</div>
               </div>
             </div>
 
@@ -2503,8 +2800,8 @@ const UI = {
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
               </div>
               <div>
-                <div style="font-weight:700;font-size:0.9rem;color:var(--text-primary);margin-bottom:3px">Local Privacy & Access Control</div>
-                <div style="font-size:0.8rem;color:var(--text-secondary);line-height:1.45">Your models stay 100% private and self-hosted with zero cloud telemetry. Strictly confined to your storage folder with safe, token-protected share links.</div>
+                <div style="font-weight:700;font-size:0.9rem;color:var(--text-primary);margin-bottom:3px">Grid Density & Smart Versions</div>
+                <div style="font-size:0.8rem;color:var(--text-secondary);line-height:1.45">Compact, Comfortable or Large gallery layouts, toggleable badges, and automatic alerts pointing to the newest iteration of any model.</div>
               </div>
             </div>
           </div>

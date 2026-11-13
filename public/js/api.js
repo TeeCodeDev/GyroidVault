@@ -72,6 +72,21 @@ const API = {
   testSMTP(data) { return this.request('/api/settings/smtp/test', { method: 'POST', body: JSON.stringify(data) }); },
   testOidcDiscovery(issuer_url) { return this.request('/api/settings/oidc/test', { method: 'POST', body: JSON.stringify({ issuer_url }) }); },
   getViewMode() { return this.request('/api/settings/view-mode'); },
+  async restoreBackup(formData) {
+    const res = await fetch('/api/system/restore', {
+      method: 'POST',
+      headers: {
+        'x-csrf-token': localStorage.getItem('pv_csrf_token') || ''
+      },
+      credentials: 'same-origin',
+      body: formData
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Failed to restore backup');
+    }
+    return res.json();
+  },
 
   // Library browser
   browseLibrary(browsePath = '') {
@@ -245,5 +260,7 @@ const API = {
   getBlockedIps() { return this.request('/api/system/blocked-ips'); },
   unblockIp(ip) { return this.request('/api/system/unblock-ip', { method: 'POST', body: JSON.stringify({ ip }) }); },
   scanDuplicates() { return this.request('/api/system/duplicates'); },
-  getReleaseNotes() { return this.request('/api/system/release-notes'); }
+  getReleaseNotes() { return this.request('/api/system/release-notes'); },
+  pingMcp() { return this.request('/api/mcp', { method: 'POST', body: JSON.stringify({ jsonrpc: '2.0', id: Date.now(), method: 'ping' }) }); },
+  getMcpTools() { return this.request('/api/mcp', { method: 'POST', body: JSON.stringify({ jsonrpc: '2.0', id: Date.now(), method: 'tools/list' }) }); }
 };

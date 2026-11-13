@@ -1,6 +1,6 @@
 # GyroidVault
 
-[![Version](https://img.shields.io/badge/version-2.3.1-blue.svg)](https://github.com/TeeCodeDev/GyroidVault/releases)
+[![Version](https://img.shields.io/badge/version-2.4.0-blue.svg)](https://github.com/TeeCodeDev/GyroidVault/releases)
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-purple.svg)](LICENSE)
 [![Docker](https://img.shields.io/badge/docker-ghcr.io-cyan.svg)](https://github.com/TeeCodeDev/GyroidVault/pkgs/container/gyroidvault)
 [![Website](https://img.shields.io/badge/website-gyroidvault.com-emerald.svg)](https://gyroidvault.com)
@@ -11,6 +11,17 @@
 📖 **Documentation & Wiki:** [GitHub Wiki](https://github.com/TeeCodeDev/GyroidVault/wiki)
 
 ---
+
+## What's New in v2.4.0
+
+- 🤖 **Native Model Context Protocol (MCP) Server:** Built-in zero-dependency MCP server operating over Server-Sent Events (`/api/mcp/sse`) and stdio (`npm run mcp`). AI assistants like Claude Desktop and Cursor can search models, inspect specs, retrieve slicer links, and manage model metadata directly. Includes a dedicated Settings configuration tab with 1-click client configs.
+- 🎨 **3MF Multi-Color Studio & Parts Drawer:** Support for embedded multi-color filament paints and vertex colors in 3MF models. Features an 'Original 3MF Colors' palette swatch and an interactive Parts Drawer with individual mesh visibility toggles (`👁️`) for multi-body assemblies.
+- 🏷️ **Smart Model Versions Hierarchy:** Automatic detection of newer iterations, an amber alert banner on older versions linking to the latest release, `LATEST`/`NEWER`/`OLDER` version badges, and model cards that navigate directly to the newest release.
+- 💾 **1-Click Backup Restore (`POST /api/system/restore`):** Direct web-based restore from previously exported `.zip` archives, complete with SQLite database validation and automatic `.bak` safety backups.
+- 📐 **Gallery Grid Density & Customizable Badges:** Choose between *Compact*, *Comfortable*, and *Large* grid densities in UI Settings, alongside granular toggles for format badges, file counts, and print status.
+- ⚡ **Automatic 3D Thumbnail Snapshots:** Automatically generates canvas snapshots for models without cover images, plus a batch thumbnail scanner in Maintenance settings.
+- ✍️ **Multi-line Print Tips:** Preserves linebreaks and formatted paragraphs in model print tips (`white-space: pre-wrap; word-break: break-word;`).
+- ☀️ **Light Mode Polish:** High-contrast enhancements across Settings category lists, 3D Studio part dropdowns, and sidebar active navigation.
 
 ## What's New in v2.3.0
 

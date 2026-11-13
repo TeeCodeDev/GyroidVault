@@ -22,6 +22,7 @@ const http = require('http');
 const path = require('path');
 const os = require('os');
 const vm = require('vm');
+const crypto = require('crypto');
 const { spawn, execFileSync } = require('child_process');
 const AdmZip = require('adm-zip');
 
@@ -398,6 +399,74 @@ async function runStaticAndUiChecks() {
     await App.handleToggleSystemSetting('oidc_enabled', true, 'OIDC');
     assert(App.cachedSystemSettings.oidc_enabled === 'true', 'Expected cachedSystemSettings.oidc_enabled to be "true" (Issue #84)');
     assert(App.publicConfig.oidc_enabled === true, 'Expected publicConfig.oidc_enabled to be true (Issue #84)');
+
+    // 7. Multi-line Print Tips CSS & Rendering Guard (Issue #85)
+    const styleCss = fs.readFileSync(path.join(ROOT_DIR, 'public/css/style.css'), 'utf8');
+    assert(styleCss.includes('.detail-tips{font-size:.875rem;color:var(--text-secondary);line-height:1.6;white-space:pre-wrap;word-break:break-word}'), 'Expected white-space: pre-wrap on .detail-tips (Issue #85)');
+    assert(styleCss.includes('.detail-tips-box{background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.18);border-radius:6px;padding:14px 16px;color:var(--text-secondary);font-size:.8125rem;line-height:1.6;margin-bottom:16px;white-space:pre-wrap;word-break:break-word}'), 'Expected white-space: pre-wrap on .detail-tips-box (Issue #85)');
+
+    // 8. Model Versions Ordering, Banner & Card Badges (Issue #87)
+    const olderModel = {
+      id: 10,
+      name: 'Original Widget (v1)',
+      is_latest_version: false,
+      latest_version: { id: 11, name: 'Upgraded Widget (v2)', created_at: '2026-11-01' },
+      versions: [
+        { id: 11, name: 'Upgraded Widget (v2)', created_at: '2026-11-01', file_count: 3, is_latest: true, is_newer: true }
+      ]
+    };
+    const olderDetailHtml = UI.modelDetail(olderModel);
+    assert(olderDetailHtml.includes('version-alert-banner'), 'Expected version-alert-banner when viewing an older model version (Issue #87)');
+    assert(olderDetailHtml.includes('View Latest Version →'), 'Expected View Latest Version button on older model detail (Issue #87)');
+    assert(olderDetailHtml.includes('LATEST'), 'Expected LATEST badge on newer version in Other Versions panel (Issue #87)');
+
+    const cardWithVersions = UI.modelCard({
+      id: 10,
+      name: 'Original Widget',
+      version_count: 1,
+      latest_version_id: 11
+    });
+    assert(cardWithVersions.includes('v2'), 'Expected v2 badge on card with newer version (Issue #87)');
+    assert(cardWithVersions.includes('App.handleModelCardClick(event, 11)'), 'Expected card click to navigate to latest_version_id (Issue #87)');
+
+    // 9. 3MF Multi-Color & Object Tree in 3D Viewer (Issue #6)
+    const viewerJs = fs.readFileSync(path.join(ROOT_DIR, 'public/js/viewer.js'), 'utf8');
+    assert(viewerJs.includes('parts-drawer'), 'Expected 3MF parts drawer in viewer.js (Issue #6)');
+    assert(viewerJs.includes('swatch-orig'), 'Expected original 3MF color swatch in viewer.js (Issue #6)');
+    assert(viewerJs.includes('btn-tree'), 'Expected 3MF parts button in viewer.js (Issue #6)');
+
+    // 10. Grid Density & Card Display Toggles
+    assert(styleCss.includes('.model-grid.grid-compact'), 'Expected grid-compact CSS rules');
+    assert(styleCss.includes('.model-grid.grid-large'), 'Expected grid-large CSS rules');
+    assert(typeof App.setGridDensity === 'function', 'Expected App.setGridDensity function to exist');
+    const uiFormHtml = UI.uiSettingsForm({});
+    assert(uiFormHtml.includes('Gallery Grid Density'), 'Expected Gallery Grid Density in UI settings form');
+    assert(uiFormHtml.includes('name="show_card_format_badges"'), 'Expected show_card_format_badges in UI settings');
+
+    // 11. Backup Restore UI Guard
+    const systemFormHtml = UI.systemSettingsForm({});
+    assert(systemFormHtml.includes('Restore from Backup (.zip)'), 'Expected Restore from Backup button in system settings');
+    assert(typeof API.restoreBackup === 'function', 'Expected API.restoreBackup function in api.js');
+
+    // 12. Toggle Switch CSS & Density Indicator
+    assert(styleCss.includes('.toggle-card input[type="checkbox"]:checked + .toggle-switch'), 'Expected toggle-card checked switch CSS');
+    assert(uiFormHtml.includes('density-btn-group'), 'Expected density-btn-group in UI settings form');
+    assert(uiFormHtml.includes('density-btn active'), 'Expected active density-btn to indicate selected density');
+
+    // 13. MCP Settings UI Guard
+    assert(typeof UI.mcpSettingsForm === 'function', 'Expected UI.mcpSettingsForm function in components.js');
+    const mcpFormHtml = UI.mcpSettingsForm();
+    assert(mcpFormHtml.includes('/api/mcp/sse'), 'Expected SSE endpoint in MCP settings form');
+    assert(mcpFormHtml.includes('search_models'), 'Expected search_models tool in MCP settings form');
+    assert(systemFormHtml.includes('Model Context Protocol (MCP)'), 'Expected MCP callout in system settings form');
+    assert(typeof API.pingMcp === 'function', 'Expected API.pingMcp in api.js');
+    assert(typeof App.testMcpConnection === 'function', 'Expected App.testMcpConnection in app.js');
+
+    // 14. Light Theme Polish & Viewer Overlay High-Contrast Guards
+    assert(styleCss.includes('html[data-theme="light"] .settings-list'), 'Expected light theme settings-list override');
+    assert(styleCss.includes('html[data-theme="light"] .filter-select'), 'Expected light theme filter-select override');
+    assert(styleCss.includes('html[data-theme="light"] .sidebar-nav-item.active'), 'Expected light theme sidebar active item override');
+    assert(styleCss.includes('.viewer-pill select'), 'Expected viewer-pill select styling');
   });
 }
 
@@ -1796,6 +1865,125 @@ async function runE2ETests() {
         body: { ids: [m2.data.id, m3.data.id], deleteDisk: true }
       });
       assert(bulkDel.status === 200, `Bulk delete failed: ${JSON.stringify(bulkDel.data)}`);
+    });
+
+    await check('Model Versions API: Order, Parent/Child Linking & Latest Version resolution (Issue #87)', async () => {
+      // Create root model v1
+      const rootRes = await apiReq('/api/models', {
+        method: 'POST',
+        session: adminSession,
+        body: { name: 'Versioned Gadget v1', description: 'First release' }
+      });
+      assert(rootRes.status === 201, `Failed to create root model: ${JSON.stringify(rootRes.data)}`);
+      const v1Id = rootRes.data.id;
+
+      // Create v2 version
+      const v2Res = await apiReq(`/api/models/${v1Id}/versions`, {
+        method: 'POST',
+        session: adminSession,
+        body: { name: 'Versioned Gadget v2', description: 'Updated release' }
+      });
+      assert(v2Res.status === 201, `Failed to create version: ${JSON.stringify(v2Res.data)}`);
+      const v2Id = v2Res.data.id;
+
+      // Verify GET /api/models shows root model annotated with latest_version_id and version_count
+      const listRes = await apiReq('/api/models', { session: adminSession });
+      const foundRoot = listRes.data.models.find(m => m.id === v1Id);
+      assert(foundRoot, 'Expected root model to appear in model list');
+      assert(foundRoot.version_count === 1, `Expected version_count=1, got ${foundRoot.version_count}`);
+      assert(foundRoot.latest_version_id === v2Id, `Expected latest_version_id=${v2Id}, got ${foundRoot.latest_version_id}`);
+
+      // Verify GET /api/models/:id for v1 (older version)
+      const v1Detail = await apiReq(`/api/models/${v1Id}`, { session: adminSession });
+      assert(v1Detail.data.is_latest_version === false, 'Expected is_latest_version=false on older version (Issue #87)');
+      assert(v1Detail.data.latest_version && v1Detail.data.latest_version.id === v2Id, 'Expected latest_version to point to v2');
+      assert(v1Detail.data.versions && v1Detail.data.versions.length === 1, 'Expected 1 other version in list');
+      assert(v1Detail.data.versions[0].is_latest === true, 'Expected version to be marked as latest');
+
+      // Verify GET /api/models/:id for v2 (latest version)
+      const v2Detail = await apiReq(`/api/models/${v2Id}`, { session: adminSession });
+      assert(v2Detail.data.is_latest_version === true, 'Expected is_latest_version=true on latest version (Issue #87)');
+      assert(v2Detail.data.latest_version === null, 'Expected latest_version=null on latest version');
+      assert(v2Detail.data.versions[0].is_latest === false, 'Expected older version to not be marked as latest');
+    });
+
+    await check('Backup Restore Endpoint (POST /api/system/restore)', async () => {
+      // 1. Download current backup
+      const backupRes = await apiReq('/api/system/backup', { session: adminSession, raw: true });
+      assert(backupRes.status === 200, 'Expected 200 on backup download');
+
+      // 2. Unauthorized or Viewer request must be rejected (401/403)
+      const unauthRestore = await apiReq('/api/system/restore', { method: 'POST' });
+      assert(unauthRestore.status === 401, `Expected 401 unauthenticated, got ${unauthRestore.status}`);
+
+      const viewerRestore = await apiReq('/api/system/restore', { method: 'POST', session: viewerSession });
+      assert(viewerRestore.status === 403, `Expected 403 for viewer, got ${viewerRestore.status}`);
+
+      // 3. Admin restore using multipart boundary
+      const boundary = '----WebKitFormBoundary' + crypto.randomBytes(8).toString('hex');
+      const header = Buffer.from(
+        `--${boundary}\r\n` +
+        `Content-Disposition: form-data; name="backup"; filename="test-backup.zip"\r\n` +
+        `Content-Type: application/zip\r\n\r\n`
+      );
+      const footer = Buffer.from(`\r\n--${boundary}--\r\n`);
+      const multipartBody = Buffer.concat([header, backupRes.data, footer]);
+
+      const restoreRes = await fetch(`http://127.0.0.1:${testPort}/api/system/restore`, {
+        method: 'POST',
+        headers: {
+          'Cookie': adminSession.cookie,
+          'x-csrf-token': adminSession.csrfToken,
+          'Content-Type': `multipart/form-data; boundary=${boundary}`
+        },
+        body: multipartBody
+      });
+      const restoreData = await restoreRes.json();
+      assert(restoreRes.status === 200, `Expected 200 on restore, got ${restoreRes.status}: ${JSON.stringify(restoreData)}`);
+      assert(restoreData.success === true, 'Expected success=true in restore response');
+    });
+
+    await check('Native Model Context Protocol (MCP) Server: protocol negotiation, tools/list & tools/call', async () => {
+      // 1. Protocol initialize negotiation
+      const initRes = await apiReq('/api/mcp', {
+        method: 'POST',
+        body: {
+          jsonrpc: '2.0',
+          id: 1,
+          method: 'initialize',
+          params: { clientInfo: { name: 'test-agent', version: '1.0' } }
+        }
+      });
+      assert(initRes.status === 200, `Expected 200 for MCP initialize, got ${initRes.status}`);
+      assert(initRes.data.result.protocolVersion === '2024-11-05', 'Expected MCP protocolVersion 2024-11-05');
+      assert(initRes.data.result.serverInfo.name === 'gyroidvault-mcp', 'Expected serverInfo.name gyroidvault-mcp');
+
+      // 2. Discover MCP tools list
+      const listToolsRes = await apiReq('/api/mcp', {
+        method: 'POST',
+        body: { jsonrpc: '2.0', id: 2, method: 'tools/list' }
+      });
+      assert(listToolsRes.status === 200, `Expected 200 for tools/list, got ${listToolsRes.status}`);
+      const toolNames = listToolsRes.data.result.tools.map(t => t.name);
+      assert(toolNames.includes('search_models'), 'Expected search_models tool in MCP');
+      assert(toolNames.includes('get_model_details'), 'Expected get_model_details tool in MCP');
+      assert(toolNames.includes('list_collections'), 'Expected list_collections tool in MCP');
+      assert(toolNames.includes('get_slicer_link'), 'Expected get_slicer_link tool in MCP');
+      assert(toolNames.includes('update_model'), 'Expected update_model tool in MCP');
+
+      // 3. Execute tools/call: search_models
+      const searchCallRes = await apiReq('/api/mcp', {
+        method: 'POST',
+        body: {
+          jsonrpc: '2.0',
+          id: 3,
+          method: 'tools/call',
+          params: { name: 'search_models', arguments: { query: 'Versioned' } }
+        }
+      });
+      assert(searchCallRes.status === 200, `Expected 200 for tools/call, got ${searchCallRes.status}`);
+      const parsedContent = JSON.parse(searchCallRes.data.result.content[0].text);
+      assert(parsedContent.count >= 1, 'Expected at least 1 model in MCP search results');
     });
 
   } finally {

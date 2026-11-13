@@ -16,7 +16,9 @@ router.get('/', (req, res) => {
     const { search, category, tag, format, user, printed, sort = 'updated', order, project_id, page = 1, limit = 24 } = req.query;
     const needsFileCountSort = sort === 'files';
     const needsPrintCountSort = sort === 'prints';
-    let query = `SELECT m.*, c.name as category_name, c.color as category_color, u.username as uploader_name
+    let query = `SELECT m.*, c.name as category_name, c.color as category_color, u.username as uploader_name,
+      (SELECT id FROM models WHERE parent_id=m.id ORDER BY created_at DESC, id DESC LIMIT 1) as latest_version_id,
+      (SELECT COUNT(*) FROM models WHERE parent_id=m.id) as version_count
       ${needsFileCountSort ? ',(SELECT COUNT(*) FROM files WHERE model_id=m.id) as file_count' : ''}
       ${needsPrintCountSort ? ',(SELECT COUNT(*) FROM print_history WHERE model_id=m.id) as print_count' : ''}
       FROM models m
@@ -265,14 +267,25 @@ router.get('/:id', (req, res) => {
       .filter(p => p.visibility === 'public' || (req.user && (req.user.role === 'admin' || p.user_id === req.user.id)));
     model.has_printed = model.prints.length > 0;
     
-    // Versions
+    // Versions (Issue #87)
     const rootId = model.parent_id || model.id;
-    model.versions = all(`
-      SELECT id, name, created_at, 
+    const allVersionsInFamily = all(`
+      SELECT id, name, created_at, parent_id,
       (SELECT COUNT(*) FROM files WHERE model_id = models.id) as file_count 
       FROM models 
-      WHERE (id = ? OR parent_id = ?) AND id != ? 
-      ORDER BY created_at DESC`, [rootId, rootId, model.id]);
+      WHERE id = ? OR parent_id = ? 
+      ORDER BY created_at DESC, id DESC`, [rootId, rootId]);
+
+    const latest = allVersionsInFamily[0];
+    model.is_latest_version = latest ? (latest.id === model.id) : true;
+    model.latest_version = (latest && latest.id !== model.id) ? { id: latest.id, name: latest.name, created_at: latest.created_at } : null;
+    model.versions = allVersionsInFamily
+      .filter(v => v.id !== model.id)
+      .map(v => ({
+        ...v,
+        is_latest: (v.id === latest?.id),
+        is_newer: new Date(v.created_at).getTime() > new Date(model.created_at).getTime()
+      }));
 
     res.json(model);
   } catch (e) { console.error(e); res.status(500).json({ error: 'Failed to fetch model' }); }

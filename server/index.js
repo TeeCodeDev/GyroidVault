@@ -37,6 +37,7 @@ const projectsRoutes = require('./routes/projects');
 const browseRoutes = require('./routes/browse');
 const taxonomyRoutes = require('./routes/taxonomy');
 const settingsRoutes = require('./routes/settings');
+const mcpRoutes = require('./routes/mcp');
 
 const app = express();
 
@@ -174,6 +175,7 @@ app.use('/api/projects', projectsRoutes);
 app.use('/api/browse', browseRoutes);
 app.use('/api', taxonomyRoutes);
 app.use('/api', settingsRoutes);
+app.use('/api/mcp', mcpRoutes);
 
 // ─── SPA Fallback & Global Error Handler ───────────────────────────────────
 
