@@ -389,6 +389,10 @@ const Viewer = {
         rotateBtn.classList.toggle('active', controls.autoRotate);
       };
     }
+    controls.addEventListener('start', () => {
+      controls.autoRotate = false;
+      if (rotateBtn) rotateBtn.classList.remove('active');
+    });
 
     // Wire up Grid Toggle
     const gridBtn = container.querySelector(`#${containerId}-btn-grid`);
