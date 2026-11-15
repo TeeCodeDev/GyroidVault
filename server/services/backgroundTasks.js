@@ -30,6 +30,12 @@ async function syncLibraryWithDisk() {
   }
   syncInProgress = true;
   try {
+    try {
+      if ((await fs.promises.readdir(LIBRARY_PATH)).length === 0) throw new Error('library is empty');
+    } catch (err) {
+      logger.warn('Sync', `Skipping sync, library at ${LIBRARY_PATH} is unreadable or empty (${err.message}). Refusing to delete every entry.`);
+      return;
+    }
     // Only check physical files on disk; skip virtual entries inside archives (is_archive_entry = 1)
     const files = all('SELECT id, library_path, original_name FROM files WHERE library_path IS NOT NULL AND (is_archive_entry IS NULL OR is_archive_entry = 0)');
     let deletedCount = 0;
