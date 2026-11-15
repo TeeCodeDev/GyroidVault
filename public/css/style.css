@@ -1094,6 +1094,7 @@ select option{background:var(--bg-card);color:var(--text-primary)}
   position: relative;
 }
 .viewer-container canvas{width:100%!important;height:100%!important;display:block}
+@media(min-width:1025px){.viewer-fill{height:max(400px, calc(100vh - 424px))}}
 .viewer-controls{position:absolute;bottom:10px;right:10px;display:flex;gap:6px}
 .viewer-controls button{background:rgba(0,0,0,0.5);backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,0.1);color:var(--text-primary);padding:6px 10px;border-radius:6px;font-size:.75rem;cursor:pointer;transition:all var(--transition)}
 .viewer-controls button:hover{background:rgba(0,0,0,0.7);border-color:var(--accent-cyan)}
