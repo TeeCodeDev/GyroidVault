@@ -2720,10 +2720,10 @@ const UI = {
           </div>
 
           <h2 style="font-size:1.55rem;font-weight:800;letter-spacing:-0.02em;margin:0 0 8px;color:var(--text-primary)">
-            Welcome to GyroidVault 2.4
+            Welcome to GyroidVault 2.5
           </h2>
           <p style="color:var(--text-secondary);font-size:0.88rem;line-height:1.55;max-width:540px;margin:0 auto">
-            Your self-hosted 3D vault and slicing workspace — equipped with native AI MCP integration, 3MF multi-color assembly studio, 1-click backup restore, and custom grid density.
+            Your self-hosted 3D vault and slicing workspace — now with unmounted storage protection, full-height 3D studio, intuitive orbit controls, and native MCP.
           </p>
         </div>
 
@@ -2736,7 +2736,7 @@ const UI = {
             <div style="min-width:0">
               <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
                 <span style="font-weight:700;font-size:0.92rem;color:#ffffff">Official Website is Live!</span>
-                <span style="background:rgba(16,185,129,0.2);color:#34d399;border:1px solid rgba(16,185,129,0.35);padding:1px 7px;border-radius:8px;font-size:0.62rem;font-weight:700;text-transform:uppercase">v2.4.0 Live</span>
+                <span style="background:rgba(16,185,129,0.2);color:#34d399;border:1px solid rgba(16,185,129,0.35);padding:1px 7px;border-radius:8px;font-size:0.62rem;font-weight:700;text-transform:uppercase">v2.5.0 Live</span>
               </div>
               <div style="font-size:0.8rem;color:var(--text-secondary);margin-top:2px">
                 Explore the interactive 3D Studio demo, feature overview & Docker setup at <strong style="color:var(--accent-cyan)">gyroidvault.com</strong>
@@ -2770,8 +2770,8 @@ const UI = {
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
               </div>
               <div>
-                <div style="font-weight:700;font-size:0.9rem;color:var(--text-primary);margin-bottom:3px">Native MCP Server (AI Vault)</div>
-                <div style="font-size:0.8rem;color:var(--text-secondary);line-height:1.45">Connect Claude Desktop, Cursor and LLM agents directly over SSE or stdio to search models, inspect specs, and manage your vault.</div>
+                <div style="font-weight:700;font-size:0.9rem;color:var(--text-primary);margin-bottom:3px">Unmounted Storage Guard</div>
+                <div style="font-size:0.8rem;color:var(--text-secondary);line-height:1.45">Safeguards your database against accidental wipes if library shares or NAS arrays are unmounted or empty during sync. (by @zampierilucas)</div>
               </div>
             </div>
 
@@ -2780,8 +2780,8 @@ const UI = {
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
               </div>
               <div>
-                <div style="font-weight:700;font-size:0.9rem;color:var(--text-primary);margin-bottom:3px">3MF Multi-Color & Parts Drawer</div>
-                <div style="font-size:0.8rem;color:var(--text-secondary);line-height:1.45">View embedded multi-color 3MF filaments with original palettes, and toggle individual parts on/off in the interactive 3MF parts drawer.</div>
+                <div style="font-weight:700;font-size:0.9rem;color:var(--text-primary);margin-bottom:3px">Full-Height 3D Studio</div>
+                <div style="font-size:0.8rem;color:var(--text-secondary);line-height:1.45">Responsive viewer canvas expands to fill the viewport height on 1080p, 1440p, and 4K displays with zero wasted space. (by @zampierilucas)</div>
               </div>
             </div>
 
@@ -2790,8 +2790,8 @@ const UI = {
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
               </div>
               <div>
-                <div style="font-weight:700;font-size:0.9rem;color:var(--text-primary);margin-bottom:3px">1-Click Backup & Restore</div>
-                <div style="font-size:0.8rem;color:var(--text-secondary);line-height:1.45">Export and restore your entire database and thumbnails via .zip archives with automatic safety copies and database integrity validation.</div>
+                <div style="font-weight:700;font-size:0.9rem;color:var(--text-primary);margin-bottom:3px">Intuitive Orbit Controls</div>
+                <div style="font-size:0.8rem;color:var(--text-secondary);line-height:1.45">Auto-rotation instantly stops upon manual mouse drag or pan, locking the model securely at your chosen angle. (by @zampierilucas)</div>
               </div>
             </div>
 
@@ -2800,8 +2800,8 @@ const UI = {
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
               </div>
               <div>
-                <div style="font-weight:700;font-size:0.9rem;color:var(--text-primary);margin-bottom:3px">Grid Density & Smart Versions</div>
-                <div style="font-size:0.8rem;color:var(--text-secondary);line-height:1.45">Compact, Comfortable or Large gallery layouts, toggleable badges, and automatic alerts pointing to the newest iteration of any model.</div>
+                <div style="font-weight:700;font-size:0.9rem;color:var(--text-primary);margin-bottom:3px">Native MCP Server & 3MF Studio</div>
+                <div style="font-size:0.8rem;color:var(--text-secondary);line-height:1.45">Connect Claude & Cursor directly via MCP, inspect multi-color 3MF assemblies, and restore backups with 1 click.</div>
               </div>
             </div>
           </div>

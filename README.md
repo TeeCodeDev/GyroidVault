@@ -1,6 +1,6 @@
 # GyroidVault
 
-[![Version](https://img.shields.io/badge/version-2.4.0-blue.svg)](https://github.com/TeeCodeDev/GyroidVault/releases)
+[![Version](https://img.shields.io/badge/version-2.5.0-blue.svg)](https://github.com/TeeCodeDev/GyroidVault/releases)
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-purple.svg)](LICENSE)
 [![Docker](https://img.shields.io/badge/docker-ghcr.io-cyan.svg)](https://github.com/TeeCodeDev/GyroidVault/pkgs/container/gyroidvault)
 [![Website](https://img.shields.io/badge/website-gyroidvault.com-emerald.svg)](https://gyroidvault.com)
@@ -11,6 +11,13 @@
 📖 **Documentation & Wiki:** [GitHub Wiki](https://github.com/TeeCodeDev/GyroidVault/wiki)
 
 ---
+
+## What's New in v2.5.0
+
+- 🛡️ **Unmounted Storage & Disk Sync Protection (PR #90):** Prevents database purging when library paths, network shares (NFS/SMB), or NAS arrays (Unraid/TrueNAS) are unmounted, inaccessible, or empty during sync. (Contributed by [@zampierilucas](https://github.com/zampierilucas))
+- 🖥️ **Full-Height 3D Studio Canvas (PR #88):** Responsive `.viewer-fill` canvas scaling on desktop, 1440p, and 4K displays (`max(400px, calc(100vh - 424px))`), eliminating wasted space while preserving mobile usability. (Contributed by [@zampierilucas](https://github.com/zampierilucas))
+- 🎯 **Intuitive 3D Orbit Controls (PR #89):** Auto-rotation immediately stops upon mouse drag, zoom, or pan interaction, preventing model angle drift. (Contributed by [@zampierilucas](https://github.com/zampierilucas))
+- 🧪 **47 Automated Pre-Release Verification Tests:** Full end-to-end and static safety coverage across all core functionality, security headers, and regression guards.
 
 ## What's New in v2.4.0
 

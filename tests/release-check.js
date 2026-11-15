@@ -324,6 +324,18 @@ async function runStaticAndUiChecks() {
     assert(viewerContent.includes('geometry.computeVertexNormals()'), 'Expected geometry.computeVertexNormals() call in smoothGeometryNormals');
   });
 
+  await check('3D Viewer responsive height (.viewer-fill) & auto-rotate stop on drag (PR #88 & #89 guards)', () => {
+    const cssContent = fs.readFileSync(path.join(ROOT_DIR, 'public/css/style.css'), 'utf8');
+    const compContent = fs.readFileSync(path.join(ROOT_DIR, 'public/js/components.js'), 'utf8');
+    const viewerContent = fs.readFileSync(path.join(ROOT_DIR, 'public/js/viewer.js'), 'utf8');
+
+    assert(cssContent.includes('.viewer-fill'), 'Expected .viewer-fill class in style.css (PR #88)');
+    assert(cssContent.includes('calc(100vh - 424px)'), 'Expected 100vh calculation for viewer-fill in style.css (PR #88)');
+    assert(compContent.includes('viewer-fill'), 'Expected viewer-fill class attached to stl-viewer in components.js (PR #88)');
+    assert(viewerContent.includes("controls.addEventListener('start'"), 'Expected controls start listener to stop autoRotate in viewer.js (PR #89)');
+    assert(viewerContent.includes("controls.autoRotate = false"), 'Expected autoRotate to be set to false on start in viewer.js (PR #89)');
+  });
+
   await check('Card SVG quick actions, model detail collection badges & maintenance filters render correctly', async () => {
     // 1. UI.modelCard quick-actions and tooltips (Issue #82)
     const cardHtml = UI.modelCard(mockModel);
@@ -1368,6 +1380,35 @@ async function runE2ETests() {
         session: adminSession,
         body: { scan_grouping_mode: 'folder' }
       });
+    });
+
+    await check('Library Sync empty/unreadable library guard: Refuses to purge models when disk is empty (PR #90 guard)', async () => {
+      // 1. Temporarily rename library files or move them aside to simulate unmounted NAS share
+      const backupDir = path.join(tmpRoot, 'lib_backup_temp');
+      fs.renameSync(tmpLibDir, backupDir);
+      fs.mkdirSync(tmpLibDir, { recursive: true }); // empty mount point
+
+      try {
+        const modelsBefore = await apiReq('/api/models', { session: adminSession });
+        const initialCount = (modelsBefore.data.models || []).length;
+        assert(initialCount > 0, 'Expected models in database before sync');
+
+        // 2. Trigger library disk sync
+        const syncRes = await apiReq('/api/library/sync', {
+          method: 'POST',
+          session: adminSession
+        });
+        assert(syncRes.status === 200, `POST /api/library/sync failed: ${syncRes.status}`);
+
+        // 3. Verify models were NOT wiped
+        const modelsAfter = await apiReq('/api/models', { session: adminSession });
+        const afterCount = (modelsAfter.data.models || []).length;
+        assert(afterCount === initialCount, `Expected model count to stay ${initialCount}, but got ${afterCount}`);
+      } finally {
+        // Restore library directory
+        fs.rmSync(tmpLibDir, { recursive: true, force: true });
+        fs.renameSync(backupDir, tmpLibDir);
+      }
     });
 
     await check('Model Download All (.zip) stream & extraction verification (Issue #75 guard)', async () => {

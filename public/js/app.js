@@ -126,7 +126,7 @@ const App = {
     this.checkWhatsNew();
   },
 
-  WHATS_NEW_VERSION: '2.4.0',
+  WHATS_NEW_VERSION: '2.5.0',
 
   isFeatureEnabled(key) {
     if (!this.publicConfig) return true;
@@ -201,13 +201,13 @@ const App = {
   },
 
   async openWhatsNew() {
-    localStorage.setItem('gv_last_seen_version', this.WHATS_NEW_VERSION || '2.4.0');
+    localStorage.setItem('gv_last_seen_version', this.WHATS_NEW_VERSION || '2.5.0');
     try {
       const res = await API.getReleaseNotes().catch(() => ({ notes: [] }));
       this.cachedReleaseNotes = res.notes || [];
-      this.openModal('Welcome to GyroidVault v2.4', UI.whatsNewModal('2.4.0', this.cachedReleaseNotes), 'modal-lg');
+      this.openModal('Welcome to GyroidVault v2.5', UI.whatsNewModal('2.5.0', this.cachedReleaseNotes), 'modal-lg');
     } catch (e) {
-      this.openModal('Welcome to GyroidVault v2.4', UI.whatsNewModal('2.4.0', []), 'modal-lg');
+      this.openModal('Welcome to GyroidVault v2.5', UI.whatsNewModal('2.5.0', []), 'modal-lg');
     }
   },
 
@@ -246,7 +246,7 @@ const App = {
   },
 
   dismissWhatsNew() {
-    localStorage.setItem('gv_last_seen_version', this.WHATS_NEW_VERSION || '2.4.0');
+    localStorage.setItem('gv_last_seen_version', this.WHATS_NEW_VERSION || '2.5.0');
     this.closeModal();
   },
 
